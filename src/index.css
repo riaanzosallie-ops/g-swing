@@ -8,35 +8,48 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* G Swing — Premium Dubai Golf / LinkMe Ecosystem */
+    --background: 150 30% 4%;
+    --foreground: 45 35% 92%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 150 25% 7%;
+    --card-foreground: 45 35% 92%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 150 30% 5%;
+    --popover-foreground: 45 35% 92%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 45 75% 55%;          /* gold */
+    --primary-foreground: 150 40% 6%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 150 35% 12%;        /* deep emerald */
+    --secondary-foreground: 45 30% 88%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 150 20% 14%;
+    --muted-foreground: 45 15% 65%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 150 60% 35%;           /* fairway green */
+    --accent-foreground: 45 35% 95%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 45 25% 18%;
+    --input: 150 25% 12%;
+    --ring: 45 75% 55%;
 
-    --radius: 0.5rem;
+    --gold: 45 80% 58%;
+    --gold-soft: 42 60% 70%;
+    --emerald: 150 55% 25%;
+
+    --gradient-gold: linear-gradient(135deg, hsl(45 85% 65%), hsl(38 70% 45%));
+    --gradient-dark: linear-gradient(180deg, hsl(150 30% 6%), hsl(150 35% 3%));
+    --gradient-card: linear-gradient(145deg, hsl(150 25% 9% / 0.9), hsl(150 30% 5% / 0.95));
+    --gradient-hero: radial-gradient(ellipse at top, hsl(150 50% 18% / 0.6), hsl(150 30% 4%) 70%);
+
+    --shadow-gold: 0 10px 40px -10px hsl(45 80% 55% / 0.35);
+    --shadow-elegant: 0 20px 60px -20px hsl(0 0% 0% / 0.6);
+
+    --radius: 1rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -56,7 +69,7 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 150 30% 4%;
     --foreground: 210 40% 98%;
 
     --card: 222.2 84% 4.9%;
@@ -101,5 +114,52 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-image: var(--gradient-hero);
+    background-attachment: fixed;
+    min-height: 100vh;
   }
+
+  h1, h2, h3, h4 {
+    font-family: 'Playfair Display', Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer utilities {
+  .text-gold { color: hsl(var(--gold)); }
+  .bg-gold { background: hsl(var(--gold)); }
+  .gradient-gold { background: var(--gradient-gold); }
+  .gradient-card { background: var(--gradient-card); }
+  .shadow-gold { box-shadow: var(--shadow-gold); }
+  .shadow-elegant { box-shadow: var(--shadow-elegant); }
+  .border-gold { border-color: hsl(var(--gold) / 0.4); }
+  .text-gradient-gold {
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .glass {
+    background: hsl(150 30% 8% / 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(45 30% 25% / 0.25);
+  }
+}
+
+@keyframes ball-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px hsl(45 80% 55% / 0.3); }
+  50% { box-shadow: 0 0 35px hsl(45 80% 55% / 0.6); }
+}
+.animate-ball-spin { animation: ball-spin 4s linear infinite; }
+.animate-float-up { animation: float-up 0.6s ease-out both; }
+.animate-glow-pulse { animation: glow-pulse 2.5s ease-in-out infinite; }
 }
