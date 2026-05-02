@@ -44,3 +44,56 @@ export const useSwings = () => useLocal<SwingAnalysis[]>("gswing.swings", []);
 export const usePlayer = () => useLocal("gswing.player", {
   name: "Riaan", handicap: 3, country: "UAE", homeCourse: "Emirates Majlis", hand: "Right",
 });
+
+/* ============ Live Match / Betting Arena ============ */
+export type MatchType = "Stroke" | "Match" | "ClosestPin" | "LongestDrive";
+export type MatchPlayer = {
+  id: string;
+  name: string;
+  handicap: number;
+  scores: number[];      // per-hole strokes
+  currentHole: number;
+  distanceToPin: number; // metres, live
+  shots: number;
+};
+export type Match = {
+  id: string;
+  course: string;
+  type: MatchType;
+  stake: number;
+  currency: string;
+  status: "lobby" | "live" | "completed";
+  holes: number;
+  par: number[];
+  createdAt: string;
+  players: MatchPlayer[];
+  chat: { id: string; from: string; text: string; ts: string; reaction?: string }[];
+  winnerId?: string;
+  roast?: string;
+};
+
+export const PAR_18 = [4,4,3,5,4,4,3,5,4,4,3,4,5,4,3,4,4,5];
+
+const seedMatch = (): Match => ({
+  id: "live-1",
+  course: "Emirates Majlis",
+  type: "Stroke",
+  stake: 240,
+  currency: "AED",
+  status: "live",
+  holes: 18,
+  par: PAR_18,
+  createdAt: new Date().toISOString(),
+  players: [
+    { id: "p1", name: "Riaan", handicap: 3, scores: [4,3,3,5,4,4], currentHole: 7, distanceToPin: 142, shots: 24 },
+    { id: "p2", name: "Nievo", handicap: 8, scores: [5,4,4,5,4,5], currentHole: 7, distanceToPin: 168, shots: 27 },
+    { id: "p3", name: "Toto",  handicap: 12, scores: [5,4,3,6,5,4], currentHole: 7, distanceToPin: 155, shots: 27 },
+    { id: "p4", name: "Docco", handicap: 6, scores: [4,4,4,5,4,5], currentHole: 7, distanceToPin: 130, shots: 26 },
+  ],
+  chat: [
+    { id: "c1", from: "Nievo", text: "Cracking drive on 6 mate 👏", ts: new Date().toISOString() },
+    { id: "c2", from: "Toto", text: "I need ACE more than the rest of you 😅", ts: new Date().toISOString() },
+  ],
+});
+
+export const useMatch = () => useLocal<Match>("gswing.match", seedMatch());

@@ -1,15 +1,18 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins, Shirt, Target, BarChart3 } from "lucide-react";
+import { Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins, Shirt, Target, BarChart3, Swords, MessagesSquare } from "lucide-react";
 import { usePlayer } from "@/lib/gswing-store";
 import courseBg from "@/assets/course-bg.jpg";
 
 const tiles = [
   { id: "gps", label: "Live GPS", icon: MapPin, hint: "Satellite course view" },
+  { id: "arena", label: "Betting Arena", icon: Swords, hint: "Stake & compete" },
+  { id: "live", label: "Live Dashboard", icon: Activity, hint: "Match leaderboard" },
   { id: "swing", label: "Swing Analysis", icon: Video, hint: "Upload & ACE feedback" },
   { id: "scorecard", label: "Scorecard", icon: Target, hint: "Track your round" },
   { id: "bag", label: "My Bag", icon: Briefcase, hint: "Your clubs & distances" },
   { id: "pros", label: "Pros' Bags", icon: Trophy, hint: "PGA & LIV picks" },
+  { id: "chat", label: "Round Chat", icon: MessagesSquare, hint: "Talk after the round" },
   { id: "news", label: "Tour News", icon: Newspaper, hint: "Major events" },
   { id: "stats", label: "Performance", icon: BarChart3, hint: "Your stats" },
   { id: "profile", label: "Profile", icon: User, hint: "Avatar & handicap" },

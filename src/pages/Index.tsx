@@ -11,6 +11,10 @@ import { Stats } from "@/components/gswing/Stats";
 import { Profile } from "@/components/gswing/Profile";
 import { ClubLink } from "@/components/gswing/ClubLink";
 import { AceCaddie } from "@/components/gswing/AceCaddie";
+import { Arena } from "@/components/gswing/Arena";
+import { LiveDashboard } from "@/components/gswing/LiveDashboard";
+import { RoundChat } from "@/components/gswing/RoundChat";
+import { Roast } from "@/components/gswing/Roast";
 import { Home, MapPin, Briefcase, Target, User, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +30,7 @@ const TITLES: Record<string, string> = {
   home: "G Swing", gps: "Live GPS", bag: "My Bag", scorecard: "Scorecard",
   swing: "Swing Analysis", pros: "Pros' Bags", news: "Tour News",
   stats: "Performance", profile: "Profile", clublink: "Club-Link",
+  arena: "Betting Arena", live: "Live Dashboard", chat: "Round Chat", roast: "ACE Roast",
 };
 
 const Index = () => {
@@ -61,6 +66,10 @@ const Index = () => {
         {view === "stats" && <Stats />}
         {view === "profile" && <Profile />}
         {view === "clublink" && <ClubLink />}
+        {view === "arena" && <Arena go={setView} />}
+        {view === "live" && <LiveDashboard go={setView} />}
+        {view === "chat" && <RoundChat />}
+        {view === "roast" && <Roast />}
       </main>
 
       <AceCaddie />
