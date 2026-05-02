@@ -338,6 +338,10 @@ function CollageView({ memory, photos, onLayout }: {
 }) {
   const pics = memory.photoIds.map(id => photos.find(p => p.id === id)).filter(Boolean) as RoundPhoto[];
   const [typed, setTyped] = useState("");
+  const [shareOpen, setShareOpen] = useState(false);
+  const [busy, setBusy] = useState<null | "save" | "share" | "wa" | "ig" | "fb" | "x">(null);
+  const collageRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     let i = 0;
     const t = setInterval(() => {
@@ -348,15 +352,87 @@ function CollageView({ memory, photos, onLayout }: {
     return () => clearInterval(t);
   }, [memory.caption]);
 
-  const share = async () => {
+  const fileName = `GSwing-FairwayMemory-${new Date(memory.date).toISOString().slice(0,10)}-${memory.id.slice(0,6)}.jpg`;
+  const captionWithTag = `${memory.caption}\n\n— ${memory.course} · ${new Date(memory.date).toLocaleDateString()}\nPowered by G Swing 🏌️⛳`;
+
+  const renderImage = async () => {
+    if (!collageRef.current) throw new Error("Collage not ready");
+    return await renderNodeToJpeg(collageRef.current, 0.95);
+  };
+
+  const handleSave = async () => {
+    setBusy("save");
     try {
-      if (navigator.share) {
-        await navigator.share({ title: "G Swing Fairway Memory", text: memory.caption });
-      } else {
-        await navigator.clipboard.writeText(memory.caption);
-        toast.success("Caption copied");
+      const img = await renderImage();
+      const { where } = await saveImageToDevice(img, fileName);
+      toast.success(`Saved to ${where} ✓`);
+    } catch (e: any) {
+      toast.error(e?.message || "Could not save image");
+    } finally { setBusy(null); }
+  };
+
+  const handleNativeShare = async () => {
+    setBusy("share");
+    try {
+      const img = await renderImage();
+      const res = await shareImage(img, fileName, captionWithTag);
+      if (res.channel === "fallback-download") toast.success("Image downloaded · caption copied");
+    } catch (e: any) {
+      if (e?.name !== "AbortError") toast.error(e?.message || "Share cancelled");
+    } finally { setBusy(null); setShareOpen(false); }
+  };
+
+  const handleWhatsApp = async () => {
+    setBusy("wa");
+    try {
+      // Try native share first (image goes through, WhatsApp picks up the file)
+      const img = await renderImage();
+      const res = await shareImage(img, fileName, captionWithTag);
+      if (res.channel === "web-share-text" || res.channel === "fallback-download") {
+        // Browser without file-share support — fall back to wa.me
+        await shareToWhatsApp(captionWithTag);
       }
-    } catch {}
+    } catch {
+      await shareToWhatsApp(captionWithTag);
+    } finally { setBusy(null); setShareOpen(false); }
+  };
+
+  const handleX = async () => {
+    setBusy("x");
+    try {
+      // X web intent doesn't accept images — share text + offer save
+      await shareToX(captionWithTag);
+      const img = await renderImage();
+      await saveImageToDevice(img, fileName);
+      toast.success("Image saved · attach it on X");
+    } finally { setBusy(null); setShareOpen(false); }
+  };
+
+  const handleFacebook = async () => {
+    setBusy("fb");
+    try {
+      const img = await renderImage();
+      const res = await shareImage(img, fileName, captionWithTag);
+      if (res.channel === "web-share-text" || res.channel === "fallback-download") {
+        await shareToFacebook(window.location.origin, captionWithTag);
+      }
+    } catch {
+      await shareToFacebook(window.location.origin, captionWithTag);
+    } finally { setBusy(null); setShareOpen(false); }
+  };
+
+  const handleInstagram = async () => {
+    setBusy("ig");
+    try {
+      const img = await renderImage();
+      await saveImageToDevice(img, fileName);
+      await navigator.clipboard.writeText(captionWithTag).catch(() => {});
+      toast.success("Image saved · caption copied — open Instagram to post", { duration: 6000 });
+      // Try to deep-link Instagram if installed
+      setTimeout(() => {
+        window.location.href = "instagram://library";
+      }, 600);
+    } finally { setBusy(null); setShareOpen(false); }
   };
 
   return (
@@ -370,7 +446,7 @@ function CollageView({ memory, photos, onLayout }: {
         {memory.badge && <Badge className="gradient-gold text-primary-foreground">{memory.badge}</Badge>}
       </div>
 
-      <Card className="gradient-card overflow-hidden border-gold/30 p-3 shadow-gold">
+      <Card ref={collageRef as any} id="fairway-memory-canvas" className="gradient-card overflow-hidden border-gold/30 p-3 shadow-gold">
         {memory.layout === "Story" && (
           <div className="space-y-2">
             {pics[0] && <img src={pics[0].dataUrl} className="aspect-video w-full rounded-lg object-cover" />}
@@ -446,14 +522,85 @@ function CollageView({ memory, photos, onLayout }: {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <Button onClick={share} variant="outline" className="border-gold/40">
-          <Share2 className="mr-2 h-4 w-4" /> Share
+        <Button onClick={() => setShareOpen(true)} variant="outline" className="border-gold/40" disabled={!!busy}>
+          {busy === "share" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
+          Share
         </Button>
-        <Button onClick={() => toast.success("Saved to gallery")} className="gradient-gold text-primary-foreground">
-          <Download className="mr-2 h-4 w-4" /> Save
+        <Button onClick={handleSave} className="gradient-gold text-primary-foreground" disabled={!!busy}>
+          {busy === "save" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+          Save
         </Button>
       </div>
+
+      <Sheet open={shareOpen} onOpenChange={setShareOpen}>
+        <SheetContent side="bottom" className="border-gold/30 bg-background">
+          <SheetHeader className="text-left">
+            <SheetTitle className="font-serif text-gradient-gold">Share your Fairway Memory</SheetTitle>
+            <SheetDescription className="text-xs">
+              {isNative()
+                ? "Choose where to send your collage."
+                : "On mobile, the system share sheet opens with WhatsApp, iMessage and more."}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4 space-y-2">
+            <ShareRow
+              icon={<Smartphone className="h-5 w-5" />}
+              label="Save to Gallery"
+              hint={isNative() ? "Saves to Files › G Swing" : "Downloads to your device"}
+              onClick={handleSave} busy={busy === "save"} />
+            <ShareRow
+              icon={<Share2 className="h-5 w-5" />}
+              label="Share via…"
+              hint="WhatsApp · iMessage · Telegram · AirDrop · Mail"
+              onClick={handleNativeShare} busy={busy === "share"} highlight />
+            <ShareRow
+              icon={<MessageCircle className="h-5 w-5 text-[hsl(142,70%,45%)]" />}
+              label="WhatsApp"
+              hint="Open chat with caption ready"
+              onClick={handleWhatsApp} busy={busy === "wa"} />
+            <ShareRow
+              icon={<Instagram className="h-5 w-5 text-[hsl(330,80%,60%)]" />}
+              label="Instagram"
+              hint="Saves image + copies caption, opens Instagram"
+              onClick={handleInstagram} busy={busy === "ig"} />
+            <ShareRow
+              icon={<Facebook className="h-5 w-5 text-[hsl(220,90%,60%)]" />}
+              label="Facebook"
+              hint="Opens Facebook share dialog"
+              onClick={handleFacebook} busy={busy === "fb"} />
+            <ShareRow
+              icon={<Twitter className="h-5 w-5" />}
+              label="X / Twitter"
+              hint="Saves image + opens tweet composer"
+              onClick={handleX} busy={busy === "x"} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
+  );
+}
+
+function ShareRow({ icon, label, hint, onClick, busy, highlight }: {
+  icon: React.ReactNode; label: string; hint: string; onClick: () => void; busy?: boolean; highlight?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition disabled:opacity-50",
+        highlight ? "border-gold/50 gradient-card shadow-gold" : "border-gold/20 hover:border-gold/40 bg-card/40"
+      )}
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+        {busy ? <Loader2 className="h-5 w-5 animate-spin text-gold" /> : icon}
+      </div>
+      <div className="flex-1">
+        <p className="font-serif text-sm">{label}</p>
+        <p className="text-[10px] text-muted-foreground">{hint}</p>
+      </div>
+    </button>
   );
 }
 
