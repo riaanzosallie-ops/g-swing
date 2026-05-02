@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Film, Sparkles, Users, User as UserIcon, Share2, Download, Wand2, ChevronLeft, Image as ImageIcon, Trash2, Lock } from "lucide-react";
+import { Camera, Film, Sparkles, Users, User as UserIcon, Share2, Download, Wand2, ChevronLeft, Image as ImageIcon, Trash2, Lock, Upload } from "lucide-react";
 import { useRoundCam, useMemories, usePlayer, type RoundPhoto, type MomentTag, type CollageLayout, type FairwayMemory } from "@/lib/gswing-store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -28,13 +28,14 @@ export const FairwayMemories = () => {
   const [hole, setHole] = useState(1);
   const [activeMemory, setActiveMemory] = useState<FairwayMemory | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   const todayPhotos = useMemo(
     () => photos.filter(p => Date.now() - new Date(p.ts).getTime() < 24 * 60 * 60 * 1000),
     [photos]
   );
 
-  const onPick = async (files: FileList | null) => {
+  const onPick = async (files: FileList | null, source: "camera" | "upload" = "camera") => {
     if (!files?.length) return;
     const next: RoundPhoto[] = [];
     for (const f of Array.from(files)) {
@@ -52,7 +53,11 @@ export const FairwayMemories = () => {
       });
     }
     setPhotos([...next, ...photos]);
-    toast.success(`${next.length} photo${next.length > 1 ? "s" : ""} captured on Hole ${hole}`);
+    toast.success(
+      source === "upload"
+        ? `${next.length} photo${next.length > 1 ? "s" : ""} added from device`
+        : `${next.length} photo${next.length > 1 ? "s" : ""} captured on Hole ${hole}`
+    );
   };
 
   const tagPhoto = (id: string, tag: MomentTag) => {
