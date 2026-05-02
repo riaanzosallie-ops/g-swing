@@ -1,5 +1,4 @@
 import splashBg from "@/assets/gswing-splash.jpg";
-import golfBall from "@/assets/golf-ball.png";
 import { Button } from "@/components/ui/button";
 import { Apple, Mail } from "lucide-react";
 
@@ -10,20 +9,6 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => (
 
     <div className="relative z-10 flex min-h-screen flex-col items-center justify-between px-6 py-12">
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
-        <div className="relative flex items-center justify-center">
-          <span
-            className="font-serif text-[9rem] leading-none text-gradient-gold drop-shadow-[0_10px_40px_hsl(45_85%_55%/0.55)]"
-            style={{ fontFamily: "'Playfair Display',serif" }}
-          >
-            G
-          </span>
-          <img
-            src={golfBall}
-            alt=""
-            className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 animate-ball-spin drop-shadow-2xl"
-          />
-          <div className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-gold/15 blur-3xl" />
-        </div>
         <p className="text-sm uppercase tracking-[0.5em] text-gold/85">
           Where Golf Meets Intelligence
         </p>
