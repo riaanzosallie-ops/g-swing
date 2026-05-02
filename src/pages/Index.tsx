@@ -15,13 +15,14 @@ import { Arena } from "@/components/gswing/Arena";
 import { LiveDashboard } from "@/components/gswing/LiveDashboard";
 import { RoundChat } from "@/components/gswing/RoundChat";
 import { Roast } from "@/components/gswing/Roast";
-import { Home, MapPin, Briefcase, Target, User, ChevronLeft } from "lucide-react";
+import { FairwayMemories } from "@/components/gswing/FairwayMemories";
+import { Home, MapPin, Briefcase, Target, User, ChevronLeft, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { id: "home", label: "Home", icon: Home },
   { id: "gps", label: "GPS", icon: MapPin },
-  { id: "bag", label: "Bag", icon: Briefcase },
+  { id: "memories", label: "Memories", icon: Film },
   { id: "scorecard", label: "Score", icon: Target },
   { id: "profile", label: "Profile", icon: User },
 ];
@@ -31,6 +32,7 @@ const TITLES: Record<string, string> = {
   swing: "Swing Analysis", pros: "Pros' Bags", news: "Tour News",
   stats: "Performance", profile: "Profile", clublink: "Club-Link",
   arena: "Betting Arena", live: "Live Dashboard", chat: "Round Chat", roast: "ACE Roast",
+  memories: "Fairway Memories",
 };
 
 const Index = () => {
@@ -70,6 +72,7 @@ const Index = () => {
         {view === "live" && <LiveDashboard go={setView} />}
         {view === "chat" && <RoundChat />}
         {view === "roast" && <Roast />}
+        {view === "memories" && <FairwayMemories />}
       </main>
 
       <AceCaddie />
