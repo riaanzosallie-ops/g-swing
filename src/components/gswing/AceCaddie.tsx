@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, X, Bot } from "lucide-react";
+import { Sparkles, Send, X, Bot, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBag } from "@/lib/gswing-store";
 import { toast } from "sonner";
@@ -22,11 +22,32 @@ export const AceCaddie = () => {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<any>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  const toggleVoice = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { toast.error("Voice input not supported on this browser"); return; }
+    if (listening) { recRef.current?.stop(); setListening(false); return; }
+    const rec = new SR();
+    rec.lang = "en-US"; rec.interimResults = false; rec.continuous = false;
+    rec.onresult = (e: any) => {
+      const text = e.results[0][0].transcript;
+      setInput(text);
+      setListening(false);
+      send(text);
+    };
+    rec.onerror = () => { setListening(false); toast.error("Voice input failed"); };
+    rec.onend = () => setListening(false);
+    recRef.current = rec;
+    rec.start();
+    setListening(true);
+  };
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
@@ -158,6 +179,10 @@ export const AceCaddie = () => {
                 placeholder="Ask ACE anything…"
                 className="flex-1 rounded-full border border-gold/20 bg-background/60 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-gold/60 focus:outline-none"
               />
+              <Button type="button" size="icon" variant="outline" onClick={toggleVoice}
+                className={cn("rounded-full border-gold/30", listening && "bg-gold/20 animate-glow-pulse")}>
+                {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
               <Button type="submit" size="icon" className="rounded-full gradient-gold text-primary-foreground" disabled={loading}>
                 <Send className="h-4 w-4" />
               </Button>
