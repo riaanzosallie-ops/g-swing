@@ -1,5 +1,4 @@
 import splashBg from "@/assets/gswing-splash.jpg";
-import golfBall from "@/assets/golf-ball.png";
 import { Button } from "@/components/ui/button";
 import { Apple, Mail } from "lucide-react";
 
