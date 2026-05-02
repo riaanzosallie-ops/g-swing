@@ -1,7 +1,7 @@
 import splashBg from "@/assets/gswing-splash.jpg";
-import golfBall from "@/assets/golf-ball.png";
 import { Button } from "@/components/ui/button";
 import { Apple, Mail } from "lucide-react";
+import { Logo } from "@/components/gswing/Logo";
 
 export const Splash = ({ onEnter }: { onEnter: () => void }) => (
   <div className="relative min-h-screen w-full overflow-hidden">
@@ -10,12 +10,8 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => (
 
     <div className="relative z-10 flex min-h-screen flex-col items-center justify-between px-6 py-12">
       <div className="flex flex-1 flex-col items-center justify-center">
-        <div className="relative mb-6 flex items-center justify-center">
-          <span className="font-serif text-[8rem] leading-none text-gradient-gold drop-shadow-[0_8px_30px_hsl(45_80%_55%/0.5)]" style={{fontFamily: "'Playfair Display',serif"}}>G</span>
-          <img src={golfBall} alt="" className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 animate-ball-spin drop-shadow-2xl" />
-        </div>
-        <h1 className="text-5xl font-bold tracking-[0.3em] text-gradient-gold">SWING</h1>
-        <p className="mt-4 text-sm uppercase tracking-[0.4em] text-gold/80">Where Golf Meets Intelligence</p>
+        <Logo size={180} />
+        <p className="mt-6 text-sm uppercase tracking-[0.4em] text-gold/80">Where Golf Meets Intelligence</p>
         <p className="mt-2 text-xs uppercase tracking-widest text-muted-foreground">Part of the LinkMe Ecosystem</p>
       </div>
 

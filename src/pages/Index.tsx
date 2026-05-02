@@ -18,6 +18,7 @@ import { Roast } from "@/components/gswing/Roast";
 import { FairwayMemories } from "@/components/gswing/FairwayMemories";
 import { Home, MapPin, Briefcase, Target, User, ChevronLeft, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/gswing/Logo";
 
 const NAV = [
   { id: "home", label: "Home", icon: Home },
@@ -52,6 +53,7 @@ const Index = () => {
               <ChevronLeft className="h-5 w-5" />
             </button>
           )}
+          <Logo size={32} showWordmark={false} />
           <h1 className="font-serif text-lg text-gradient-gold">{TITLES[view] ?? "G Swing"}</h1>
         </div>
         <span className="text-[10px] uppercase tracking-widest text-muted-foreground">LinkMe</span>
