@@ -45,6 +45,33 @@ export const usePlayer = () => useLocal("gswing.player", {
   name: "Riaan", handicap: 3, country: "UAE", homeCourse: "Emirates Majlis", hand: "Right",
 });
 
+/* ============ Fairway Memories ============ */
+export type MomentTag = "Great Shot" | "Birdie/Eagle" | "Funny" | "Scenery" | "Group" | "Personal Best" | "Partner";
+export type RoundPhoto = {
+  id: string;
+  dataUrl: string;
+  hole: number;
+  score?: number;
+  ts: string;
+  tag?: MomentTag;
+  quality: number; // 0-1 AI score
+};
+export type CollageLayout = "Classic" | "Story" | "Polaroid" | "Minimal" | "GroupWall";
+export type FairwayMemory = {
+  id: string;
+  date: string;
+  course: string;
+  mode: "solo" | "group";
+  players: { name: string; score: number; par: number }[];
+  photoIds: string[]; // selected for collage
+  layout: CollageLayout;
+  caption: string;
+  badge?: string;
+};
+
+export const useRoundCam = () => useLocal<RoundPhoto[]>("gswing.roundcam", []);
+export const useMemories = () => useLocal<FairwayMemory[]>("gswing.memories", []);
+
 /* ============ Live Match / Betting Arena ============ */
 export type MatchType = "Stroke" | "Match" | "ClosestPin" | "LongestDrive";
 export type MatchPlayer = {
