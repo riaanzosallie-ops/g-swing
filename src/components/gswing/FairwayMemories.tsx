@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Film, Sparkles, Users, User as UserIcon, Share2, Download, Wand2, ChevronLeft, Image as ImageIcon, Trash2, Lock, Upload } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Camera, Sparkles, Users, User as UserIcon, Share2, Download, ChevronLeft, Image as ImageIcon, Trash2, Lock, Upload, MessageCircle, Instagram, Facebook, Twitter, Smartphone, Loader2 } from "lucide-react";
 import { useRoundCam, useMemories, usePlayer, type RoundPhoto, type MomentTag, type CollageLayout, type FairwayMemory } from "@/lib/gswing-store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { renderNodeToJpeg, saveImageToDevice, shareImage, shareToWhatsApp, shareToX, shareToFacebook, isNative } from "@/lib/share";
 
 const TAGS: MomentTag[] = ["Great Shot", "Birdie/Eagle", "Funny", "Scenery", "Group", "Personal Best", "Partner"];
 const LAYOUTS: CollageLayout[] = ["Classic", "Story", "Polaroid", "Minimal", "GroupWall"];
