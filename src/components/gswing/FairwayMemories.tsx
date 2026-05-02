@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -230,10 +230,11 @@ export const FairwayMemories = () => {
 
   function BuildLoader() {
     const [step, setStep] = useState(0);
-    useState(() => {
+    useEffect(() => {
       const t = setInterval(() => setStep(s => Math.min(s + 1, LOAD_STEPS.length - 1)), 700);
-      setTimeout(() => clearInterval(t), 3000);
-    });
+      const to = setTimeout(() => clearInterval(t), 3000);
+      return () => { clearInterval(t); clearTimeout(to); };
+    }, []);
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 pb-28 text-center">
         <div className="relative">
@@ -314,14 +315,15 @@ function CollageView({ memory, photos, onLayout }: {
 }) {
   const pics = memory.photoIds.map(id => photos.find(p => p.id === id)).filter(Boolean) as RoundPhoto[];
   const [typed, setTyped] = useState("");
-  useState(() => {
+  useEffect(() => {
     let i = 0;
     const t = setInterval(() => {
       i++;
       setTyped(memory.caption.slice(0, i));
       if (i >= memory.caption.length) clearInterval(t);
     }, 30);
-  });
+    return () => clearInterval(t);
+  }, [memory.caption]);
 
   const share = async () => {
     try {
