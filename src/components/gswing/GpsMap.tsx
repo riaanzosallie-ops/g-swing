@@ -44,6 +44,7 @@ export const GpsMap = () => {
   const [courseId, setCourseId] = useState("majlis");
   const [hole, setHole] = useState(7);
   const [bag] = useBag();
+  const [unit, setUnit] = useState<"m" | "yd">("m");
   const course = useMemo(() => COURSES.find((c) => c.id === courseId)!, [courseId]);
   const [playerPos, setPlayerPos] = useState<[number, number]>([course.center[0] - 0.0008, course.center[1] - 0.0010]);
 
@@ -53,7 +54,10 @@ export const GpsMap = () => {
 
   const distToPin = distMeters(playerPos, course.pin);
   const distToBunker = distToPin - 28;
-  const distToWater = distToPin + 35;
+  const distToFront = Math.max(0, distToPin - 12);
+  const distToBack = distToPin + 14;
+  const conv = (m: number) => unit === "m" ? m : Math.round(m * 1.0936);
+  const u = unit === "m" ? "m" : "y";
 
   const recommended = bag
     .filter((c) => c.distance > 0)
@@ -75,11 +79,15 @@ export const GpsMap = () => {
 
   return (
     <div className="space-y-3 pb-28">
-      <Card className="gradient-card border-gold/20 p-3">
+      <Card className="gradient-card border-gold/20 p-3 flex items-center gap-2">
         <select value={courseId} onChange={(e) => setCourseId(e.target.value)}
-          className="w-full rounded-lg border border-gold/30 bg-background/60 p-2 text-sm text-foreground">
+          className="flex-1 rounded-lg border border-gold/30 bg-background/60 p-2 text-sm text-foreground">
           {COURSES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <button onClick={() => setUnit(unit === "m" ? "yd" : "m")}
+          className="rounded-lg border border-gold/30 px-3 py-2 text-xs font-semibold text-gold">
+          {unit === "m" ? "M" : "YD"}
+        </button>
       </Card>
 
       <div className="relative h-[42vh] overflow-hidden rounded-2xl border border-gold/30 shadow-elegant">
@@ -101,13 +109,24 @@ export const GpsMap = () => {
 
       <div className="grid grid-cols-3 gap-2">
         <Card className="gradient-card border-gold/20 p-3 text-center">
+          <p className="text-[10px] uppercase text-muted-foreground">Front</p>
+          <p className="mt-1 font-serif text-lg text-foreground">{conv(distToFront)}<span className="text-xs">{u}</span></p>
+        </Card>
+        <Card className="gradient-card border-gold/40 p-3 text-center shadow-gold">
           <Flag className="mx-auto h-4 w-4 text-gold" />
-          <p className="mt-1 font-serif text-2xl text-gradient-gold">{distToPin}m</p>
-          <p className="text-[10px] uppercase text-muted-foreground">to pin</p>
+          <p className="mt-1 font-serif text-2xl text-gradient-gold">{conv(distToPin)}<span className="text-xs">{u}</span></p>
+          <p className="text-[10px] uppercase text-muted-foreground">Middle (pin)</p>
         </Card>
         <Card className="gradient-card border-gold/20 p-3 text-center">
+          <p className="text-[10px] uppercase text-muted-foreground">Back</p>
+          <p className="mt-1 font-serif text-lg text-foreground">{conv(distToBack)}<span className="text-xs">{u}</span></p>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <Card className="gradient-card border-gold/20 p-3 text-center">
           <Crosshair className="mx-auto h-4 w-4 text-gold" />
-          <p className="mt-1 font-serif text-2xl text-foreground">{distToBunker}m</p>
+          <p className="mt-1 font-serif text-2xl text-foreground">{conv(distToBunker)}<span className="text-xs">{u}</span></p>
           <p className="text-[10px] uppercase text-muted-foreground">to bunker</p>
         </Card>
         <Card className="gradient-card border-gold/20 p-3 text-center">
@@ -115,12 +134,17 @@ export const GpsMap = () => {
           <p className="mt-1 font-serif text-2xl text-foreground">12<span className="text-sm">km/h</span></p>
           <p className="text-[10px] uppercase text-muted-foreground">NE wind</p>
         </Card>
+        <Card className="gradient-card border-gold/20 p-3 text-center">
+          <MapPin className="mx-auto h-4 w-4 text-gold" />
+          <p className="mt-1 font-serif text-2xl text-foreground">{conv(distToPin + 35)}<span className="text-xs">{u}</span></p>
+          <p className="text-[10px] uppercase text-muted-foreground">to water</p>
+        </Card>
       </div>
 
       <Card className="gradient-card border-gold/40 p-4 shadow-gold">
         <p className="text-[10px] uppercase tracking-widest text-gold/80">ACE Recommends</p>
         <p className="font-serif text-2xl text-gradient-gold">{recommended?.name ?? "—"}</p>
-        <p className="text-xs text-muted-foreground">Based on your My Bag distances ({recommended?.distance}m carry) at {distToPin}m to the pin.</p>
+        <p className="text-xs text-muted-foreground">Based on your My Bag distances ({conv(recommended?.distance ?? 0)}{u} carry) at {conv(distToPin)}{u} to the pin.</p>
       </Card>
 
       <div className="grid grid-cols-2 gap-2">
