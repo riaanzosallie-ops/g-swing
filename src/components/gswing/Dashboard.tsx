@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins, Shirt, Target, BarChart3, Swords, MessagesSquare } from "lucide-react";
+import { Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins, Shirt, Target, BarChart3, Swords, MessagesSquare, Film } from "lucide-react";
 import { usePlayer } from "@/lib/gswing-store";
 import courseBg from "@/assets/course-bg.jpg";
 
@@ -8,6 +8,7 @@ const tiles = [
   { id: "gps", label: "Live GPS", icon: MapPin, hint: "Satellite course view" },
   { id: "arena", label: "Betting Arena", icon: Swords, hint: "Stake & compete" },
   { id: "live", label: "Live Dashboard", icon: Activity, hint: "Match leaderboard" },
+  { id: "memories", label: "Fairway Memories", icon: Film, hint: "AI keepsake collage" },
   { id: "swing", label: "Swing Analysis", icon: Video, hint: "Upload & ACE feedback" },
   { id: "scorecard", label: "Scorecard", icon: Target, hint: "Track your round" },
   { id: "bag", label: "My Bag", icon: Briefcase, hint: "Your clubs & distances" },
