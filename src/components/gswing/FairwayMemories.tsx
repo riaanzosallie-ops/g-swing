@@ -173,11 +173,19 @@ export const FairwayMemories = () => {
           </div>
 
           <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple hidden
-            onChange={(e) => onPick(e.target.files)} />
-          <Button onClick={() => fileRef.current?.click()}
-            className="mt-4 w-full gradient-gold text-primary-foreground" size="lg">
-            <Camera className="mr-2 h-5 w-5" /> Capture Moment
-          </Button>
+            onChange={(e) => { onPick(e.target.files, "camera"); e.currentTarget.value = ""; }} />
+          <input ref={uploadRef} type="file" accept="image/*" multiple hidden
+            onChange={(e) => { onPick(e.target.files, "upload"); e.currentTarget.value = ""; }} />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button onClick={() => fileRef.current?.click()}
+              className="gradient-gold text-primary-foreground" size="lg">
+              <Camera className="mr-2 h-5 w-5" /> Capture
+            </Button>
+            <Button onClick={() => uploadRef.current?.click()} variant="outline"
+              className="border-gold/40 text-gold hover:bg-gold/10" size="lg">
+              <Upload className="mr-2 h-5 w-5" /> Upload
+            </Button>
+          </div>
         </Card>
 
         <div className="grid grid-cols-3 gap-2">
