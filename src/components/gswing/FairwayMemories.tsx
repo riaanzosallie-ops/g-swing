@@ -87,6 +87,9 @@ export const FairwayMemories = () => {
       <div className="space-y-4 pb-28">
         <Header title="Fairway Memories" sub="Every round tells a story. We keep it forever." />
 
+        <input ref={uploadRef} type="file" accept="image/*" multiple hidden
+          onChange={(e) => { onPick(e.target.files, "upload"); e.currentTarget.value = ""; }} />
+
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setMode("capture")}
             className="gradient-card flex flex-col items-start gap-2 rounded-2xl border border-gold/20 p-4 text-left hover:border-gold/50">
@@ -104,6 +107,11 @@ export const FairwayMemories = () => {
             <span className="absolute inset-y-0 -left-10 w-10 -skew-x-12 bg-white/30 animate-shimmer" />
           </button>
         </div>
+
+        <Button onClick={() => uploadRef.current?.click()} variant="outline"
+          className="w-full border-gold/40 text-gold hover:bg-gold/10">
+          <Upload className="mr-2 h-4 w-4" /> Upload from device
+        </Button>
 
         <Card className="gradient-card border-gold/20 p-4">
           <p className="text-[10px] uppercase tracking-widest text-gold/80">Saved Collages</p>
