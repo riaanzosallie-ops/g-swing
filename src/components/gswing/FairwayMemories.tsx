@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Film, Sparkles, Users, User as UserIcon, Share2, Download, Wand2, ChevronLeft, Image as ImageIcon, Trash2, Lock } from "lucide-react";
+import { Camera, Film, Sparkles, Users, User as UserIcon, Share2, Download, Wand2, ChevronLeft, Image as ImageIcon, Trash2, Lock, Upload } from "lucide-react";
 import { useRoundCam, useMemories, usePlayer, type RoundPhoto, type MomentTag, type CollageLayout, type FairwayMemory } from "@/lib/gswing-store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -28,13 +28,14 @@ export const FairwayMemories = () => {
   const [hole, setHole] = useState(1);
   const [activeMemory, setActiveMemory] = useState<FairwayMemory | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   const todayPhotos = useMemo(
     () => photos.filter(p => Date.now() - new Date(p.ts).getTime() < 24 * 60 * 60 * 1000),
     [photos]
   );
 
-  const onPick = async (files: FileList | null) => {
+  const onPick = async (files: FileList | null, source: "camera" | "upload" = "camera") => {
     if (!files?.length) return;
     const next: RoundPhoto[] = [];
     for (const f of Array.from(files)) {
@@ -52,7 +53,11 @@ export const FairwayMemories = () => {
       });
     }
     setPhotos([...next, ...photos]);
-    toast.success(`${next.length} photo${next.length > 1 ? "s" : ""} captured on Hole ${hole}`);
+    toast.success(
+      source === "upload"
+        ? `${next.length} photo${next.length > 1 ? "s" : ""} added from device`
+        : `${next.length} photo${next.length > 1 ? "s" : ""} captured on Hole ${hole}`
+    );
   };
 
   const tagPhoto = (id: string, tag: MomentTag) => {
@@ -82,6 +87,9 @@ export const FairwayMemories = () => {
       <div className="space-y-4 pb-28">
         <Header title="Fairway Memories" sub="Every round tells a story. We keep it forever." />
 
+        <input ref={uploadRef} type="file" accept="image/*" multiple hidden
+          onChange={(e) => { onPick(e.target.files, "upload"); e.currentTarget.value = ""; }} />
+
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setMode("capture")}
             className="gradient-card flex flex-col items-start gap-2 rounded-2xl border border-gold/20 p-4 text-left hover:border-gold/50">
@@ -99,6 +107,11 @@ export const FairwayMemories = () => {
             <span className="absolute inset-y-0 -left-10 w-10 -skew-x-12 bg-white/30 animate-shimmer" />
           </button>
         </div>
+
+        <Button onClick={() => uploadRef.current?.click()} variant="outline"
+          className="w-full border-gold/40 text-gold hover:bg-gold/10">
+          <Upload className="mr-2 h-4 w-4" /> Upload from device
+        </Button>
 
         <Card className="gradient-card border-gold/20 p-4">
           <p className="text-[10px] uppercase tracking-widest text-gold/80">Saved Collages</p>
@@ -160,11 +173,19 @@ export const FairwayMemories = () => {
           </div>
 
           <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple hidden
-            onChange={(e) => onPick(e.target.files)} />
-          <Button onClick={() => fileRef.current?.click()}
-            className="mt-4 w-full gradient-gold text-primary-foreground" size="lg">
-            <Camera className="mr-2 h-5 w-5" /> Capture Moment
-          </Button>
+            onChange={(e) => { onPick(e.target.files, "camera"); e.currentTarget.value = ""; }} />
+          <input ref={uploadRef} type="file" accept="image/*" multiple hidden
+            onChange={(e) => { onPick(e.target.files, "upload"); e.currentTarget.value = ""; }} />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button onClick={() => fileRef.current?.click()}
+              className="gradient-gold text-primary-foreground" size="lg">
+              <Camera className="mr-2 h-5 w-5" /> Capture
+            </Button>
+            <Button onClick={() => uploadRef.current?.click()} variant="outline"
+              className="border-gold/40 text-gold hover:bg-gold/10" size="lg">
+              <Upload className="mr-2 h-5 w-5" /> Upload
+            </Button>
+          </div>
         </Card>
 
         <div className="grid grid-cols-3 gap-2">
