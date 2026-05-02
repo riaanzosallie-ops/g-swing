@@ -8,11 +8,11 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => (
     <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/30 to-background" />
 
     <div className="relative z-10 flex min-h-screen flex-col items-center justify-between px-6 py-12">
-      <div className="flex flex-1 flex-col items-center justify-center gap-6">
-        <p className="text-sm uppercase tracking-[0.5em] text-gold/85">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 pt-[42vh]">
+        <p className="splash-shine text-sm uppercase tracking-[0.45em] text-gold/90 opacity-0 [animation:splash-rise_1s_ease-out_0.3s_forwards]">
           Where Golf Meets Intelligence
         </p>
-        <p className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground/70">
+        <p className="splash-shine text-[10px] uppercase tracking-[0.35em] text-muted-foreground/70 opacity-0 [animation:splash-rise_1s_ease-out_0.6s_forwards]">
           Powered by the Link-Me Ecosystem
         </p>
       </div>
