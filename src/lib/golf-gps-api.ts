@@ -22,6 +22,17 @@ export interface GolfCourse {
   created_at: string;
 }
 
+export interface CourseArrivalDetection {
+  arrived: boolean;
+  should_auto_select: boolean;
+  nearest: GolfCourse | null;
+  nearest_candidate: GolfCourse | null;
+  distance_meters: number | null;
+  arrival_radius_meters: number;
+  player_position: LatLng;
+  message?: string;
+}
+
 export interface TeeBox {
   color: string;         // "championship" | "white" | "red" | "yellow"
   yardage: number;
@@ -201,6 +212,17 @@ export async function fetchNearestCourse(
 ): Promise<{ nearest: GolfCourse | null; distance_meters: number }> {
   const qs = new URLSearchParams({ lat: String(pos.lat), lng: String(pos.lng) });
   return apiFetch(`golf-courses?${qs}`);
+}
+
+/** Detect whether a player has arrived at a course and should auto-select it. */
+export async function detectCourseArrival(
+  pos: LatLng,
+  options: { radiusMeters?: number; country?: string } = {},
+): Promise<CourseArrivalDetection> {
+  const qs = new URLSearchParams({ lat: String(pos.lat), lng: String(pos.lng) });
+  if (options.radiusMeters) qs.set("radius_meters", String(options.radiusMeters));
+  if (options.country) qs.set("country", options.country);
+  return apiFetch<CourseArrivalDetection>(`golf-courses/detect?${qs}`);
 }
 
 // ─── Round API ────────────────────────────────────────────────────────────────

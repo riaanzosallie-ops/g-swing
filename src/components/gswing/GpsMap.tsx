@@ -19,10 +19,10 @@ import {
 } from "lucide-react";
 import { useBag } from "@/lib/gswing-store";
 import {
+  detectCourseArrival,
   endShot,
   fetchCourses,
   fetchHoleGps,
-  fetchNearestCourse,
   getOrCreateSessionId,
   setCurrentHole,
   startRound,
@@ -584,10 +584,11 @@ export const GpsMap = () => {
         const next = { lat: position.coords.latitude, lng: position.coords.longitude };
         setPlayerPos(next);
         try {
-          const nearest = await fetchNearestCourse(next);
-          if (nearest.nearest && nearest.nearest.id !== courseId && nearest.distance_meters <= 5000) {
-            setCourseId(nearest.nearest.id);
-            toast.success(`Detected ${nearest.nearest.name}`);
+          const detection = await detectCourseArrival(next, { country: "AE", radiusMeters: 1200 });
+          if (detection.arrived && detection.nearest && detection.nearest.id !== courseId) {
+            setCourseId(detection.nearest.id);
+            setHole(1);
+            toast.success(`Arrived at ${detection.nearest.name}`);
             await pushPlayerLocation(next);
             return;
           }
@@ -597,9 +598,10 @@ export const GpsMap = () => {
         const localNearest = nearestLocalCourse(next, courses);
         if (localNearest && localNearest.id !== courseId) {
           const distanceYards = haversineYards(next, { lat: localNearest.lat, lng: localNearest.lng });
-          if (distanceYards <= 6500) {
+          if (distanceYards <= 1400) {
             setCourseId(localNearest.id);
-            toast.success(`Detected ${localNearest.name}`);
+            setHole(1);
+            toast.success(`Arrived at ${localNearest.name}`);
           }
         }
         await pushPlayerLocation(next);

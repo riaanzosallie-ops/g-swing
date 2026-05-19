@@ -17,6 +17,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const DEFAULT_ARRIVAL_RADIUS_METERS = 1200;
+
 // ─── Haversine (yards) ────────────────────────────────────────────────────────
 function haversineYards(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000;
@@ -51,6 +53,18 @@ function err(message: string, status = 400) {
   return json({ error: message }, status);
 }
 
+function parseLatLng(qs: URLSearchParams): { lat: number; lng: number } | null {
+  const lat = parseFloat(qs.get("lat") ?? "");
+  const lng = parseFloat(qs.get("lng") ?? "");
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+function arrivalRadius(qs: URLSearchParams): number {
+  const radius = parseInt(qs.get("radius_meters") ?? "", 10);
+  if (!Number.isFinite(radius)) return DEFAULT_ARRIVAL_RADIUS_METERS;
+  return Math.min(5000, Math.max(100, radius));
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -78,21 +92,67 @@ serve(async (req) => {
       return json({ courses: data ?? [] });
     }
 
-    // GET /golf-courses/nearest?lat=&lng=
-    if (parts.length === 0 && qs.has("lat") && qs.has("lng")) {
-      const playerLat = parseFloat(qs.get("lat")!);
-      const playerLng = parseFloat(qs.get("lng")!);
-      if (isNaN(playerLat) || isNaN(playerLng)) return err("Invalid lat/lng");
+    // GET /golf-courses?lat=&lng= or /golf-courses/nearest?lat=&lng=
+    if ((parts.length === 0 || (parts.length === 1 && parts[0] === "nearest")) && qs.has("lat") && qs.has("lng")) {
+      const pos = parseLatLng(qs);
+      if (!pos) return err("Invalid lat/lng");
       const { data: courses, error } = await supabase.from("golf_courses").select("*");
       if (error) throw error;
       if (!courses?.length) return json({ nearest: null });
       const nearest = courses.reduce((best: typeof courses[0], c: typeof courses[0]) => {
-        const dBest = haversineMeters(playerLat, playerLng, best.lat, best.lng);
-        const dC    = haversineMeters(playerLat, playerLng, c.lat,    c.lng);
+        const dBest = haversineMeters(pos.lat, pos.lng, best.lat, best.lng);
+        const dC    = haversineMeters(pos.lat, pos.lng, c.lat,    c.lng);
         return dC < dBest ? c : best;
       });
-      const distM = haversineMeters(playerLat, playerLng, nearest.lat, nearest.lng);
+      const distM = haversineMeters(pos.lat, pos.lng, nearest.lat, nearest.lng);
       return json({ nearest, distance_meters: distM });
+    }
+
+    // GET /golf-courses/detect?lat=&lng=&radius_meters=&country=
+    if (parts.length === 1 && parts[0] === "detect") {
+      const pos = parseLatLng(qs);
+      if (!pos) return err("Invalid lat/lng");
+
+      const radiusMeters = arrivalRadius(qs);
+      const country = qs.get("country")?.toUpperCase();
+      let query = supabase.from("golf_courses").select("*");
+      if (country) query = query.eq("country", country);
+
+      const { data: courses, error } = await query;
+      if (error) throw error;
+
+      if (!courses?.length) {
+        return json({
+          arrived: false,
+          should_auto_select: false,
+          nearest: null,
+          nearest_candidate: null,
+          distance_meters: null,
+          arrival_radius_meters: radiusMeters,
+          player_position: pos,
+        });
+      }
+
+      const nearest = courses.reduce((best: typeof courses[0], c: typeof courses[0]) => {
+        const dBest = haversineMeters(pos.lat, pos.lng, best.lat, best.lng);
+        const dC = haversineMeters(pos.lat, pos.lng, c.lat, c.lng);
+        return dC < dBest ? c : best;
+      });
+      const distanceMeters = haversineMeters(pos.lat, pos.lng, nearest.lat, nearest.lng);
+      const arrived = distanceMeters <= radiusMeters;
+
+      return json({
+        arrived,
+        should_auto_select: arrived,
+        nearest: arrived ? nearest : null,
+        nearest_candidate: nearest,
+        distance_meters: distanceMeters,
+        arrival_radius_meters: radiusMeters,
+        player_position: pos,
+        message: arrived
+          ? `Player arrived at ${nearest.name}.`
+          : `Nearest course is ${nearest.name}, ${distanceMeters}m away.`,
+      });
     }
 
     const courseId = parts[0];

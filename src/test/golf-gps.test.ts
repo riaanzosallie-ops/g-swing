@@ -268,6 +268,55 @@ describe("fetchHoleGps (mocked)", () => {
   });
 });
 
+describe("detectCourseArrival (mocked)", () => {
+  const sharjahCourse = {
+    id: "00000000-0000-0000-0000-000000000101",
+    name: "Sharjah Golf and Shooting Club",
+    city: "Sharjah",
+    country: "AE",
+    lat: 25.3536,
+    lng: 55.4881,
+    holes_count: 9,
+    par: 36,
+    website: null,
+    timezone: "Asia/Dubai",
+    created_at: new Date().toISOString(),
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        arrived: true,
+        should_auto_select: true,
+        nearest: sharjahCourse,
+        nearest_candidate: sharjahCourse,
+        distance_meters: 42,
+        arrival_radius_meters: 1200,
+        player_position: { lat: 25.3537, lng: 55.4882 },
+      }),
+    }));
+    vi.stubEnv("VITE_SUPABASE_URL", "https://test.supabase.co");
+    vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "test-key");
+  });
+
+  it("calls the backend arrival detection endpoint with radius and country", async () => {
+    const { detectCourseArrival } = await import("@/lib/golf-gps-api");
+    const result = await detectCourseArrival(
+      { lat: 25.3537, lng: 55.4882 },
+      { radiusMeters: 1200, country: "AE" },
+    );
+
+    expect(result.arrived).toBe(true);
+    expect(result.nearest?.name).toBe("Sharjah Golf and Shooting Club");
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(calledUrl).toContain("golf-courses/detect");
+    expect(calledUrl).toContain("radius_meters=1200");
+    expect(calledUrl).toContain("country=AE");
+  });
+});
+
 describe("startRound (mocked)", () => {
   const mockRound = {
     id: "round-uuid-1", course_id: "course-1", session_id: "sess-1",
