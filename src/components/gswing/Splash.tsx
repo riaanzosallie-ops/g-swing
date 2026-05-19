@@ -13,24 +13,22 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => (
     <div className="splash-gold-sweep absolute inset-0" />
 
     <div className="relative z-10 flex min-h-screen flex-col px-6 pb-8 pt-7">
-      <header className="flex items-center justify-between opacity-0 [animation:splash-rise_0.9s_ease-out_0.15s_forwards]">
+      <header className="flex items-center justify-between pr-24 opacity-0 [animation:splash-rise_0.9s_ease-out_0.15s_forwards]">
         <span className="text-[10px] uppercase tracking-[0.34em] text-gold-soft/80">Premium Golf OS</span>
         <span className="text-[10px] uppercase tracking-[0.26em] text-foreground/70">LinkMe</span>
       </header>
 
-      <main className="flex flex-1 flex-col justify-end pb-8">
-        <div className="mb-8 flex items-center justify-center">
-          <div className="splash-logo relative flex h-44 w-44 items-center justify-center">
-            <span className="splash-logo-ring absolute inset-0 rounded-full border border-gold/30" />
-            <span className="splash-logo-ring splash-logo-ring-delay absolute inset-5 rounded-full border border-gold/35" />
-            <span className="absolute h-28 w-28 rounded-full bg-black/35 shadow-[0_0_80px_hsl(45_80%_58%/0.25)] backdrop-blur-sm" />
-            <img src={golfBall} alt="" className="splash-ball absolute h-20 w-20 object-contain drop-shadow-[0_12px_30px_hsl(0_0%_0%/0.65)]" />
-            <span className="absolute -bottom-1 font-serif text-5xl font-bold tracking-normal text-gold drop-shadow-[0_8px_28px_hsl(0_0%_0%/0.8)]">
-              G
-            </span>
-          </div>
-        </div>
+      <div className="splash-corner-mark absolute right-4 top-4 flex h-24 w-24 items-center justify-center">
+        <span className="absolute inset-0 rounded-full border border-gold/24" />
+        <span className="absolute inset-3 rounded-full border border-gold/24" />
+        <span className="absolute inset-[25px] rounded-full bg-black/32 backdrop-blur-[2px]" />
+        <img src={golfBall} alt="" className="absolute h-10 w-10 object-contain drop-shadow-[0_7px_18px_hsl(0_0%_0%/0.75)]" />
+        <span className="absolute bottom-2 font-serif text-3xl font-bold leading-none tracking-normal text-gold drop-shadow-[0_6px_18px_hsl(0_0%_0%/0.8)]">
+          G
+        </span>
+      </div>
 
+      <main className="flex flex-1 flex-col justify-end pb-8">
         <div className="space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full border border-gold/25 bg-black/24 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-gold-soft/90 opacity-0 backdrop-blur-sm [animation:splash-rise_0.9s_ease-out_0.45s_forwards]">
             <Sparkles className="h-3.5 w-3.5 text-gold" />
