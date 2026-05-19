@@ -36,6 +36,7 @@ import {
 } from "@/lib/golf-gps-api";
 import { haversineYards, toDisplayUnit, unitLabel, type LatLng } from "@/lib/gps-utils";
 import { toast } from "sonner";
+import courseBg from "@/assets/course-bg.jpg";
 
 const DEMO_COURSE_ID = "00000000-0000-0000-0000-000000000001";
 const DEFAULT_POSITION: LatLng = { lat: 25.0936, lng: 55.1545 };
@@ -237,137 +238,94 @@ function CartGpsView({
   const playerPoint = playerPosition ? project(playerPosition) : null;
   const frontPoint = front ? project(front) : null;
   const backPoint = back ? project(back) : null;
-  const greenPolygon = green?.polygon?.coordinates?.[0]?.map(([lng, lat]) => project({ lat, lng })) ?? [];
   const unitText = displayUnit === "m" ? "Meters" : "Yards";
-
-  const fairwayPath = `M ${teePoint.x} ${teePoint.y} C ${teePoint.x - 120} ${(teePoint.y + pinPoint.y) / 2}, ${
-    pinPoint.x + 180
-  } ${(teePoint.y + pinPoint.y) / 2}, ${pinPoint.x} ${pinPoint.y}`;
+  const toCssPoint = (point: DisplayPoint) => ({
+    left: `${Math.max(2, Math.min(98, (point.x / 1000) * 100))}%`,
+    top: `${Math.max(2, Math.min(98, (point.y / 560) * 100))}%`,
+  });
 
   return (
-    <div className="relative overflow-hidden rounded-lg border-[10px] border-black bg-black shadow-elegant">
-      <div className="relative overflow-hidden rounded-sm border border-zinc-700">
-        <svg viewBox="0 0 1000 560" className="block h-[58vh] min-h-[395px] w-full">
-          <defs>
-            <filter id="gpsGlow" x="-40%" y="-40%" width="180%" height="180%">
-              <feGaussianBlur stdDeviation="6" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            <filter id="cartSoftFocus">
-              <feGaussianBlur stdDeviation="0.75" />
-            </filter>
-            <linearGradient id="fairway" x1="0" x2="1" y1="1" y2="0">
-              <stop offset="0%" stopColor="hsl(153 38% 20%)" />
-              <stop offset="100%" stopColor="hsl(139 44% 45%)" />
-            </linearGradient>
-            <radialGradient id="cartGround" cx="48%" cy="34%" r="78%">
-              <stop offset="0%" stopColor="hsl(93 25% 64%)" />
-              <stop offset="44%" stopColor="hsl(99 24% 36%)" />
-              <stop offset="100%" stopColor="hsl(116 26% 12%)" />
-            </radialGradient>
-            <pattern id="scanlines" width="4" height="4" patternUnits="userSpaceOnUse">
-              <rect width="4" height="1" fill="hsl(0 0% 100% / 0.08)" />
-            </pattern>
-          </defs>
+    <div className="relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
+      <div
+        className="relative h-[58vh] min-h-[410px] overflow-hidden bg-cover bg-center"
+        style={{ backgroundImage: `url(${courseBg})` }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_46%_42%,transparent_0%,hsl(150_35%_5%/0.14)_42%,hsl(150_35%_3%/0.52)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,hsl(45_60%_92%/0.06),transparent_20%,hsl(150_50%_4%/0.18)_100%)]" />
+        <div className="absolute inset-0 opacity-[0.18] [background-image:repeating-linear-gradient(0deg,transparent_0px,transparent_3px,hsl(0_0%_100%/0.18)_4px)]" />
 
-          <rect width="1000" height="560" fill="url(#cartGround)" />
-          <path d="M0 104 C178 15 295 36 405 90 C530 152 668 55 796 18 C900 -13 973 5 1000 34 L1000 0 L0 0Z" fill="hsl(40 30% 76% / 0.28)" filter="url(#cartSoftFocus)" />
-          <path d="M-78 350 C52 248 167 250 251 306 C336 362 355 448 270 523 C176 607 22 548 -86 504Z" fill="hsl(213 76% 84% / 0.92)" stroke="hsl(218 90% 94% / 0.9)" strokeWidth="9" />
-          <path d="M765 332 C875 244 973 275 1036 365 C1095 449 1070 558 972 592 C855 633 750 546 718 460 C700 412 720 371 765 332Z" fill="hsl(219 74% 86% / 0.92)" stroke="hsl(218 90% 95% / 0.95)" strokeWidth="9" />
+        <div className="absolute left-4 top-4 rounded-md border border-black/30 bg-black/55 px-3 py-1.5 text-sm backdrop-blur-sm">
+          <span className="font-semibold text-gold">Hole {gps?.hole_number ?? "-"}</span>
+          <span className="text-white/75"> - Par {gps?.par ?? "-"}</span>
+        </div>
 
-          <path d={fairwayPath} stroke="hsl(143 33% 22% / 0.86)" strokeWidth="160" strokeLinecap="round" fill="none" opacity="0.88" />
-          <path d={fairwayPath} stroke="url(#fairway)" strokeWidth="110" strokeLinecap="round" fill="none" opacity="0.76" />
-          <path d={fairwayPath} stroke="hsl(130 45% 49% / 0.42)" strokeWidth="82" strokeLinecap="round" fill="none" />
-
-          {hazards.map((hazard, index) => {
-            const location = hazard.lat && hazard.lng ? project({ lat: hazard.lat, lng: hazard.lng }) : null;
-            if (!location) return null;
-            const isWater = hazard.type === "water";
-            return (
-              <ellipse
-                key={`${hazard.type}-${hazard.label ?? index}`}
-                cx={location.x}
-                cy={location.y}
-                rx={isWater ? 82 : 48}
-                ry={isWater ? 54 : 31}
-                fill={isWater ? "hsl(211 72% 84% / 0.9)" : "hsl(43 44% 78% / 0.9)"}
-                stroke={isWater ? "hsl(215 95% 94%)" : "hsl(42 65% 90%)"}
-                strokeWidth="4"
-              />
-            );
-          })}
-
-          {greenPolygon.length >= 3 ? (
-            <polygon
-              points={polygonPath(greenPolygon)}
-              fill="hsl(143 52% 70%)"
-              stroke="hsl(151 52% 30%)"
-              strokeWidth="10"
-              filter="url(#gpsGlow)"
+        {hazards.map((hazard, index) => {
+          const location = hazard.lat && hazard.lng ? project({ lat: hazard.lat, lng: hazard.lng }) : null;
+          if (!location) return null;
+          const isWater = hazard.type === "water";
+          return (
+            <div
+              key={`${hazard.type}-${hazard.label ?? index}`}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-[50%] border backdrop-blur-[1px] ${
+                isWater
+                  ? "h-24 w-36 border-sky-100/50 bg-sky-200/35 shadow-[inset_0_0_24px_hsl(210_70%_92%/0.28)]"
+                  : "h-16 w-24 border-stone-100/55 bg-stone-200/45 shadow-[inset_0_0_16px_hsl(45_45%_88%/0.3)]"
+              }`}
+              style={toCssPoint(location)}
             />
-          ) : (
-            <ellipse
-              cx={pinPoint.x}
-              cy={pinPoint.y}
-              rx="178"
-              ry="108"
-              fill="hsl(143 52% 70%)"
-              stroke="hsl(151 52% 30%)"
-              strokeWidth="10"
-              filter="url(#gpsGlow)"
-            />
-          )}
+          );
+        })}
 
-          {backPoint && (
-            <g>
-              <rect x={backPoint.x - 42} y={backPoint.y - 70} width="84" height="43" rx="7" fill="hsl(45 35% 94%)" stroke="hsl(224 18% 20%)" strokeWidth="2" />
-              <text x={backPoint.x} y={backPoint.y - 39} textAnchor="middle" fontSize="34" fill="hsl(150 35% 10%)">
-                {formatDistance(backDistance)}
-              </text>
-            </g>
-          )}
+        <div
+          className="absolute h-28 w-44 -translate-x-1/2 -translate-y-1/2 rounded-[46%_54%_48%_52%] border border-emerald-100/45 bg-emerald-300/34 shadow-[0_0_26px_hsl(150_80%_72%/0.22),inset_0_0_24px_hsl(142_60%_82%/0.26)] backdrop-blur-[1px]"
+          style={toCssPoint(pinPoint)}
+        />
 
-          {frontPoint && (
-            <g>
-              <path d={`M${frontPoint.x - 13} ${frontPoint.y + 10} L${frontPoint.x} ${frontPoint.y - 4} L${frontPoint.x + 13} ${frontPoint.y + 10}Z`} fill="hsl(224 18% 20%)" />
-              <rect x={frontPoint.x - 42} y={frontPoint.y + 10} width="84" height="43" rx="7" fill="hsl(45 35% 94%)" stroke="hsl(224 18% 20%)" strokeWidth="2" />
-              <text x={frontPoint.x} y={frontPoint.y + 41} textAnchor="middle" fontSize="34" fill="hsl(150 35% 10%)">
-                {formatDistance(frontDistance)}
-              </text>
-            </g>
-          )}
+        {backPoint && (
+          <div
+            className="absolute -translate-x-1/2 -translate-y-[145%] rounded border border-zinc-800 bg-white/90 px-2 py-0.5 font-serif text-xl leading-none text-zinc-900 shadow"
+            style={toCssPoint(backPoint)}
+          >
+            {formatDistance(backDistance)}
+          </div>
+        )}
 
-          <g transform={`translate(${teePoint.x},${teePoint.y})`}>
-            <circle r="13" fill="hsl(45 80% 58%)" stroke="hsl(150 35% 8%)" strokeWidth="4" />
-          </g>
+        {frontPoint && (
+          <div
+            className="absolute -translate-x-1/2 translate-y-[35%] rounded border border-zinc-800 bg-white/90 px-2 py-0.5 font-serif text-xl leading-none text-zinc-900 shadow"
+            style={toCssPoint(frontPoint)}
+          >
+            {formatDistance(frontDistance)}
+          </div>
+        )}
 
-          <g transform={`translate(${pinPoint.x},${pinPoint.y})`}>
-            <circle r="17" fill="hsl(45 35% 94%)" stroke="hsl(150 35% 8%)" strokeWidth="5" />
-            <path d="M-17 0H17M0 -17V17" stroke="hsl(150 35% 8%)" strokeWidth="3" />
-            <path d="M-17 -17 A17 17 0 0 1 0 -17 L0 0 L-17 0Z" fill="hsl(248 24% 35%)" />
-            <path d="M0 0 L17 0 A17 17 0 0 1 0 17Z" fill="hsl(248 24% 35%)" />
-          </g>
+        <div
+          className="absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-black/70 bg-gold shadow"
+          style={toCssPoint(teePoint)}
+        />
 
-          {playerPoint && (
-            <g transform={`translate(${playerPoint.x},${playerPoint.y})`}>
-              <circle r="24" fill="hsl(150 70% 48%)" opacity="0.2" />
-              <circle r="10" fill="hsl(45 35% 95%)" stroke="hsl(150 70% 42%)" strokeWidth="5" />
-            </g>
-          )}
+        <div
+          className="absolute h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-[4px] border-black/80 bg-white shadow"
+          style={toCssPoint(pinPoint)}
+        >
+          <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-black/80" />
+          <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-black/80" />
+          <span className="absolute inset-0 rounded-full bg-[conic-gradient(hsl(248_20%_35%)_0_25%,transparent_25%_50%,hsl(248_20%_35%)_50%_75%,transparent_75%)]" />
+        </div>
 
-          <rect width="1000" height="560" fill="url(#scanlines)" opacity="0.34" />
-          <rect width="1000" height="560" fill="hsl(45 100% 88% / 0.1)" />
-        </svg>
+        {playerPoint && (
+          <div
+            className="absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-emerald-300 bg-white shadow-[0_0_18px_hsl(150_70%_55%/0.45)]"
+            style={toCssPoint(playerPoint)}
+          />
+        )}
 
-        <div className="pointer-events-none absolute right-4 top-4 w-[178px] overflow-hidden rounded-xl border border-white/70 bg-gradient-to-br from-white/85 to-yellow-100/75 text-yellow-700 shadow-xl backdrop-blur-sm sm:w-[218px]">
+        <div className="pointer-events-none absolute right-4 top-4 w-[178px] overflow-hidden rounded-lg border border-gold/40 bg-background/88 text-gold shadow-xl backdrop-blur-md sm:w-[218px]">
           <div className="grid grid-cols-[54px_1fr] sm:grid-cols-[68px_1fr]">
-            <div className="flex flex-col items-center justify-center border-r border-white/60 bg-lime-300/65 p-2 text-[10px] leading-tight text-emerald-900">
-              <div className="relative mb-1 h-10 w-10 rounded-full border-4 border-lime-500 bg-lime-200 shadow-inner">
-                <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-emerald-800/50" />
-                <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-emerald-800/50" />
+            <div className="flex flex-col items-center justify-center border-r border-gold/25 bg-emerald/45 p-2 text-[10px] leading-tight text-gold-soft">
+              <div className="relative mb-1 h-10 w-10 rounded-full border-4 border-gold/70 bg-emerald shadow-inner">
+                <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/50" />
+                <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/50" />
                 <span className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
                 <span className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[conic-gradient(hsl(248_24%_35%)_0_25%,transparent_25%_50%,hsl(248_24%_35%)_50%_75%,transparent_75%)]" />
               </div>
@@ -376,11 +334,11 @@ function CartGpsView({
               <span>Green</span>
             </div>
             <div className="p-2 text-right">
-              <div className="font-serif text-5xl font-bold leading-none tracking-normal sm:text-6xl">
+              <div className="font-serif text-5xl font-bold leading-none tracking-normal text-gold sm:text-6xl">
                 {formatDistance(centerDistance)}
               </div>
-              <div className="text-2xl font-semibold leading-none sm:text-3xl">{unitText}</div>
-              <div className="mt-3 text-center text-[10px] text-yellow-800/70">
+              <div className="text-2xl font-semibold leading-none text-gold-soft sm:text-3xl">{unitText}</div>
+              <div className="mt-3 text-center text-[10px] text-muted-foreground">
                 Hole {gps?.hole_number ?? "-"}
                 <br />
                 Par {gps?.par ?? "-"}, Handicap {gps?.handicap ?? "-"}
@@ -389,8 +347,8 @@ function CartGpsView({
           </div>
         </div>
 
-        <div className="pointer-events-none absolute bottom-8 right-5 hidden w-[210px] rounded-sm border border-white/30 bg-zinc-950/58 p-3 text-center text-white/85 shadow-xl backdrop-blur-sm sm:block">
-          <div className="mx-auto mb-2 flex h-14 w-20 items-center justify-center rounded-md bg-gradient-to-b from-slate-200/85 to-blue-300/70 shadow-inner">
+        <div className="pointer-events-none absolute bottom-8 right-5 hidden w-[210px] rounded-md border border-gold/20 bg-black/58 p-3 text-center text-white/85 shadow-xl backdrop-blur-sm sm:block">
+          <div className="mx-auto mb-2 flex h-14 w-20 items-center justify-center rounded-md bg-gradient-to-b from-slate-200/75 to-blue-300/55 shadow-inner">
             <Home className="h-8 w-8 text-white drop-shadow" />
           </div>
           <div className="text-[10px] text-white/70">Main Menu</div>
