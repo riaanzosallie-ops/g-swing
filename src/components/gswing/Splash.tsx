@@ -5,8 +5,18 @@ import { Apple, ChevronRight, Mail, Sparkles } from "lucide-react";
 
 export const Splash = ({ onEnter }: { onEnter: () => void }) => (
   <div className="splash-hero relative min-h-screen w-full overflow-hidden bg-background">
-    <img src={splashBg} alt="" className="absolute inset-0 h-full w-full object-cover" />
-    <div className="absolute inset-0 bg-[linear-gradient(180deg,hsl(150_35%_3%/0.18)_0%,hsl(150_35%_3%/0.32)_38%,hsl(150_35%_3%/0.92)_100%)]" />
+    <div className="absolute inset-0 grid grid-cols-2">
+      <div
+        className="splash-region splash-region-dubai relative overflow-hidden bg-cover bg-center"
+        style={{ backgroundImage: `url(${splashBg})` }}
+      />
+      <div
+        className="splash-region splash-region-sa relative overflow-hidden bg-cover bg-center"
+        style={{ backgroundImage: `url(${splashBg})` }}
+      />
+    </div>
+    <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-gold/45 to-transparent" />
+    <div className="absolute inset-0 bg-[linear-gradient(180deg,hsl(150_35%_3%/0.18)_0%,hsl(150_35%_3%/0.26)_38%,hsl(150_35%_3%/0.92)_100%)]" />
     <div className="splash-dubai-sa absolute inset-0" />
     <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" />
     <div className="splash-film-grain absolute inset-0" />

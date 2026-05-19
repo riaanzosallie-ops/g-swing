@@ -201,8 +201,60 @@ All colors MUST be HSL.
   0%, 100% { box-shadow: 0 0 24px hsl(45 80% 58% / 0.12); }
   50% { box-shadow: 0 0 38px hsl(45 80% 58% / 0.28); }
 }
-.splash-hero > img {
+.splash-region {
   animation: splash-ken-burns 10s ease-out forwards;
+}
+.splash-region::before,
+.splash-region::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+.splash-region-dubai {
+  background-position: 42% center;
+  filter: saturate(1.08) contrast(1.08);
+  transform-origin: left center;
+}
+.splash-region-dubai::before {
+  inset: 0;
+  background:
+    radial-gradient(circle at 68% 18%, hsl(42 100% 70% / 0.38), transparent 26%),
+    linear-gradient(112deg, hsl(37 95% 47% / 0.36) 0%, transparent 54%),
+    linear-gradient(180deg, hsl(38 78% 18% / 0.12), hsl(150 40% 4% / 0.42));
+}
+.splash-region-dubai::after {
+  right: -4%;
+  bottom: 19%;
+  width: 92%;
+  height: 42%;
+  opacity: 0.45;
+  background:
+    linear-gradient(90deg, transparent 0 7%, hsl(43 80% 78% / 0.42) 7% 9%, transparent 9% 16%, hsl(43 80% 72% / 0.28) 16% 18%, transparent 18% 25%, hsl(43 80% 72% / 0.24) 25% 27%, transparent 27%),
+    linear-gradient(180deg, transparent 0 70%, hsl(42 90% 65% / 0.48) 70% 72%, transparent 72%);
+  transform: skewX(-12deg);
+}
+.splash-region-sa {
+  background-position: 58% center;
+  filter: saturate(1.18) contrast(1.04);
+  transform-origin: right center;
+}
+.splash-region-sa::before {
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 18%, hsl(48 95% 68% / 0.2), transparent 24%),
+    linear-gradient(118deg, transparent 0%, hsl(150 72% 18% / 0.24) 38%, hsl(151 82% 36% / 0.34) 100%),
+    linear-gradient(180deg, hsl(150 20% 6% / 0.1), hsl(150 40% 4% / 0.48));
+}
+.splash-region-sa::after {
+  left: -8%;
+  bottom: 22%;
+  width: 112%;
+  height: 28%;
+  opacity: 0.48;
+  background:
+    linear-gradient(176deg, transparent 0 31%, hsl(151 36% 58% / 0.26) 32% 42%, transparent 43%),
+    linear-gradient(182deg, transparent 0 47%, hsl(150 32% 25% / 0.44) 48% 62%, transparent 63%),
+    radial-gradient(ellipse at 70% 78%, hsl(151 48% 52% / 0.3) 0 34%, transparent 35%);
 }
 .splash-film-grain {
   opacity: 0.18;
@@ -213,39 +265,10 @@ All colors MUST be HSL.
 }
 .splash-dubai-sa {
   background:
-    radial-gradient(circle at 78% 15%, hsl(42 100% 70% / 0.36), transparent 24%),
-    linear-gradient(116deg, hsl(39 90% 48% / 0.28) 0%, transparent 32%),
-    radial-gradient(circle at 10% 72%, hsl(151 82% 42% / 0.28), transparent 34%),
-    linear-gradient(28deg, hsl(148 65% 16% / 0.62) 0%, transparent 46%),
+    linear-gradient(90deg, hsl(39 90% 48% / 0.16) 0%, transparent 38%, hsl(45 80% 58% / 0.1) 50%, transparent 62%, hsl(151 82% 42% / 0.18) 100%),
+    radial-gradient(circle at 24% 18%, hsl(42 100% 70% / 0.2), transparent 24%),
+    radial-gradient(circle at 78% 70%, hsl(151 82% 42% / 0.22), transparent 34%),
     linear-gradient(180deg, transparent 0%, hsl(150 35% 3% / 0.2) 52%, hsl(150 35% 3% / 0.94) 100%);
-}
-.splash-dubai-sa::before,
-.splash-dubai-sa::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-}
-.splash-dubai-sa::before {
-  right: -12%;
-  top: 9%;
-  width: 64%;
-  height: 42%;
-  opacity: 0.34;
-  background:
-    linear-gradient(90deg, transparent 0 8%, hsl(43 80% 72% / 0.42) 8% 10%, transparent 10% 18%, hsl(43 80% 72% / 0.3) 18% 20%, transparent 20%),
-    linear-gradient(180deg, transparent 0 64%, hsl(42 90% 65% / 0.45) 64% 66%, transparent 66%);
-  transform: skewX(-13deg);
-}
-.splash-dubai-sa::after {
-  left: -16%;
-  bottom: 8%;
-  width: 72%;
-  height: 30%;
-  opacity: 0.32;
-  background:
-    radial-gradient(ellipse at 28% 70%, hsl(151 52% 62% / 0.34) 0 32%, transparent 33%),
-    radial-gradient(ellipse at 58% 64%, hsl(151 45% 48% / 0.28) 0 38%, transparent 39%),
-    linear-gradient(180deg, transparent 0 68%, hsl(151 52% 34% / 0.32) 69% 72%, transparent 73%);
 }
 .splash-gold-sweep {
   left: 0;
