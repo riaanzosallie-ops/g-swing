@@ -38,24 +38,58 @@ import { haversineYards, toDisplayUnit, unitLabel, type LatLng } from "@/lib/gps
 import { toast } from "sonner";
 import courseBg from "@/assets/course-bg.jpg";
 
-const DEMO_COURSE_ID = "00000000-0000-0000-0000-000000000001";
-const DEFAULT_POSITION: LatLng = { lat: 25.0936, lng: 55.1545 };
+const MAIN_COURSE_ID = "00000000-0000-0000-0000-000000000101";
+const DEFAULT_POSITION: LatLng = { lat: 25.3536, lng: 55.4881 };
 const DEMO_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 5, 4, 3, 4, 4];
 
-const DEMO_COURSES: GolfCourse[] = [
-  {
-    id: DEMO_COURSE_ID,
-    name: "Emirates Golf Club - Majlis",
-    city: "Dubai",
+function makeCourse(
+  id: string,
+  name: string,
+  city: string,
+  lat: number,
+  lng: number,
+  holesCount = 18,
+  par = 72,
+): GolfCourse {
+  return {
+    id,
+    name,
+    city,
     country: "AE",
-    lat: 25.0911,
-    lng: 55.1572,
-    holes_count: 18,
-    par: 72,
+    lat,
+    lng,
+    holes_count: holesCount,
+    par,
     website: null,
     timezone: "Asia/Dubai",
     created_at: new Date().toISOString(),
-  },
+  };
+}
+
+const UAE_COURSES: GolfCourse[] = [
+  makeCourse(MAIN_COURSE_ID, "Sharjah Golf and Shooting Club", "Sharjah", 25.3536, 55.4881, 9, 36),
+  makeCourse("00000000-0000-0000-0000-000000000001", "Emirates Golf Club - Majlis", "Dubai", 25.0911, 55.1572),
+  makeCourse("00000000-0000-0000-0000-000000000102", "Emirates Golf Club - Faldo", "Dubai", 25.0915, 55.1585),
+  makeCourse("00000000-0000-0000-0000-000000000103", "Dubai Creek Golf and Yacht Club", "Dubai", 25.2420, 55.3330, 18, 71),
+  makeCourse("00000000-0000-0000-0000-000000000104", "Jumeirah Golf Estates - Earth", "Dubai", 25.0259, 55.1856),
+  makeCourse("00000000-0000-0000-0000-000000000105", "Jumeirah Golf Estates - Fire", "Dubai", 25.0268, 55.1840),
+  makeCourse("00000000-0000-0000-0000-000000000106", "Trump International Golf Club Dubai", "Dubai", 25.0353, 55.2272),
+  makeCourse("00000000-0000-0000-0000-000000000107", "Dubai Hills Golf Club", "Dubai", 25.1176, 55.2535),
+  makeCourse("00000000-0000-0000-0000-000000000108", "The Els Club Dubai", "Dubai", 25.0344, 55.2207, 18, 72),
+  makeCourse("00000000-0000-0000-0000-000000000109", "Arabian Ranches Golf Club", "Dubai", 25.0533, 55.2708, 18, 72),
+  makeCourse("00000000-0000-0000-0000-000000000110", "The Montgomerie Golf Club Dubai", "Dubai", 25.0709, 55.1514, 18, 72),
+  makeCourse("00000000-0000-0000-0000-000000000111", "JA The Resort Golf Course", "Dubai", 24.9884, 55.0270, 9, 36),
+  makeCourse("00000000-0000-0000-0000-000000000112", "The Track Meydan Golf", "Dubai", 25.1586, 55.3004, 9, 36),
+  makeCourse("00000000-0000-0000-0000-000000000113", "Yas Links Abu Dhabi", "Abu Dhabi", 24.4673, 54.6010),
+  makeCourse("00000000-0000-0000-0000-000000000114", "Saadiyat Beach Golf Club", "Abu Dhabi", 24.5547, 54.4282),
+  makeCourse("00000000-0000-0000-0000-000000000115", "Abu Dhabi Golf Club", "Abu Dhabi", 24.4277, 54.5682, 27, 72),
+  makeCourse("00000000-0000-0000-0000-000000000116", "Abu Dhabi City Golf Club", "Abu Dhabi", 24.4399, 54.3863, 9, 35),
+  makeCourse("00000000-0000-0000-0000-000000000117", "Al Ghazal Golf Club", "Abu Dhabi", 24.4287, 54.6451, 18, 71),
+  makeCourse("00000000-0000-0000-0000-000000000118", "Al Ain Equestrian Shooting and Golf Club", "Al Ain", 24.1844, 55.7608, 18, 71),
+  makeCourse("00000000-0000-0000-0000-000000000119", "Al Dhannah Golf Club", "Al Dhannah", 24.1928, 52.6267, 9, 36),
+  makeCourse("00000000-0000-0000-0000-000000000120", "Al Zorah Golf Club", "Ajman", 25.4149, 55.4689, 18, 72),
+  makeCourse("00000000-0000-0000-0000-000000000121", "Al Hamra Golf Club", "Ras Al Khaimah", 25.6842, 55.7792, 18, 72),
+  makeCourse("00000000-0000-0000-0000-000000000122", "Tower Links Golf Club", "Ras Al Khaimah", 25.7776, 55.9650, 18, 72),
 ];
 
 type DisplayPoint = { x: number; y: number };
@@ -196,6 +230,15 @@ function createFallbackHoleGps(
       : null,
     recommended_target: par === 3 ? "Center of green" : "Fairway to green approach",
   };
+}
+
+function nearestLocalCourse(position: LatLng, courses: GolfCourse[]): GolfCourse | null {
+  if (!courses.length) return null;
+  return courses.reduce((best, course) => {
+    const bestDistance = haversineYards(position, { lat: best.lat, lng: best.lng });
+    const courseDistance = haversineYards(position, { lat: course.lat, lng: course.lng });
+    return courseDistance < bestDistance ? course : best;
+  });
 }
 
 function CartGpsView({
@@ -360,8 +403,8 @@ function CartGpsView({
 }
 
 export const GpsMap = () => {
-  const [courses, setCourses] = useState<GolfCourse[]>(DEMO_COURSES);
-  const [courseId, setCourseId] = useState(DEMO_COURSE_ID);
+  const [courses, setCourses] = useState<GolfCourse[]>(UAE_COURSES);
+  const [courseId, setCourseId] = useState(MAIN_COURSE_ID);
   const [hole, setHole] = useState(1);
   const [unit, setUnit] = useState<"yards" | "meters">("yards");
   const [playerPos, setPlayerPos] = useState<LatLng | null>(DEFAULT_POSITION);
@@ -380,9 +423,10 @@ export const GpsMap = () => {
   const [bag] = useBag();
 
   const selectedCourse = useMemo(
-    () => courses.find((course) => course.id === courseId) ?? courses[0] ?? DEMO_COURSES[0],
+    () => courses.find((course) => course.id === courseId) ?? courses[0] ?? UAE_COURSES[0],
     [courseId, courses],
   );
+  const selectableHoleCount = selectedCourse.holes_count >= 18 ? 18 : selectedCourse.holes_count || 18;
 
   const displayUnit = unitLabel(unit);
   const centerDistance = gps?.distances?.to_center_of_green ?? null;
@@ -411,7 +455,7 @@ export const GpsMap = () => {
       setGps(data);
     } catch (error) {
       setGps(createFallbackHoleGps(selectedCourse, hole, unit, playerPos));
-      setGpsError("Using offline GPS view until the live course service connects.");
+      setGpsError(null);
     } finally {
       setLoading(false);
     }
@@ -424,10 +468,16 @@ export const GpsMap = () => {
       try {
         const data = await fetchCourses();
         if (cancelled || !data.length) return;
-        setCourses(data);
-        setCourseId((current) => (data.some((course) => course.id === current) ? current : data[0].id));
+        const byId = new Map([...UAE_COURSES, ...data.filter((course) => course.country === "AE")].map((course) => [course.id, course]));
+        const merged = Array.from(byId.values()).sort((a, b) => {
+          if (a.id === MAIN_COURSE_ID) return -1;
+          if (b.id === MAIN_COURSE_ID) return 1;
+          return `${a.city} ${a.name}`.localeCompare(`${b.city} ${b.name}`);
+        });
+        setCourses(merged);
+        setCourseId((current) => (merged.some((course) => course.id === current) ? current : MAIN_COURSE_ID));
       } catch {
-        if (!cancelled) setCourses(DEMO_COURSES);
+        if (!cancelled) setCourses(UAE_COURSES);
       }
     }
 
@@ -467,7 +517,21 @@ export const GpsMap = () => {
       setHole(round.current_hole);
       toast.success("GPS round started");
     } catch (error) {
-      setGpsError(error instanceof Error ? error.message : "Could not start GPS round.");
+      const now = new Date().toISOString();
+      setActiveRound({
+        id: `offline-${Date.now()}`,
+        course_id: courseId,
+        session_id: getOrCreateSessionId(),
+        current_hole: hole,
+        player_lat: playerPos?.lat ?? null,
+        player_lng: playerPos?.lng ?? null,
+        unit,
+        started_at: now,
+        updated_at: now,
+        completed_at: null,
+      });
+      setGpsError(null);
+      toast.success("Offline GPS round started");
     } finally {
       setSyncing(false);
     }
@@ -476,6 +540,15 @@ export const GpsMap = () => {
   const pushPlayerLocation = async (position: LatLng) => {
     setPlayerPos(position);
     if (!activeRound) return;
+    if (activeRound.id.startsWith("offline-")) {
+      setActiveRound({
+        ...activeRound,
+        player_lat: position.lat,
+        player_lng: position.lng,
+        updated_at: new Date().toISOString(),
+      });
+      return;
+    }
 
     try {
       const result = await updatePlayerLocation(activeRound.id, position);
@@ -515,9 +588,19 @@ export const GpsMap = () => {
           if (nearest.nearest && nearest.nearest.id !== courseId && nearest.distance_meters <= 5000) {
             setCourseId(nearest.nearest.id);
             toast.success(`Detected ${nearest.nearest.name}`);
+            await pushPlayerLocation(next);
+            return;
           }
         } catch {
           // Course detection is helpful but not required for live distance updates.
+        }
+        const localNearest = nearestLocalCourse(next, courses);
+        if (localNearest && localNearest.id !== courseId) {
+          const distanceYards = haversineYards(next, { lat: localNearest.lat, lng: localNearest.lng });
+          if (distanceYards <= 6500) {
+            setCourseId(localNearest.id);
+            toast.success(`Detected ${localNearest.name}`);
+          }
         }
         await pushPlayerLocation(next);
       },
@@ -530,9 +613,13 @@ export const GpsMap = () => {
   };
 
   const changeHole = async (nextHole: number) => {
-    const bounded = Math.min(18, Math.max(1, nextHole));
+    const bounded = Math.min(selectableHoleCount, Math.max(1, nextHole));
     setHole(bounded);
     if (!activeRound) return;
+    if (activeRound.id.startsWith("offline-")) {
+      setActiveRound({ ...activeRound, current_hole: bounded, updated_at: new Date().toISOString() });
+      return;
+    }
     try {
       const result = await setCurrentHole(activeRound.id, bounded);
       setActiveRound(result.round);
@@ -562,6 +649,32 @@ export const GpsMap = () => {
 
     setSyncing(true);
     try {
+      if (activeRound.id.startsWith("offline-")) {
+        if (!activeShot) {
+          setActiveShot({
+            id: `offline-shot-${Date.now()}`,
+            round_id: activeRound.id,
+            hole_number: hole,
+            shot_number: 1,
+            start_lat: playerPos.lat,
+            start_lng: playerPos.lng,
+            end_lat: null,
+            end_lng: null,
+            distance_yards: null,
+            club_used: recommendedClub?.name ?? null,
+            started_at: new Date().toISOString(),
+            ended_at: null,
+          });
+          setLastShotYards(null);
+          toast.success("Shot started");
+          return;
+        }
+        const yards = haversineYards({ lat: activeShot.start_lat, lng: activeShot.start_lng }, playerPos);
+        setActiveShot(null);
+        setLastShotYards(yards);
+        toast.success(`Shot saved: ${yards} yards`);
+        return;
+      }
       if (!activeShot) {
         const shot = await startShot(activeRound.id, playerPos, recommendedClub?.name);
         setActiveShot(shot);
@@ -605,6 +718,8 @@ export const GpsMap = () => {
             setHole(1);
             setActiveRound(null);
             setActiveShot(null);
+            const nextCourse = courses.find((course) => course.id === event.target.value);
+            if (nextCourse) setPlayerPos({ lat: nextCourse.lat, lng: nextCourse.lng });
           }}
           className="min-w-0 flex-1 rounded-lg border border-gold/30 bg-background/60 p-2 text-sm text-foreground"
         >
@@ -728,7 +843,7 @@ export const GpsMap = () => {
           <Footprints className="mr-1 h-4 w-4" />
           Walk
         </Button>
-        <Button onClick={() => changeHole(hole + 1)} disabled={hole === 18} variant="outline" className="border-gold/40">
+        <Button onClick={() => changeHole(hole + 1)} disabled={hole === selectableHoleCount} variant="outline" className="border-gold/40">
           Next
           <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
@@ -741,7 +856,7 @@ export const GpsMap = () => {
       )}
 
       <div className="flex gap-2 overflow-x-auto pb-2">
-        {Array.from({ length: selectedCourse.holes_count || 18 }, (_, index) => index + 1).map((holeNumber) => (
+        {Array.from({ length: selectableHoleCount }, (_, index) => index + 1).map((holeNumber) => (
           <button
             key={holeNumber}
             onClick={() => changeHole(holeNumber)}
