@@ -7,7 +7,7 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => (
   <div className="splash-hero relative min-h-screen w-full overflow-hidden bg-background">
     <img src={splashBg} alt="" className="absolute inset-0 h-full w-full object-cover" />
     <div className="absolute inset-0 bg-[linear-gradient(180deg,hsl(150_35%_3%/0.18)_0%,hsl(150_35%_3%/0.32)_38%,hsl(150_35%_3%/0.92)_100%)]" />
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_52%_23%,hsl(45_95%_70%/0.26),transparent_27%),radial-gradient(circle_at_20%_64%,hsl(150_70%_45%/0.24),transparent_34%)]" />
+    <div className="splash-dubai-sa absolute inset-0" />
     <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" />
     <div className="splash-film-grain absolute inset-0" />
     <div className="splash-gold-sweep absolute inset-0" />
@@ -17,6 +17,15 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => (
         <span className="text-[10px] uppercase tracking-[0.34em] text-gold-soft/80">Premium Golf OS</span>
         <span className="text-[10px] uppercase tracking-[0.26em] text-foreground/70">LinkMe</span>
       </header>
+
+      <div className="pointer-events-none absolute left-6 top-24 flex flex-col gap-2 opacity-0 [animation:splash-rise_0.9s_ease-out_0.36s_forwards]">
+        <span className="w-fit rounded-full border border-gold/25 bg-black/22 px-3 py-1 text-[9px] uppercase tracking-[0.28em] text-gold-soft/85 backdrop-blur-sm">
+          Dubai
+        </span>
+        <span className="w-fit rounded-full border border-emerald-200/20 bg-black/20 px-3 py-1 text-[9px] uppercase tracking-[0.28em] text-emerald-100/80 backdrop-blur-sm">
+          South Africa
+        </span>
+      </div>
 
       <div className="splash-corner-mark absolute right-4 top-4 flex h-24 w-24 items-center justify-center">
         <span className="absolute inset-0 rounded-full border border-gold/24" />
@@ -32,7 +41,7 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => (
         <div className="space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full border border-gold/25 bg-black/24 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-gold-soft/90 opacity-0 backdrop-blur-sm [animation:splash-rise_0.9s_ease-out_0.45s_forwards]">
             <Sparkles className="h-3.5 w-3.5 text-gold" />
-            Live GPS. ACE Caddie. Score.
+            Dubai to South Africa
           </div>
 
           <h1 className="max-w-[11ch] font-serif text-6xl leading-[0.9] tracking-normal text-foreground opacity-0 drop-shadow-[0_18px_40px_hsl(0_0%_0%/0.75)] [animation:splash-rise_0.9s_ease-out_0.62s_forwards]">
