@@ -171,6 +171,58 @@ All colors MUST be HSL.
   0% { background-position: -150% 0; }
   60%, 100% { background-position: 250% 0; }
 }
+@keyframes splash-ken-burns {
+  0% { transform: scale(1.04) translate3d(-1.2%, 0, 0); }
+  100% { transform: scale(1.14) translate3d(1.2%, -1.5%, 0); }
+}
+@keyframes splash-gold-sweep {
+  0% { opacity: 0; transform: translateX(-115%) skewX(-18deg); }
+  22% { opacity: 0.68; }
+  55%, 100% { opacity: 0; transform: translateX(115%) skewX(-18deg); }
+}
+@keyframes splash-logo-in {
+  0% { opacity: 0; transform: translateY(22px) scale(0.84); filter: blur(8px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes splash-logo-ring {
+  0% { opacity: 0; transform: scale(0.62) rotate(0deg); }
+  25% { opacity: 0.85; }
+  100% { opacity: 0; transform: scale(1.55) rotate(42deg); }
+}
+@keyframes splash-ball-float {
+  0%, 100% { transform: translateY(0) rotate(-8deg); }
+  50% { transform: translateY(-8px) rotate(10deg); }
+}
+.splash-hero > img {
+  animation: splash-ken-burns 10s ease-out forwards;
+}
+.splash-film-grain {
+  opacity: 0.18;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0, transparent 3px, hsl(0 0% 100% / 0.08) 4px),
+    radial-gradient(circle at 20% 30%, hsl(0 0% 100% / 0.08) 0 1px, transparent 1px);
+  background-size: auto, 9px 9px;
+}
+.splash-gold-sweep {
+  left: 0;
+  right: auto;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, hsl(45 95% 72% / 0.42), transparent);
+  animation: splash-gold-sweep 2.6s ease-out 0.55s forwards;
+}
+.splash-logo {
+  opacity: 0;
+  animation: splash-logo-in 1s cubic-bezier(0.2, 0.9, 0.2, 1) 0.25s forwards;
+}
+.splash-logo-ring {
+  animation: splash-logo-ring 2.8s ease-out infinite;
+}
+.splash-logo-ring-delay {
+  animation-delay: 0.75s;
+}
+.splash-ball {
+  animation: splash-ball-float 4.2s ease-in-out 1s infinite;
+}
 .splash-shine {
   position: relative;
   overflow: hidden;
