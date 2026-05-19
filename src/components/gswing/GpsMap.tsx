@@ -8,6 +8,7 @@ import {
   Crosshair,
   Flag,
   Footprints,
+  Home,
   Locate,
   LocateOff,
   MapPin,
@@ -38,6 +39,7 @@ import { toast } from "sonner";
 
 const DEMO_COURSE_ID = "00000000-0000-0000-0000-000000000001";
 const DEFAULT_POSITION: LatLng = { lat: 25.0936, lng: 55.1545 };
+const DEMO_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 5, 4, 3, 4, 4];
 
 const DEMO_COURSES: GolfCourse[] = [
   {
@@ -69,16 +71,6 @@ function sanitizeHazardKey(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function initials(label: string): string {
-  return label
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function getPrimaryTee(tees: TeeBox[]): TeeBox | undefined {
   return [...tees].sort((a, b) => b.yardage - a.yardage)[0] ?? tees[0];
 }
@@ -95,8 +87,8 @@ function buildProjector(points: LatLng[]) {
   const lngRange = Math.max(maxLng - minLng, 0.0012);
 
   return (point: LatLng): DisplayPoint => ({
-    x: 110 + ((point.lng - minLng) / lngRange) * 780,
-    y: 72 + (1 - (point.lat - minLat) / latRange) * 416,
+    x: 100 + ((point.lng - minLng) / lngRange) * 680,
+    y: 86 + (1 - (point.lat - minLat) / latRange) * 385,
   });
 }
 
@@ -104,12 +96,123 @@ function polygonPath(points: DisplayPoint[]): string {
   return points.map((point) => `${point.x},${point.y}`).join(" ");
 }
 
-function CourseSketch({
+function formatDistance(value: number | null | undefined): string {
+  return value === null || value === undefined ? "-" : String(value);
+}
+
+function offsetPoint(origin: LatLng, northMeters: number, eastMeters: number): LatLng {
+  return {
+    lat: origin.lat + northMeters / 111_320,
+    lng: origin.lng + eastMeters / (111_320 * Math.cos((origin.lat * Math.PI) / 180)),
+  };
+}
+
+function createFallbackHoleGps(
+  course: GolfCourse,
+  holeNumber: number,
+  unit: "yards" | "meters",
+  playerPosition: LatLng | null,
+): HoleGpsResponse {
+  const par = DEMO_PARS[holeNumber - 1] ?? 4;
+  const base = { lat: course.lat + (holeNumber - 1) * 0.00005, lng: course.lng + (holeNumber - 1) * 0.00004 };
+  const greenCenter = offsetPoint(base, 170 + holeNumber * 7, -70 + holeNumber * 4);
+  const greenFront = offsetPoint(greenCenter, -24, -8);
+  const greenBack = offsetPoint(greenCenter, 25, 9);
+  const pin = offsetPoint(greenCenter, 0, 0);
+  const tee = offsetPoint(greenCenter, -260 - par * 35, -85);
+  const water = offsetPoint(greenCenter, -20, 150);
+  const bunker = offsetPoint(greenCenter, 28, -170);
+  const displayDistance = (target: LatLng) => {
+    const yards = playerPosition ? haversineYards(playerPosition, target) : 0;
+    return unit === "meters" ? Math.round(yards * 0.9144) : yards;
+  };
+
+  const greenPolygon = [
+    [greenCenter.lng - 0.0007, greenCenter.lat + 0.00033],
+    [greenCenter.lng + 0.00055, greenCenter.lat + 0.0003],
+    [greenCenter.lng + 0.00082, greenCenter.lat - 0.0001],
+    [greenCenter.lng + 0.00015, greenCenter.lat - 0.00048],
+    [greenCenter.lng - 0.00065, greenCenter.lat - 0.00034],
+    [greenCenter.lng - 0.0007, greenCenter.lat + 0.00033],
+  ] as [number, number][];
+
+  return {
+    course_id: course.id,
+    hole_number: holeNumber,
+    par,
+    handicap: ((holeNumber * 5) % 18) + 1,
+    notes: "Offline demo GPS geometry",
+    unit,
+    status: "ok",
+    tee_boxes: [
+      {
+        color: "championship",
+        yardage: par === 3 ? 173 : par === 5 ? 522 : 386,
+        lat: tee.lat,
+        lng: tee.lng,
+      },
+    ],
+    green: {
+      center: greenCenter,
+      front: greenFront,
+      back: greenBack,
+      pin,
+      polygon: { type: "Polygon", coordinates: [greenPolygon] },
+      depth_yards: 31,
+      width_yards: 42,
+    },
+    hazards: [
+      {
+        type: "water",
+        label: "Water right",
+        lat: water.lat,
+        lng: water.lng,
+        geometry: null,
+        carry_yards_from_tee: null,
+      },
+      {
+        type: "bunker",
+        label: "Left bunker",
+        lat: bunker.lat,
+        lng: bunker.lng,
+        geometry: null,
+        carry_yards_from_tee: null,
+      },
+    ],
+    player_position: playerPosition,
+    distances: playerPosition
+      ? {
+          to_center_of_green: displayDistance(greenCenter),
+          to_front_of_green: displayDistance(greenFront),
+          to_back_of_green: displayDistance(greenBack),
+          to_pin: displayDistance(pin),
+          to_tee_box: displayDistance(tee),
+          hazards: {
+            water_right: displayDistance(water),
+            left_bunker: displayDistance(bunker),
+          },
+        }
+      : null,
+    recommended_target: par === 3 ? "Center of green" : "Fairway to green approach",
+  };
+}
+
+function CartGpsView({
   gps,
   playerPosition,
+  displayUnit,
+  centerDistance,
+  frontDistance,
+  backDistance,
+  currentTime,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
+  displayUnit: "y" | "m";
+  centerDistance: number | null;
+  frontDistance: number | null;
+  backDistance: number | null;
+  currentTime: string;
 }) {
   const primaryTee = getPrimaryTee(gps?.tee_boxes ?? []);
   const green = gps?.green;
@@ -129,127 +232,170 @@ function CourseSketch({
   ].filter(Boolean) as LatLng[];
 
   const project = buildProjector(geometryPoints);
-  const teePoint = tee ? project(tee) : { x: 500, y: 480 };
-  const pinPoint = pin ? project(pin) : { x: 500, y: 150 };
+  const teePoint = tee ? project(tee) : { x: 475, y: 472 };
+  const pinPoint = pin ? project(pin) : { x: 450, y: 210 };
   const playerPoint = playerPosition ? project(playerPosition) : null;
-
-  const greenPolygon = green?.polygon?.coordinates?.[0]?.map(([lng, lat]) => project({ lat, lng })) ?? [];
   const frontPoint = front ? project(front) : null;
   const backPoint = back ? project(back) : null;
+  const greenPolygon = green?.polygon?.coordinates?.[0]?.map(([lng, lat]) => project({ lat, lng })) ?? [];
+  const unitText = displayUnit === "m" ? "Meters" : "Yards";
 
-  const fairwayPath = `M ${teePoint.x} ${teePoint.y} C ${teePoint.x - 110} ${(teePoint.y + pinPoint.y) / 2}, ${
-    pinPoint.x + 120
+  const fairwayPath = `M ${teePoint.x} ${teePoint.y} C ${teePoint.x - 120} ${(teePoint.y + pinPoint.y) / 2}, ${
+    pinPoint.x + 180
   } ${(teePoint.y + pinPoint.y) / 2}, ${pinPoint.x} ${pinPoint.y}`;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-gold/30 bg-[radial-gradient(circle_at_50%_35%,hsl(150_45%_17%),hsl(150_40%_7%)_58%,hsl(150_42%_4%))] shadow-elegant">
-      <svg viewBox="0 0 1000 560" className="block h-[42vh] min-h-[330px] w-full">
-        <defs>
-          <filter id="gpsGlow" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <linearGradient id="fairway" x1="0" x2="1" y1="1" y2="0">
-            <stop offset="0%" stopColor="hsl(153 45% 22%)" />
-            <stop offset="100%" stopColor="hsl(139 45% 42%)" />
-          </linearGradient>
-        </defs>
+    <div className="relative overflow-hidden rounded-lg border-[10px] border-black bg-black shadow-elegant">
+      <div className="relative overflow-hidden rounded-sm border border-zinc-700">
+        <svg viewBox="0 0 1000 560" className="block h-[58vh] min-h-[395px] w-full">
+          <defs>
+            <filter id="gpsGlow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="6" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="cartSoftFocus">
+              <feGaussianBlur stdDeviation="0.75" />
+            </filter>
+            <linearGradient id="fairway" x1="0" x2="1" y1="1" y2="0">
+              <stop offset="0%" stopColor="hsl(153 38% 20%)" />
+              <stop offset="100%" stopColor="hsl(139 44% 45%)" />
+            </linearGradient>
+            <radialGradient id="cartGround" cx="48%" cy="34%" r="78%">
+              <stop offset="0%" stopColor="hsl(93 25% 64%)" />
+              <stop offset="44%" stopColor="hsl(99 24% 36%)" />
+              <stop offset="100%" stopColor="hsl(116 26% 12%)" />
+            </radialGradient>
+            <pattern id="scanlines" width="4" height="4" patternUnits="userSpaceOnUse">
+              <rect width="4" height="1" fill="hsl(0 0% 100% / 0.08)" />
+            </pattern>
+          </defs>
 
-        <rect width="1000" height="560" fill="hsl(150 36% 8%)" />
-        <path d={fairwayPath} stroke="url(#fairway)" strokeWidth="120" strokeLinecap="round" fill="none" opacity="0.72" />
-        <path d={fairwayPath} stroke="hsl(130 45% 42% / 0.55)" strokeWidth="72" strokeLinecap="round" fill="none" />
+          <rect width="1000" height="560" fill="url(#cartGround)" />
+          <path d="M0 104 C178 15 295 36 405 90 C530 152 668 55 796 18 C900 -13 973 5 1000 34 L1000 0 L0 0Z" fill="hsl(40 30% 76% / 0.28)" filter="url(#cartSoftFocus)" />
+          <path d="M-78 350 C52 248 167 250 251 306 C336 362 355 448 270 523 C176 607 22 548 -86 504Z" fill="hsl(213 76% 84% / 0.92)" stroke="hsl(218 90% 94% / 0.9)" strokeWidth="9" />
+          <path d="M765 332 C875 244 973 275 1036 365 C1095 449 1070 558 972 592 C855 633 750 546 718 460 C700 412 720 371 765 332Z" fill="hsl(219 74% 86% / 0.92)" stroke="hsl(218 90% 95% / 0.95)" strokeWidth="9" />
 
-        {hazards.map((hazard, index) => {
-          const location = hazard.lat && hazard.lng ? project({ lat: hazard.lat, lng: hazard.lng }) : null;
-          if (!location) return null;
-          const isWater = hazard.type === "water";
-          return (
-            <g key={`${hazard.type}-${hazard.label ?? index}`} opacity="0.95">
+          <path d={fairwayPath} stroke="hsl(143 33% 22% / 0.86)" strokeWidth="160" strokeLinecap="round" fill="none" opacity="0.88" />
+          <path d={fairwayPath} stroke="url(#fairway)" strokeWidth="110" strokeLinecap="round" fill="none" opacity="0.76" />
+          <path d={fairwayPath} stroke="hsl(130 45% 49% / 0.42)" strokeWidth="82" strokeLinecap="round" fill="none" />
+
+          {hazards.map((hazard, index) => {
+            const location = hazard.lat && hazard.lng ? project({ lat: hazard.lat, lng: hazard.lng }) : null;
+            if (!location) return null;
+            const isWater = hazard.type === "water";
+            return (
               <ellipse
+                key={`${hazard.type}-${hazard.label ?? index}`}
                 cx={location.x}
                 cy={location.y}
-                rx={isWater ? 82 : 46}
+                rx={isWater ? 82 : 48}
                 ry={isWater ? 54 : 31}
-                fill={isWater ? "hsl(205 72% 76% / 0.9)" : "hsl(42 55% 80% / 0.9)"}
-                stroke={isWater ? "hsl(215 95% 92%)" : "hsl(42 65% 90%)"}
+                fill={isWater ? "hsl(211 72% 84% / 0.9)" : "hsl(43 44% 78% / 0.9)"}
+                stroke={isWater ? "hsl(215 95% 94%)" : "hsl(42 65% 90%)"}
                 strokeWidth="4"
               />
-              <text x={location.x} y={location.y + 5} textAnchor="middle" fontSize="20" fill="hsl(150 30% 8%)">
-                {hazard.type.toUpperCase()}
+            );
+          })}
+
+          {greenPolygon.length >= 3 ? (
+            <polygon
+              points={polygonPath(greenPolygon)}
+              fill="hsl(143 52% 70%)"
+              stroke="hsl(151 52% 30%)"
+              strokeWidth="10"
+              filter="url(#gpsGlow)"
+            />
+          ) : (
+            <ellipse
+              cx={pinPoint.x}
+              cy={pinPoint.y}
+              rx="178"
+              ry="108"
+              fill="hsl(143 52% 70%)"
+              stroke="hsl(151 52% 30%)"
+              strokeWidth="10"
+              filter="url(#gpsGlow)"
+            />
+          )}
+
+          {backPoint && (
+            <g>
+              <rect x={backPoint.x - 42} y={backPoint.y - 70} width="84" height="43" rx="7" fill="hsl(45 35% 94%)" stroke="hsl(224 18% 20%)" strokeWidth="2" />
+              <text x={backPoint.x} y={backPoint.y - 39} textAnchor="middle" fontSize="34" fill="hsl(150 35% 10%)">
+                {formatDistance(backDistance)}
               </text>
             </g>
-          );
-        })}
+          )}
 
-        {greenPolygon.length >= 3 ? (
-          <polygon
-            points={polygonPath(greenPolygon)}
-            fill="hsl(143 58% 70%)"
-            stroke="hsl(151 62% 34%)"
-            strokeWidth="7"
-            filter="url(#gpsGlow)"
-          />
-        ) : (
-          <ellipse
-            cx={pinPoint.x}
-            cy={pinPoint.y}
-            rx="148"
-            ry="88"
-            fill="hsl(143 58% 70%)"
-            stroke="hsl(151 62% 34%)"
-            strokeWidth="7"
-            filter="url(#gpsGlow)"
-          />
-        )}
+          {frontPoint && (
+            <g>
+              <path d={`M${frontPoint.x - 13} ${frontPoint.y + 10} L${frontPoint.x} ${frontPoint.y - 4} L${frontPoint.x + 13} ${frontPoint.y + 10}Z`} fill="hsl(224 18% 20%)" />
+              <rect x={frontPoint.x - 42} y={frontPoint.y + 10} width="84" height="43" rx="7" fill="hsl(45 35% 94%)" stroke="hsl(224 18% 20%)" strokeWidth="2" />
+              <text x={frontPoint.x} y={frontPoint.y + 41} textAnchor="middle" fontSize="34" fill="hsl(150 35% 10%)">
+                {formatDistance(frontDistance)}
+              </text>
+            </g>
+          )}
 
-        {backPoint && (
-          <g>
-            <rect x={backPoint.x - 31} y={backPoint.y - 54} width="62" height="34" rx="6" fill="hsl(45 35% 94%)" />
-            <text x={backPoint.x} y={backPoint.y - 30} textAnchor="middle" fontSize="25" fill="hsl(150 35% 10%)">
-              {gps?.distances?.to_back_of_green ?? ""}
-            </text>
+          <g transform={`translate(${teePoint.x},${teePoint.y})`}>
+            <circle r="13" fill="hsl(45 80% 58%)" stroke="hsl(150 35% 8%)" strokeWidth="4" />
           </g>
-        )}
 
-        {frontPoint && (
-          <g>
-            <rect x={frontPoint.x - 31} y={frontPoint.y + 20} width="62" height="34" rx="6" fill="hsl(45 35% 94%)" />
-            <text x={frontPoint.x} y={frontPoint.y + 45} textAnchor="middle" fontSize="25" fill="hsl(150 35% 10%)">
-              {gps?.distances?.to_front_of_green ?? ""}
-            </text>
+          <g transform={`translate(${pinPoint.x},${pinPoint.y})`}>
+            <circle r="17" fill="hsl(45 35% 94%)" stroke="hsl(150 35% 8%)" strokeWidth="5" />
+            <path d="M-17 0H17M0 -17V17" stroke="hsl(150 35% 8%)" strokeWidth="3" />
+            <path d="M-17 -17 A17 17 0 0 1 0 -17 L0 0 L-17 0Z" fill="hsl(248 24% 35%)" />
+            <path d="M0 0 L17 0 A17 17 0 0 1 0 17Z" fill="hsl(248 24% 35%)" />
           </g>
-        )}
 
-        <g transform={`translate(${teePoint.x},${teePoint.y})`}>
-          <circle r="16" fill="hsl(45 80% 58%)" stroke="hsl(150 35% 8%)" strokeWidth="5" />
-          <text y="38" textAnchor="middle" fontSize="18" fill="hsl(45 35% 92%)">TEE</text>
-        </g>
+          {playerPoint && (
+            <g transform={`translate(${playerPoint.x},${playerPoint.y})`}>
+              <circle r="24" fill="hsl(150 70% 48%)" opacity="0.2" />
+              <circle r="10" fill="hsl(45 35% 95%)" stroke="hsl(150 70% 42%)" strokeWidth="5" />
+            </g>
+          )}
 
-        <g transform={`translate(${pinPoint.x},${pinPoint.y})`}>
-          <line x1="0" y1="-58" x2="0" y2="0" stroke="hsl(150 35% 8%)" strokeWidth="5" />
-          <path d="M0 -58 L42 -43 L0 -28 Z" fill="hsl(45 80% 58%)" stroke="hsl(150 35% 8%)" strokeWidth="3" />
-          <circle r="16" fill="hsl(45 35% 94%)" stroke="hsl(150 35% 8%)" strokeWidth="5" />
-          <path d="M-16 0H16M0 -16V16" stroke="hsl(150 35% 8%)" strokeWidth="3" />
-        </g>
+          <rect width="1000" height="560" fill="url(#scanlines)" opacity="0.34" />
+          <rect width="1000" height="560" fill="hsl(45 100% 88% / 0.1)" />
+        </svg>
 
-        {playerPoint && (
-          <g transform={`translate(${playerPoint.x},${playerPoint.y})`}>
-            <circle r="21" fill="hsl(150 70% 48%)" opacity="0.24" />
-            <circle r="11" fill="hsl(45 35% 95%)" stroke="hsl(150 70% 42%)" strokeWidth="5" />
-            <text y="39" textAnchor="middle" fontSize="18" fill="hsl(45 35% 92%)">YOU</text>
-          </g>
-        )}
-      </svg>
+        <div className="pointer-events-none absolute right-4 top-4 w-[178px] overflow-hidden rounded-xl border border-white/70 bg-gradient-to-br from-white/85 to-yellow-100/75 text-yellow-700 shadow-xl backdrop-blur-sm sm:w-[218px]">
+          <div className="grid grid-cols-[54px_1fr] sm:grid-cols-[68px_1fr]">
+            <div className="flex flex-col items-center justify-center border-r border-white/60 bg-lime-300/65 p-2 text-[10px] leading-tight text-emerald-900">
+              <div className="relative mb-1 h-10 w-10 rounded-full border-4 border-lime-500 bg-lime-200 shadow-inner">
+                <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-emerald-800/50" />
+                <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-emerald-800/50" />
+                <span className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+                <span className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[conic-gradient(hsl(248_24%_35%)_0_25%,transparent_25%_50%,hsl(248_24%_35%)_50%_75%,transparent_75%)]" />
+              </div>
+              <span>Center</span>
+              <span>of</span>
+              <span>Green</span>
+            </div>
+            <div className="p-2 text-right">
+              <div className="font-serif text-5xl font-bold leading-none tracking-normal sm:text-6xl">
+                {formatDistance(centerDistance)}
+              </div>
+              <div className="text-2xl font-semibold leading-none sm:text-3xl">{unitText}</div>
+              <div className="mt-3 text-center text-[10px] text-yellow-800/70">
+                Hole {gps?.hole_number ?? "-"}
+                <br />
+                Par {gps?.par ?? "-"}, Handicap {gps?.handicap ?? "-"}
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <div className="pointer-events-none absolute left-3 top-3 rounded-xl bg-background/80 px-3 py-1.5 text-xs backdrop-blur">
-        <span className="font-semibold text-gold">Hole {gps?.hole_number ?? "-"}</span>
-        <span className="text-muted-foreground"> · Par {gps?.par ?? "-"}</span>
-      </div>
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-xl bg-background/80 px-3 py-1.5 text-[10px] text-muted-foreground backdrop-blur">
-        Backend GPS geometry
+        <div className="pointer-events-none absolute bottom-8 right-5 hidden w-[210px] rounded-sm border border-white/30 bg-zinc-950/58 p-3 text-center text-white/85 shadow-xl backdrop-blur-sm sm:block">
+          <div className="mx-auto mb-2 flex h-14 w-20 items-center justify-center rounded-md bg-gradient-to-b from-slate-200/85 to-blue-300/70 shadow-inner">
+            <Home className="h-8 w-8 text-white drop-shadow" />
+          </div>
+          <div className="text-[10px] text-white/70">Main Menu</div>
+          <div className="mt-6 font-serif text-4xl tracking-normal text-white/85">{currentTime}</div>
+        </div>
       </div>
     </div>
   );
@@ -269,6 +415,9 @@ export const GpsMap = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  );
   const watchIdRef = useRef<number | null>(null);
   const [bag] = useBag();
 
@@ -303,12 +452,12 @@ export const GpsMap = () => {
       });
       setGps(data);
     } catch (error) {
-      setGps(null);
-      setGpsError(error instanceof Error ? error.message : "Could not load GPS hole data.");
+      setGps(createFallbackHoleGps(selectedCourse, hole, unit, playerPos));
+      setGpsError("Using offline GPS view until the live course service connects.");
     } finally {
       setLoading(false);
     }
-  }, [courseId, hole, playerPos, unit]);
+  }, [courseId, hole, playerPos, selectedCourse, unit]);
 
   useEffect(() => {
     let cancelled = false;
@@ -333,6 +482,13 @@ export const GpsMap = () => {
   useEffect(() => {
     loadHole();
   }, [loadHole]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -468,6 +624,7 @@ export const GpsMap = () => {
 
   const courseCenter = { lat: selectedCourse.lat, lng: selectedCourse.lng };
   const fallbackDistance = playerPos ? toDisplayUnit(haversineYards(playerPos, courseCenter), unit) : null;
+  const displayCenterDistance = centerDistance ?? fallbackDistance;
 
   return (
     <div className="space-y-3 pb-28">
@@ -495,7 +652,7 @@ export const GpsMap = () => {
         >
           {courses.map((course) => (
             <option key={course.id} value={course.id}>
-              {course.country} · {course.name}
+              {course.country} - {course.name}
             </option>
           ))}
         </select>
@@ -508,38 +665,21 @@ export const GpsMap = () => {
       </Card>
 
       {gpsError && (
-        <Card className="flex items-start gap-2 border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300">
+        <Card className="flex items-start gap-2 border-gold/30 bg-gold/10 p-3 text-xs text-gold">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{gpsError}</span>
         </Card>
       )}
 
-      <CourseSketch gps={gps} playerPosition={playerPos} />
-
-      <div className="grid grid-cols-3 gap-2">
-        <Card className="gradient-card border-gold/20 p-3 text-center">
-          <p className="text-[10px] uppercase text-muted-foreground">Front</p>
-          <p className="mt-1 font-serif text-2xl text-foreground">
-            {loading ? "..." : frontDistance ?? "-"}
-            <span className="text-xs">{displayUnit}</span>
-          </p>
-        </Card>
-        <Card className="gradient-card border-gold/40 p-3 text-center shadow-gold">
-          <Flag className="mx-auto h-4 w-4 text-gold" />
-          <p className="mt-1 font-serif text-3xl text-gradient-gold">
-            {loading ? "..." : centerDistance ?? fallbackDistance ?? "-"}
-            <span className="text-xs">{displayUnit}</span>
-          </p>
-          <p className="text-[10px] uppercase text-muted-foreground">Center green</p>
-        </Card>
-        <Card className="gradient-card border-gold/20 p-3 text-center">
-          <p className="text-[10px] uppercase text-muted-foreground">Back</p>
-          <p className="mt-1 font-serif text-2xl text-foreground">
-            {loading ? "..." : backDistance ?? "-"}
-            <span className="text-xs">{displayUnit}</span>
-          </p>
-        </Card>
-      </div>
+      <CartGpsView
+        gps={gps}
+        playerPosition={playerPos}
+        displayUnit={displayUnit}
+        centerDistance={loading ? null : displayCenterDistance}
+        frontDistance={loading ? null : frontDistance}
+        backDistance={loading ? null : backDistance}
+        currentTime={currentTime}
+      />
 
       <div className="grid grid-cols-2 gap-2">
         <Card className="gradient-card border-gold/20 p-3">
@@ -561,7 +701,7 @@ export const GpsMap = () => {
             {pinDistance ?? "-"}
             <span className="text-xs">{displayUnit}</span>
           </p>
-          <p className="text-xs text-muted-foreground">Par {gps?.par ?? "-"} · HCP {gps?.handicap ?? "-"}</p>
+          <p className="text-xs text-muted-foreground">Par {gps?.par ?? "-"} - HCP {gps?.handicap ?? "-"}</p>
         </Card>
       </div>
 
