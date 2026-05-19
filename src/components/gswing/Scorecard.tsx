@@ -2,116 +2,194 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Target, Plus, Minus, Save, Trophy, Sparkles, Flame, Coins, Share2 } from "lucide-react";
+import {
+  Target,
+  Plus,
+  Minus,
+  Save,
+  Trophy,
+  Sparkles,
+  Flame,
+  Coins,
+  Share2,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+} from "lucide-react";
 import { useRounds } from "@/lib/gswing-store";
 import { toast } from "sonner";
 
-const PARS = [4,4,3,5,4,4,3,4,5,4,3,4,4,5,4,3,4,4];
+const PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 5, 4, 3, 4, 4];
 const PAR_TOTAL = PARS.reduce((a, b) => a + b, 0);
 
 type Player = {
   id: string;
   name: string;
   scores: number[];
-  hero?: number; // hole index where hero used
+  hero?: number;
 };
 
-const initials = (n: string) => n.slice(0, 2).toUpperCase();
+const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
 const seedPlayers = (): Player[] => [
   { id: "p1", name: "Riaan", scores: PARS.map(() => 0) },
   { id: "p2", name: "Nievo", scores: PARS.map(() => 0) },
-  { id: "p3", name: "Toto",  scores: PARS.map(() => 0) },
+  { id: "p3", name: "Toto", scores: PARS.map(() => 0) },
   { id: "p4", name: "Docco", scores: PARS.map(() => 0) },
 ];
 
 export const Scorecard = () => {
   const [players, setPlayers] = useState<Player[]>(seedPlayers());
-  const [active, setActive] = useState(0);
-  const [skinValue, setSkinValue] = useState(20); // AED per hole
+  const [activeHole, setActiveHole] = useState(0);
+  const [skinValue, setSkinValue] = useState(20);
   const [pressActive, setPressActive] = useState(false);
   const [presses, setPresses] = useState<{ hole: number; by: string }[]>([]);
   const [rounds, setRounds] = useRounds();
 
-  const set = (pi: number, hi: number, v: number) => {
-    setPlayers((arr) => arr.map((p, idx) => {
-      if (idx !== pi) return p;
-      const n = [...p.scores]; n[hi] = Math.max(0, v); return { ...p, scores: n };
-    }));
+  const setScore = (playerIndex: number, holeIndex: number, value: number) => {
+    setPlayers((arr) =>
+      arr.map((player, index) => {
+        if (index !== playerIndex) return player;
+        const scores = [...player.scores];
+        scores[holeIndex] = Math.max(0, value);
+        return { ...player, scores };
+      }),
+    );
   };
 
-  const triggerHero = (pi: number, hi: number) => {
-    setPlayers((arr) => arr.map((p, idx) => {
-      if (idx !== pi) return p;
-      if (p.hero !== undefined) { toast.error(`${p.name} already used Hero Mode`); return p; }
-      const n = [...p.scores];
-      n[hi] = Math.max(1, (n[hi] || PARS[hi]) - 1);
-      toast.success(`🔥 HERO! ${p.name} drops one shot on H${hi + 1}`);
-      return { ...p, scores: n, hero: hi };
-    }));
+  const triggerHero = (playerIndex: number, holeIndex: number) => {
+    setPlayers((arr) =>
+      arr.map((player, index) => {
+        if (index !== playerIndex) return player;
+        if (player.hero !== undefined) {
+          toast.error(`${player.name} already used Hero Mode`);
+          return player;
+        }
+        const scores = [...player.scores];
+        scores[holeIndex] = Math.max(1, (scores[holeIndex] || PARS[holeIndex]) - 1);
+        toast.success(`Hero Mode: ${player.name} drops one shot on H${holeIndex + 1}`);
+        return { ...player, scores, hero: holeIndex };
+      }),
+    );
   };
 
-  // Live leaderboard: lowest total wins; only count completed holes
   const board = useMemo(() => {
-    return players.map((p) => {
-      const total = p.scores.reduce((a, b) => a + b, 0);
-      const holesPlayed = p.scores.filter((s) => s > 0).length;
-      const parThrough = PARS.slice(0, holesPlayed).reduce((a, b) => a + b, 0);
-      // approximate par-through using completed-count
-      const playedPar = p.scores.reduce((sum, s, i) => s > 0 ? sum + PARS[i] : sum, 0);
-      const diff = total - playedPar;
-      return { ...p, total, holesPlayed, diff, parThrough };
-    }).sort((a, b) => {
-      if (a.holesPlayed === 0 && b.holesPlayed === 0) return 0;
-      if (a.holesPlayed === 0) return 1;
-      if (b.holesPlayed === 0) return -1;
-      return a.diff - b.diff;
-    });
+    return players
+      .map((player) => {
+        const total = player.scores.reduce((a, b) => a + b, 0);
+        const holesPlayed = player.scores.filter((score) => score > 0).length;
+        const playedPar = player.scores.reduce(
+          (sum, score, index) => (score > 0 ? sum + PARS[index] : sum),
+          0,
+        );
+        const diff = total - playedPar;
+        return { ...player, total, holesPlayed, diff };
+      })
+      .sort((a, b) => {
+        if (a.holesPlayed === 0 && b.holesPlayed === 0) return 0;
+        if (a.holesPlayed === 0) return 1;
+        if (b.holesPlayed === 0) return -1;
+        return a.diff - b.diff || a.total - b.total;
+      });
   }, [players]);
 
-  // Skins calculation: per-hole lowest unique score wins; ties carry over
   const skins = useMemo(() => {
-    const won: Record<string, number> = Object.fromEntries(players.map((p) => [p.id, 0]));
+    const won: Record<string, number> = Object.fromEntries(players.map((player) => [player.id, 0]));
     let carry = 0;
     const carryHoles: number[] = [];
-    for (let h = 0; h < 18; h++) {
-      const holeScores = players.map((p) => p.scores[h]);
-      if (holeScores.some((s) => s === 0)) continue; // skip incomplete
+
+    for (let hole = 0; hole < 18; hole += 1) {
+      const holeScores = players.map((player) => player.scores[hole]);
+      if (holeScores.some((score) => score === 0)) continue;
+
       const min = Math.min(...holeScores);
-      const winners = players.filter((p) => p.scores[h] === min);
+      const winners = players.filter((player) => player.scores[hole] === min);
       if (winners.length === 1) {
         won[winners[0].id] += 1 + carry;
         carry = 0;
       } else {
         carry += 1;
-        carryHoles.push(h + 1);
+        carryHoles.push(hole + 1);
       }
     }
+
     return { won, carry, carryHoles };
   }, [players]);
 
-  // Press / side bets — each press doubles current hole stake for affected players
+  const completedHoleCount = useMemo(() => {
+    return PARS.filter((_, holeIndex) => players.every((player) => player.scores[holeIndex] > 0)).length;
+  }, [players]);
+
+  const activeHoleComplete = players.every((player) => player.scores[activeHole] > 0);
   const pressSummary = presses.length;
 
+  const goToHole = (holeIndex: number) => {
+    setActiveHole(Math.min(17, Math.max(0, holeIndex)));
+  };
+
+  const nextHole = () => {
+    if (!activeHoleComplete) {
+      toast.error(`Enter all 4 scores for Hole ${activeHole + 1} first`);
+      return;
+    }
+
+    if (activeHole === 17) {
+      toast.success("All 18 holes completed");
+      return;
+    }
+
+    setActiveHole((hole) => hole + 1);
+  };
+
   const callPress = () => {
-    const lastHoleIdx = Math.max(0, players[0].scores.findIndex((s) => s === 0) - 1);
-    setPresses((arr) => [...arr, { hole: lastHoleIdx + 1, by: players[active].name }]);
+    const lowestCurrentScore = [...players]
+      .filter((player) => player.scores[activeHole] > 0)
+      .sort((a, b) => a.scores[activeHole] - b.scores[activeHole])[0];
+    const by = lowestCurrentScore?.name ?? "Group";
+
+    setPresses((arr) => [...arr, { hole: activeHole + 1, by }]);
     setPressActive(true);
-    toast.success(`Press called by ${players[active].name} on H${lastHoleIdx + 1}`);
+    toast.success(`Press called on H${activeHole + 1}`);
   };
 
   const save = () => {
+    if (completedHoleCount < 18) {
+      toast.error(`Complete all 18 holes first. ${completedHoleCount}/18 done`);
+      return;
+    }
+
     const winner = board[0];
-    setRounds([{ id: crypto.randomUUID(), date: new Date().toISOString().slice(0,10), course: "Emirates Majlis", score: winner.total, par: PAR_TOTAL, holes: 18 }, ...rounds]);
-    toast.success(`Round saved · ${winner.name} wins`);
+    setRounds([
+      {
+        id: crypto.randomUUID(),
+        date: new Date().toISOString().slice(0, 10),
+        course: "Emirates Majlis",
+        score: winner.total,
+        par: PAR_TOTAL,
+        holes: 18,
+      },
+      ...rounds,
+    ]);
+    toast.success(`Round saved: ${winner.name} wins`);
   };
 
   const shareResult = async () => {
-    const text = `G Swing — ${board[0].name} wins at Emirates Majlis (${board[0].total}, ${board[0].diff >= 0 ? "+" : ""}${board[0].diff}). Skins: ${Object.entries(skins.won).map(([id, n]) => `${players.find(p=>p.id===id)?.name} ${n}`).join(", ")}`;
+    const winner = board[0];
+    const text = `G Swing - ${winner.name} wins at Emirates Majlis (${winner.total}, ${
+      winner.diff >= 0 ? "+" : ""
+    }${winner.diff}). Skins: ${Object.entries(skins.won)
+      .map(([id, n]) => `${players.find((player) => player.id === id)?.name} ${n}`)
+      .join(", ")}`;
+
     try {
       if (navigator.share) await navigator.share({ title: "G Swing Result", text });
-      else { await navigator.clipboard.writeText(text); toast.success("Result copied"); }
-    } catch {}
+      else {
+        await navigator.clipboard.writeText(text);
+        toast.success("Result copied");
+      }
+    } catch {
+      // User cancelled native share.
+    }
   };
 
   return (
@@ -119,85 +197,230 @@ export const Scorecard = () => {
       <div className="flex items-center gap-3">
         <Target className="h-6 w-6 text-gold" />
         <h2 className="font-serif text-2xl text-gradient-gold">Scorecard</h2>
-        <Badge variant="outline" className="ml-auto border-gold/40 text-gold">4 Players · Live</Badge>
+        <Badge variant="outline" className="ml-auto border-gold/40 text-gold">
+          H{activeHole + 1}/18
+        </Badge>
       </div>
 
-      {/* Live Leaderboard */}
       <Card className="gradient-card border-gold/40 p-4 shadow-gold">
         <div className="mb-2 flex items-center gap-2">
           <Trophy className="h-4 w-4 text-gold" />
           <p className="font-serif text-sm">Live Leaderboard</p>
         </div>
         <div className="space-y-1.5">
-          {board.map((p, i) => (
-            <div key={p.id} className={`flex items-center justify-between rounded-lg border px-2.5 py-1.5 transition-all ${i === 0 && p.holesPlayed > 0 ? "border-gold/60 bg-gold/10" : "border-border"}`}>
+          {board.map((player, index) => (
+            <div
+              key={player.id}
+              className={`flex items-center justify-between rounded-lg border px-2.5 py-1.5 transition-all ${
+                index === 0 && player.holesPlayed > 0 ? "border-gold/60 bg-gold/10" : "border-border"
+              }`}
+            >
               <div className="flex items-center gap-2">
-                <span className={`w-4 text-center text-xs font-serif ${i === 0 && p.holesPlayed > 0 ? "text-gold" : "text-muted-foreground"}`}>{i + 1}</span>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-gold">{initials(p.name)}</div>
+                <span
+                  className={`w-4 text-center text-xs font-serif ${
+                    index === 0 && player.holesPlayed > 0 ? "text-gold" : "text-muted-foreground"
+                  }`}
+                >
+                  {index + 1}
+                </span>
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-gold">
+                  {initials(player.name)}
+                </div>
                 <div>
-                  <p className="text-xs">{p.name} {p.hero !== undefined && <Flame className="inline h-3 w-3 text-gold" />}</p>
-                  <p className="text-[9px] text-muted-foreground">Thru {p.holesPlayed} · Skins {skins.won[p.id] ?? 0}</p>
+                  <p className="text-xs">
+                    {player.name} {player.hero !== undefined && <Flame className="inline h-3 w-3 text-gold" />}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground">
+                    Thru {player.holesPlayed} · Skins {skins.won[player.id] ?? 0}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-serif text-base">{p.total || "—"}</p>
-                <p className={`text-[10px] ${p.diff <= 0 ? "text-emerald-400" : "text-destructive"}`}>{p.holesPlayed === 0 ? "" : p.diff === 0 ? "E" : p.diff > 0 ? `+${p.diff}` : p.diff}</p>
+                <p className="font-serif text-base">{player.total || "-"}</p>
+                <p className={`text-[10px] ${player.diff <= 0 ? "text-emerald-400" : "text-destructive"}`}>
+                  {player.holesPlayed === 0 ? "" : player.diff === 0 ? "E" : player.diff > 0 ? `+${player.diff}` : player.diff}
+                </p>
               </div>
             </div>
           ))}
         </div>
       </Card>
 
-      {/* Player tabs */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {players.map((p, i) => (
-          <button key={p.id} onClick={() => setActive(i)}
-            className={`rounded-xl border px-2 py-1.5 text-[10px] transition ${active === i ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground"}`}>
-            <div className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-[9px]">{initials(p.name)}</div>
-            {p.name}
-          </button>
-        ))}
-      </div>
+      <Card className="gradient-card border-gold/30 p-4">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Hole {activeHole + 1} of 18
+            </p>
+            <h3 className="font-serif text-2xl text-gold">H{activeHole + 1} · Par {PARS[activeHole]}</h3>
+            <p className="text-xs text-muted-foreground">
+              Enter all four player scores, then tap Next.
+            </p>
+          </div>
+          <div className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">
+            {completedHoleCount}/18 done
+          </div>
+        </div>
 
-      {/* Hole grid for active player */}
-      <div className="grid grid-cols-3 gap-2">
-        {PARS.map((par, i) => {
-          const v = players[active].scores[i];
-          const isHero = players[active].hero === i;
-          return (
-            <Card key={i} className={`gradient-card p-2 text-center ${isHero ? "border-gold shadow-gold" : "border-gold/15"}`}>
-              <p className="text-[10px] text-muted-foreground">H{i + 1} · Par {par}</p>
-              <div className="mt-1 flex items-center justify-center gap-1">
-                <button onClick={() => set(active, i, v - 1)} className="rounded bg-secondary p-1"><Minus className="h-3 w-3" /></button>
-                <span className={`w-6 font-serif text-xl ${v && v < par ? "text-emerald-400" : v && v > par ? "text-destructive" : "text-gold"}`}>{v || "-"}</span>
-                <button onClick={() => set(active, i, v + 1)} className="rounded bg-secondary p-1"><Plus className="h-3 w-3" /></button>
+        <div className="space-y-2">
+          {players.map((player, playerIndex) => {
+            const score = player.scores[activeHole];
+            const isHero = player.hero === activeHole;
+
+            return (
+              <div
+                key={player.id}
+                className={`rounded-xl border p-3 transition ${
+                  isHero ? "border-gold bg-gold/10 shadow-gold" : "border-border bg-background/30"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-gold">
+                    {initials(player.name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{player.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {score ? `${score - PARS[activeHole] === 0 ? "Par" : score - PARS[activeHole] > 0 ? `+${score - PARS[activeHole]}` : score - PARS[activeHole]} on this hole` : "Score needed"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setScore(playerIndex, activeHole, score - 1)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary"
+                      aria-label={`Decrease ${player.name} score`}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <span
+                      className={`w-9 text-center font-serif text-2xl ${
+                        score && score < PARS[activeHole]
+                          ? "text-emerald-400"
+                          : score && score > PARS[activeHole]
+                            ? "text-destructive"
+                            : "text-gold"
+                      }`}
+                    >
+                      {score || "-"}
+                    </span>
+                    <button
+                      onClick={() => setScore(playerIndex, activeHole, score + 1)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary"
+                      aria-label={`Increase ${player.name} score`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setScore(playerIndex, activeHole, PARS[activeHole])}
+                    className="h-8 flex-1 border-gold/20 text-xs"
+                  >
+                    Par
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setScore(playerIndex, activeHole, Math.max(1, PARS[activeHole] - 1))}
+                    className="h-8 flex-1 border-gold/20 text-xs"
+                  >
+                    Birdie
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => triggerHero(playerIndex, activeHole)}
+                    disabled={player.hero !== undefined}
+                    className="h-8 flex-1 border-gold/20 text-xs"
+                  >
+                    <Sparkles className="mr-1 h-3 w-3 text-gold" />
+                    {player.hero !== undefined ? "Used" : "Hero"}
+                  </Button>
+                </div>
               </div>
-              {isHero && <Flame className="mx-auto mt-0.5 h-3 w-3 text-gold" />}
-            </Card>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 grid grid-cols-[auto_1fr_auto] items-center gap-2">
+          <Button
+            onClick={() => goToHole(activeHole - 1)}
+            variant="outline"
+            className="border-gold/40 px-3"
+            disabled={activeHole === 0}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button onClick={nextHole} className="gradient-gold text-primary-foreground">
+            {activeHole === 17 ? (
+              <>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Finish Hole 18
+              </>
+            ) : (
+              <>
+                Next Hole
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={() => goToHole(activeHole + 1)}
+            variant="outline"
+            className="border-gold/40 px-3"
+            disabled={activeHole === 17}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-6 gap-1">
+        {PARS.map((par, index) => {
+          const done = players.every((player) => player.scores[index] > 0);
+          return (
+            <button
+              key={index}
+              onClick={() => goToHole(index)}
+              className={`rounded-lg border px-1.5 py-2 text-[10px] transition ${
+                activeHole === index
+                  ? "border-gold bg-gold/15 text-gold"
+                  : done
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-border text-muted-foreground"
+              }`}
+            >
+              H{index + 1}
+              <span className="block text-[9px] opacity-70">P{par}</span>
+            </button>
           );
         })}
       </div>
 
-      {/* Hero Mode + Press */}
       <div className="grid grid-cols-2 gap-2">
+        <Button onClick={callPress} variant="outline" className="border-gold/40">
+          <Flame className="mr-2 h-4 w-4 text-gold" />
+          Press {pressSummary > 0 && `(${pressSummary})`}
+        </Button>
         <Button
           onClick={() => {
-            const hi = Math.max(0, players[active].scores.findIndex((s) => s === 0));
-            triggerHero(active, hi === -1 ? 17 : hi);
+            setPlayers(seedPlayers());
+            setActiveHole(0);
+            setPresses([]);
+            setPressActive(false);
+            toast.success("Scorecard reset");
           }}
           variant="outline"
           className="border-gold/40"
-          disabled={players[active].hero !== undefined}
         >
-          <Sparkles className="mr-2 h-4 w-4 text-gold" />
-          {players[active].hero !== undefined ? "Hero Used" : "Hero Mode"}
-        </Button>
-        <Button onClick={callPress} variant="outline" className="border-gold/40">
-          <Flame className="mr-2 h-4 w-4 text-gold" /> Press {pressSummary > 0 && `(${pressSummary})`}
+          New Round
         </Button>
       </div>
 
-      {/* Skins / Press summary */}
       <Card className="gradient-card border-gold/20 p-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -205,40 +428,61 @@ export const Scorecard = () => {
             <p className="font-serif text-sm">Skins · AED {skinValue}/hole</p>
           </div>
           <div className="flex gap-1">
-            <button onClick={() => setSkinValue(Math.max(5, skinValue - 5))} className="rounded bg-secondary px-2 text-xs">-</button>
-            <button onClick={() => setSkinValue(skinValue + 5)} className="rounded bg-secondary px-2 text-xs">+</button>
+            <button onClick={() => setSkinValue(Math.max(5, skinValue - 5))} className="rounded bg-secondary px-2 text-xs">
+              -
+            </button>
+            <button onClick={() => setSkinValue(skinValue + 5)} className="rounded bg-secondary px-2 text-xs">
+              +
+            </button>
           </div>
         </div>
         <div className="mt-2 grid grid-cols-4 gap-1 text-center">
-          {players.map((p) => (
-            <div key={p.id} className="rounded-lg border border-border p-1.5">
-              <p className="text-[9px] text-muted-foreground">{p.name}</p>
-              <p className="font-serif text-base text-gold">{skins.won[p.id] ?? 0}</p>
-              <p className="text-[9px] text-emerald-400">+{(skins.won[p.id] ?? 0) * skinValue}</p>
+          {players.map((player) => (
+            <div key={player.id} className="rounded-lg border border-border p-1.5">
+              <p className="text-[9px] text-muted-foreground">{player.name}</p>
+              <p className="font-serif text-base text-gold">{skins.won[player.id] ?? 0}</p>
+              <p className="text-[9px] text-emerald-400">+{(skins.won[player.id] ?? 0) * skinValue}</p>
             </div>
           ))}
         </div>
-        {skins.carry > 0 && <p className="mt-2 text-[10px] text-muted-foreground">Carryover: {skins.carry} skin(s) · holes {skins.carryHoles.join(", ")}</p>}
-        {pressSummary > 0 && <p className="mt-1 text-[10px] text-gold">{pressSummary} press bet(s) live · doubling stakes</p>}
+        {skins.carry > 0 && (
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Carryover: {skins.carry} skin(s) · holes {skins.carryHoles.join(", ")}
+          </p>
+        )}
+        {pressActive && pressSummary > 0 && (
+          <p className="mt-1 text-[10px] text-gold">
+            {pressSummary} press bet(s) live · last called on H{presses[presses.length - 1]?.hole}
+          </p>
+        )}
       </Card>
 
       <div className="grid grid-cols-2 gap-2">
-        <Button onClick={save} className="gradient-gold text-primary-foreground"><Save className="mr-2 h-4 w-4" /> Save Round</Button>
-        <Button onClick={shareResult} variant="outline" className="border-gold/40"><Share2 className="mr-2 h-4 w-4" /> Share</Button>
+        <Button onClick={save} className="gradient-gold text-primary-foreground">
+          <Save className="mr-2 h-4 w-4" />
+          Save Round
+        </Button>
+        <Button onClick={shareResult} variant="outline" className="border-gold/40">
+          <Share2 className="mr-2 h-4 w-4" />
+          Share
+        </Button>
       </div>
 
       <div>
         <h3 className="mb-2 font-serif text-lg text-foreground">Round History</h3>
         <div className="space-y-2">
-          {rounds.map((r) => (
-            <Card key={r.id} className="gradient-card border-gold/10 p-3 flex justify-between items-center">
+          {rounds.map((round) => (
+            <Card key={round.id} className="gradient-card flex items-center justify-between border-gold/10 p-3">
               <div>
-                <p className="text-sm text-foreground">{r.course}</p>
-                <p className="text-[10px] text-muted-foreground">{r.date}</p>
+                <p className="text-sm text-foreground">{round.course}</p>
+                <p className="text-[10px] text-muted-foreground">{round.date}</p>
               </div>
               <div className="text-right">
-                <p className="font-serif text-xl text-gold">{r.score}</p>
-                <p className="text-[10px] text-muted-foreground">{r.score - r.par >= 0 ? "+" : ""}{r.score - r.par}</p>
+                <p className="font-serif text-xl text-gold">{round.score}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {round.score - round.par >= 0 ? "+" : ""}
+                  {round.score - round.par}
+                </p>
               </div>
             </Card>
           ))}
