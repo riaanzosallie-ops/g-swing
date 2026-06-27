@@ -109,6 +109,8 @@ import {
 import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
 import type { MappedHole } from "@/types/gswing-course-map";
 import { RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useGswingAdmin } from "@/lib/use-gswing-admin";
 
 const MEASURE_SRC = "gs-measure-src";
 const MEASURE_LINE = "gs-measure-line";
