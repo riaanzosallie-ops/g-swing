@@ -2384,7 +2384,7 @@ export const GpsMap = () => {
 
   return (
     <div className="space-y-3 pb-28">
-      <div className="flex items-center gap-3">
+      <div className="hidden md:flex items-center gap-3">
         <Target className="h-6 w-6 text-gold" />
         <div className="min-w-0">
           <h2 className="font-serif text-2xl text-gradient-gold">Live GPS</h2>
@@ -2395,7 +2395,7 @@ export const GpsMap = () => {
         </div>
       </div>
 
-      <Card className="gradient-card flex items-center gap-2 border-gold/20 p-3">
+      <Card className="gradient-card hidden md:flex items-center gap-2 border-gold/20 p-3">
         <select
           value={courseId}
           onChange={(event) => {
@@ -2536,7 +2536,7 @@ export const GpsMap = () => {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="hidden md:grid grid-cols-2 gap-2">
         <Button
           onClick={activeRound ? toggleLiveTracking : startPlayMode}
           disabled={syncing}
@@ -2566,7 +2566,7 @@ export const GpsMap = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="hidden md:grid grid-cols-3 gap-2">
         <Button onClick={() => changeHole(hole - 1)} disabled={hole === 1} variant="outline" className="border-gold/40">
           <ChevronLeft className="mr-1 h-4 w-4" />
           Prev
@@ -2587,9 +2587,11 @@ export const GpsMap = () => {
         </Card>
       )}
 
-      <RoundIntelligence stats={roundStats} loading={statsLoading} />
+      <div className="hidden md:block">
+        <RoundIntelligence stats={roundStats} loading={statsLoading} />
+      </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="hidden md:grid grid-cols-2 gap-2">
         <Button
           variant="outline"
           className="border-gold/40"
@@ -2610,7 +2612,7 @@ export const GpsMap = () => {
       </div>
 
       <Button
-        className="w-full gradient-gold text-primary-foreground shadow-elegant"
+        className="hidden md:flex w-full gradient-gold text-primary-foreground shadow-elegant"
         onClick={() => setExperienceOpen(true)}
         disabled={roundShots.length === 0}
       >
@@ -2638,7 +2640,7 @@ export const GpsMap = () => {
         model={experienceModel}
       />
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="hidden md:flex gap-2 overflow-x-auto pb-2">
         {Array.from({ length: selectableHoleCount }, (_, index) => index + 1).map((holeNumber) => (
           <button
             key={holeNumber}
