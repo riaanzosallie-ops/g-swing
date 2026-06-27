@@ -18,6 +18,8 @@ const API_KEY = Deno.env.get("GOLFCOURSE_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+console.log(`[golfcourse-api] boot — API key found = ${API_KEY.length > 0}`);
+
 type CacheEntry = { value: unknown; expires: number };
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const cache = new Map<string, CacheEntry>();
@@ -36,27 +38,47 @@ function putCache(key: string, value: unknown) {
 }
 
 async function callApi(path: string): Promise<{ ok: true; data: unknown } | { ok: false; status: number; error: string }> {
-  if (!API_KEY) return { ok: false, status: 500, error: "GOLFCOURSE_API_KEY not configured" };
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { Authorization: `Key ${API_KEY}`, Accept: "application/json" },
+  if (!API_KEY) {
+    console.error("[golfcourse-api] GOLFCOURSE_API_KEY secret is missing");
+    return { ok: false, status: 500, error: "GOLFCOURSE_API_KEY not configured on server" };
+  }
+  const url = `${API_BASE}${path}`;
+  const headers = { Authorization: `Key ${API_KEY}`, Accept: "application/json" };
+  console.log("[golfcourse-api] GolfCourseAPI Request", {
+    url,
+    method: "GET",
+    headers: { Authorization: "Key <REDACTED>", Accept: headers.Accept },
   });
+  const res = await fetch(url, { headers });
   const text = await res.text();
+  console.log("[golfcourse-api] GolfCourseAPI Response", {
+    status: res.status,
+    bodyPreview: text.slice(0, 500),
+  });
   let parsed: unknown = null;
   try { parsed = text ? JSON.parse(text) : null; } catch { parsed = { raw: text }; }
   if (!res.ok) {
-    const err = (parsed && typeof parsed === "object" && "error" in (parsed as Record<string, unknown>))
+    const providerErr = (parsed && typeof parsed === "object" && "error" in (parsed as Record<string, unknown>))
       ? String((parsed as Record<string, unknown>).error)
-      : `Provider error ${res.status}`;
-    return { ok: false, status: res.status, error: err };
+      : (text || `HTTP ${res.status}`);
+    const labelled = `${res.status} ${providerErr}`;
+    console.error("[golfcourse-api] GolfCourseAPI Error", { status: res.status, error: labelled });
+    return { ok: false, status: res.status, error: labelled };
   }
   return { ok: true, data: parsed };
 }
 
 function json(body: unknown, status = 200) {
+  // Always return 200 to the client so supabase-js does not collapse the
+  // body into a generic "non-2xx" error. Real status is in body.providerStatus.
   return new Response(JSON.stringify(body), {
-    status,
+    status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function errorJson(error: string, providerStatus: number) {
+  return json({ error, providerStatus, fallback: true });
 }
 
 Deno.serve(async (req) => {
@@ -64,60 +86,89 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+  if (!authHeader?.startsWith("Bearer ")) return errorJson("Unauthorized: missing caller token", 401);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
   const token = authHeader.replace("Bearer ", "");
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-  if (claimsError || !claimsData?.claims) return json({ error: "Unauthorized" }, 401);
+  if (claimsError || !claimsData?.claims) return errorJson("Unauthorized: invalid caller token", 401);
 
   let body: Record<string, unknown> = {};
-  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  try { body = await req.json(); } catch { return errorJson("Invalid JSON body", 400); }
   const action = String(body.action ?? "");
 
   try {
     if (action === "search") {
       const query = String(body.query ?? "").trim();
-      if (!query) return json({ error: "query required" }, 400);
+      if (!query) return errorJson("query required", 400);
       const key = `search:${query.toLowerCase()}`;
       const hit = cached<unknown>(key);
       if (hit) return json({ cached: true, ...(hit as object) });
       const r = await callApi(`/search?search_query=${encodeURIComponent(query)}`);
-      if (!r.ok) return json({ error: r.error }, r.status);
+      if (!r.ok) return errorJson(r.error, r.status);
       putCache(key, r.data);
       return json({ cached: false, ...(r.data as object) });
     }
 
     if (action === "get") {
       const id = body.id;
-      if (id === undefined || id === null) return json({ error: "id required" }, 400);
+      if (id === undefined || id === null) return errorJson("id required", 400);
       const key = `course:${id}`;
       const hit = cached<unknown>(key);
       if (hit) return json({ cached: true, course: hit });
       const r = await callApi(`/courses/${encodeURIComponent(String(id))}`);
-      if (!r.ok) return json({ error: r.error }, r.status);
+      if (!r.ok) return errorJson(r.error, r.status);
       putCache(key, r.data);
       return json({ cached: false, course: r.data });
     }
 
     if (action === "sharjah") {
-      const key = `search:sharjah-golf-and-shooting-club`;
-      const hit = cached<unknown>(key);
-      if (hit) return json({ cached: true, ...(hit as object) });
-      const r = await callApi(`/search?search_query=${encodeURIComponent("Sharjah Golf and Shooting Club")}`);
-      if (!r.ok) return json({ error: r.error }, r.status);
-      putCache(key, r.data);
-      return json({ cached: false, ...(r.data as object) });
+      // Try primary, then progressively broader UAE searches and merge.
+      const queries = [
+        "Sharjah Golf and Shooting Club",
+        "Sharjah",
+        "United Arab Emirates",
+        "Dubai",
+        "Abu Dhabi",
+      ];
+      const merged: { id: unknown; club_name?: string; course_name?: string; location?: unknown; _query: string }[] = [];
+      const seen = new Set<string>();
+      let lastError: { status: number; error: string } | null = null;
+      for (const q of queries) {
+        const r = await callApi(`/search?search_query=${encodeURIComponent(q)}`);
+        if (!r.ok) { lastError = { status: r.status, error: r.error }; continue; }
+        const list = ((r.data as { courses?: Array<Record<string, unknown>> })?.courses ?? []);
+        for (const c of list) {
+          const id = String((c as { id?: unknown }).id ?? "");
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          merged.push({ ...(c as Record<string, unknown>), _query: q } as never);
+        }
+        // Stop early if specific Sharjah club found
+        if (q === queries[0] && list.length > 0) break;
+      }
+      if (merged.length === 0 && lastError) return errorJson(lastError.error, lastError.status);
+      return json({ cached: false, courses: merged, queriesTried: queries });
     }
 
     if (action === "health") {
-      return json({ ok: true, hasKey: API_KEY.length > 0 });
+      const r = await callApi(`/search?search_query=pinehurst`);
+      return json({
+        ok: r.ok,
+        hasKey: API_KEY.length > 0,
+        endpoint: `${API_BASE}/search`,
+        authHeader: "Authorization: Key <REDACTED>",
+        providerStatus: r.ok ? 200 : r.status,
+        providerError: r.ok ? null : r.error,
+      });
     }
 
-    return json({ error: `Unknown action: ${action}` }, 400);
+    return errorJson(`Unknown action: ${action}`, 400);
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.error("[golfcourse-api] Unhandled error", msg);
+    return errorJson(msg, 500);
   }
 });
