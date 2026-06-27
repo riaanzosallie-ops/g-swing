@@ -253,28 +253,40 @@ export function GpsHud(props: GpsHudProps) {
         </div>
       </div>
 
-      {/* HERO DISTANCE CARD — center / front / back */}
-      <div className="pointer-events-none absolute right-2 top-16 w-[178px] sm:w-[218px]">
-        <div className="pointer-events-auto overflow-hidden rounded-2xl border border-gold/45 bg-gradient-to-br from-black/80 via-emerald-950/70 to-black/80 shadow-[0_8px_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-          <div className="border-b border-gold/20 px-3 pt-2 pb-1.5 text-right">
-            <div className="text-[9px] uppercase tracking-widest text-gold-soft">Center · Green</div>
-            <div className="font-serif text-[56px] font-bold leading-none text-gold tabular-nums sm:text-[64px]">
-              {animatedCenter == null ? "—" : animatedCenter}
+      {/* HERO DISTANCE CARD — horizontal Front · Center · Back pinned to
+          the bottom safe zone, above the ACE caddie panel. Never sits
+          across the map center, never collides with the right-edge. */}
+      <div className="pointer-events-none absolute inset-x-2 bottom-[6.25rem]">
+        <div className="pointer-events-auto mx-auto max-w-[420px] overflow-hidden rounded-2xl border border-gold/45 bg-gradient-to-br from-black/80 via-emerald-950/70 to-black/80 shadow-[0_10px_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+          {animatedCenter == null ? (
+            <div className="flex flex-col items-center px-4 py-3 text-center">
+              <span className="text-[9px] uppercase tracking-[0.25em] text-gold-soft">Yardages</span>
+              <span className="mt-1 font-serif text-lg text-gold">Mapping required</span>
+              <span className="mt-0.5 text-[10px] text-white/55">
+                Professional course mapping needed for live distances.
+              </span>
             </div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-gold-soft">{u}</div>
-          </div>
-          <div className="grid grid-cols-2 text-right">
-            <div className="border-r border-gold/15 px-3 py-1.5">
-              <div className="text-[8px] uppercase tracking-widest text-white/55">Front</div>
-              <div className="font-serif text-xl text-gold tabular-nums">{fmt(front)}</div>
+          ) : (
+            <div className="flex items-stretch">
+              <div className="flex flex-1 flex-col items-center justify-center border-r border-gold/15 px-2 py-2">
+                <span className="text-[8px] uppercase tracking-widest text-white/55">Front</span>
+                <span className="font-serif text-xl text-gold tabular-nums">{fmt(front)}</span>
+              </div>
+              <div className="flex flex-[1.4] flex-col items-center justify-center px-3 py-2">
+                <span className="text-[9px] uppercase tracking-[0.2em] text-gold-soft">Center · Green</span>
+                <span className="font-serif text-[44px] leading-none font-bold text-gold tabular-nums">
+                  {animatedCenter}
+                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-gold-soft">{u}</span>
+              </div>
+              <div className="flex flex-1 flex-col items-center justify-center border-l border-gold/15 px-2 py-2">
+                <span className="text-[8px] uppercase tracking-widest text-white/55">Back</span>
+                <span className="font-serif text-xl text-gold tabular-nums">{fmt(back)}</span>
+              </div>
             </div>
-            <div className="px-3 py-1.5">
-              <div className="text-[8px] uppercase tracking-widest text-white/55">Back</div>
-              <div className="font-serif text-xl text-gold tabular-nums">{fmt(back)}</div>
-            </div>
-          </div>
-          {readout.pin != null && (
-            <div className="flex items-center justify-end gap-1 border-t border-gold/15 px-3 py-1 text-[9px] uppercase tracking-wider text-gold-soft">
+          )}
+          {animatedCenter != null && readout.pin != null && (
+            <div className="flex items-center justify-center gap-1 border-t border-gold/15 px-3 py-1 text-[9px] uppercase tracking-wider text-gold-soft">
               <Flag className="h-2.5 w-2.5" /> Pin
               <span className="font-serif text-sm text-gold tabular-nums">{fmt(readout.pin)}</span>
               <span>{u}</span>
@@ -283,8 +295,9 @@ export function GpsHud(props: GpsHudProps) {
         </div>
       </div>
 
-      {/* LEFT MAP CONTROL DOCK — premium glass column */}
-      <div className="pointer-events-auto absolute bottom-32 left-2 flex flex-col gap-1 rounded-2xl border border-gold/30 bg-black/60 p-1 shadow-xl backdrop-blur-md">
+      {/* LEFT MAP CONTROL DOCK — slim semi-transparent icon column pinned
+          mid-left so it never covers the hero card or the caddie panel. */}
+      <div className="pointer-events-auto absolute top-1/2 left-1.5 flex -translate-y-1/2 flex-col gap-0.5 rounded-2xl border border-gold/20 bg-black/35 p-0.5 shadow-md backdrop-blur-md">
         <HudCtrl active={showOverlays} onClick={onToggleOverlays} label="Overlays">
           <LayersIcon className="h-3.5 w-3.5" />
         </HudCtrl>
@@ -311,7 +324,7 @@ export function GpsHud(props: GpsHudProps) {
 
       {/* HAZARD TILES — only when we actually have evidence-backed carries */}
       {readout.carries.length > 0 && (
-        <div className="pointer-events-auto absolute left-2 right-2 bottom-[10.5rem] flex gap-1.5 overflow-x-auto pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="pointer-events-auto absolute left-2 right-2 bottom-[12.5rem] flex gap-1.5 overflow-x-auto pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {readout.carries.slice(0, 6).map((c) => {
             const chip = hazardChip(c.kind);
             const risk = hazardRisk(c.carry);
@@ -355,7 +368,7 @@ export function GpsHud(props: GpsHudProps) {
       )}
 
       {/* ACE CADDIE — bottom floating panel */}
-      <div className="pointer-events-auto absolute inset-x-2 bottom-14">
+      <div className="pointer-events-auto absolute inset-x-2 bottom-11">
         <div className="overflow-hidden rounded-2xl border border-gold/40 bg-gradient-to-r from-black/85 via-emerald-950/75 to-black/85 shadow-[0_10px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl">
           <div className="flex items-start gap-2 px-3 py-2">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-gold/10">
@@ -444,12 +457,12 @@ function HudCtrl({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-xl border transition-all active:scale-95 ${
+      className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all active:scale-95 ${
         disabled
           ? "cursor-not-allowed border-white/10 bg-black/30 text-white/30"
           : active
             ? "border-gold bg-gold/20 text-gold shadow-[0_0_16px_rgba(245,200,75,0.25)]"
-            : "border-gold/25 bg-black/40 text-gold-soft hover:text-gold"
+            : "border-gold/20 bg-black/30 text-gold-soft hover:text-gold"
       }`}
     >
       {children}

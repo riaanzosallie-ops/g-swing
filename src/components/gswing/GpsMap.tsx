@@ -338,14 +338,12 @@ function MapboxCourseView({
       bearing: 0,
       attributionControl: false,
     });
-    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+    // Premium GPS owns the controls. The default Mapbox compass /
+    // geolocate widgets get hidden via `.gswing-map` CSS; we keep a
+    // compact zoom group in the bottom-right safe zone.
     map.addControl(
-      new mapboxgl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: true,
-        showUserHeading: true,
-      }),
-      "top-right",
+      new mapboxgl.NavigationControl({ showCompass: false, showZoom: true }),
+      "bottom-right",
     );
     mapRef.current = map;
     return () => {
@@ -649,7 +647,7 @@ function MapboxCourseView({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
+    <div className="gswing-map relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
       <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
 
       <GpsHud
@@ -690,28 +688,37 @@ function MapboxCourseView({
         flyoverRunning={flyoverRunning}
       />
 
-      {/* Camera mode strip — kept for power users; lifted above quick-action dock. */}
-      <div className="pointer-events-auto absolute right-2 bottom-2 flex flex-wrap justify-end gap-1 rounded-full border border-gold/30 bg-black/60 p-1 text-[9px] uppercase tracking-wider backdrop-blur-md">
-        {CAMERA_MODES.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => setCameraMode(m.id)}
-            className={`rounded-full px-2 py-0.5 font-semibold transition-colors ${
-              cameraMode === m.id
-                ? "bg-gold/25 text-gold"
-                : "text-white/65 hover:text-white"
-            }`}
-            aria-pressed={cameraMode === m.id}
-          >
-            {m.label}
-          </button>
-        ))}
+      {/* Camera mode pill — compact single-row glass dock pinned top-center
+          under the top strip. Never crosses the map center, never overlaps
+          the hero distance card. */}
+      <div className="pointer-events-auto absolute left-1/2 top-[3.4rem] -translate-x-1/2">
+        <div
+          className="flex max-w-[94vw] items-center gap-0.5 overflow-x-auto rounded-full border border-gold/30 bg-black/55 p-0.5 text-[9px] uppercase tracking-wider shadow-lg backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+          aria-label="Camera mode"
+        >
+          {CAMERA_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              onClick={() => setCameraMode(m.id)}
+              aria-selected={cameraMode === m.id}
+              className={`shrink-0 rounded-full px-2 py-1 font-semibold transition-colors ${
+                cameraMode === m.id
+                  ? "bg-gold text-black shadow-[0_0_12px_rgba(245,200,75,0.35)]"
+                  : "text-white/70 hover:text-white"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {usePlaceholder && (
-        <div className="pointer-events-none absolute left-2 top-[5.5rem] rounded-md border border-gold/30 bg-black/55 px-2 py-0.5 text-[9px] text-gold-soft backdrop-blur-sm">
-          Placeholder geometry (Sharjah H1)
+        <div className="pointer-events-none absolute bottom-1 left-2 rounded-md border border-gold/25 bg-black/55 px-1.5 py-0.5 text-[8px] uppercase tracking-wider text-gold-soft/80 backdrop-blur-sm">
+          Mapping preview
         </div>
       )}
     </div>
