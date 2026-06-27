@@ -198,19 +198,71 @@ export function ensureCourseLayers(map: mapboxgl.Map): void {
 
   hazardFill(LAYERS.waterFill, "water", "#3aa9ff", 0.5);
   hazardLine(LAYERS.waterLine, "water", "#bee8ff", 0.75);
+  // Animated water shimmer — bright dashed inner edge with marching offset.
+  map.addLayer({
+    id: LAYERS.waterShimmer,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "water"]],
+    paint: {
+      "line-color": "#ffffff",
+      "line-width": 1.1,
+      "line-opacity": 0.55,
+      "line-blur": 0.6,
+      "line-dasharray": [0.6, 2.4],
+    },
+  });
   hazardFill(LAYERS.bunkerFill, "bunker", "#e8cf8f", 0.7);
   hazardLine(LAYERS.bunkerLine, "bunker", "#f7e5a7", 0.85);
   hazardFill(LAYERS.obFill, "ob", "#ef4444", 0.22);
   hazardLine(LAYERS.obLine, "ob", "#ef4444", 0.85, 1.4);
+  // OB red dashed warning line on top of the solid stroke.
+  map.addLayer({
+    id: LAYERS.obDash,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "ob"]],
+    paint: {
+      "line-color": "#ff2d2d",
+      "line-width": 1.6,
+      "line-opacity": 0.95,
+      "line-dasharray": [2, 2],
+    },
+  });
   hazardFill(LAYERS.otherFill, "other", "#7c5cff", 0.28);
   hazardLine(LAYERS.otherLine, "other", "#a48bff", 0.6);
 
-  // Cart path — LineString hazards rendered as silver line.
+  // Trees — canopy fill drawn above ground hazards.
+  map.addLayer({
+    id: LAYERS.treesFill,
+    type: "fill",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "trees"]],
+    paint: { "fill-color": "#0f2a18", "fill-opacity": 0.62 },
+  });
+  map.addLayer({
+    id: LAYERS.treesLine,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "trees"]],
+    paint: { "line-color": "#1f5a32", "line-width": 1, "line-opacity": 0.75, "line-blur": 0.6 },
+  });
+
+  // Cart path — dark casing under bright silver line for premium contrast.
+  map.addLayer({
+    id: LAYERS.cartCasing,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "category"], "cartpath"]],
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-color": "#0a0a0a", "line-width": 3.2, "line-opacity": 0.7 },
+  });
   map.addLayer({
     id: LAYERS.cartLine,
     type: "line",
     source: SRC.hazards,
     filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "category"], "cartpath"]],
+    layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": "#cbd5e1", "line-width": 1.4, "line-opacity": 0.8 },
   });
 
