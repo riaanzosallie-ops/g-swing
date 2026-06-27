@@ -1355,6 +1355,14 @@ export const GpsMap = () => {
         geometry={geometryPayload}
       />
 
+      <YardagePanel
+        geometry={geometryPayload}
+        playerPosition={playerPos}
+        lastShotEnd={lastShotEnd}
+        unit={unit}
+        fallbackCenterYards={loading ? null : displayCenterDistance}
+      />
+
       <div className="grid grid-cols-2 gap-2">
         <Card className="gradient-card border-gold/20 p-3">
           <div className="flex items-center gap-2">
