@@ -8,6 +8,7 @@ import {
   Crosshair,
   Flag,
   Footprints,
+  Home,
   Locate,
   LocateOff,
   MapPin,
@@ -247,6 +248,7 @@ function CartGpsView({
   centerDistance,
   frontDistance,
   backDistance,
+  currentTime,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -254,6 +256,7 @@ function CartGpsView({
   centerDistance: number | null;
   frontDistance: number | null;
   backDistance: number | null;
+  currentTime: string;
 }) {
   const primaryTee = getPrimaryTee(gps?.tee_boxes ?? []);
   const green = gps?.green;
@@ -387,6 +390,13 @@ function CartGpsView({
           </div>
         </div>
 
+        <div className="pointer-events-none absolute bottom-8 right-5 hidden w-[210px] rounded-md border border-gold/20 bg-black/58 p-3 text-center text-white/85 shadow-xl backdrop-blur-sm sm:block">
+          <div className="mx-auto mb-2 flex h-14 w-20 items-center justify-center rounded-md bg-gradient-to-b from-slate-200/75 to-blue-300/55 shadow-inner">
+            <Home className="h-8 w-8 text-white drop-shadow" />
+          </div>
+          <div className="text-[10px] text-white/70">Main Menu</div>
+          <div className="mt-6 font-serif text-4xl tracking-normal text-white/85">{currentTime}</div>
+        </div>
       </div>
     </div>
   );
@@ -406,6 +416,9 @@ export const GpsMap = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  );
   const watchIdRef = useRef<number | null>(null);
   const [bag] = useBag();
 
@@ -477,6 +490,13 @@ export const GpsMap = () => {
   useEffect(() => {
     loadHole();
   }, [loadHole]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -733,6 +753,7 @@ export const GpsMap = () => {
         centerDistance={loading ? null : displayCenterDistance}
         frontDistance={loading ? null : frontDistance}
         backDistance={loading ? null : backDistance}
+        currentTime={currentTime}
       />
 
       <div className="grid grid-cols-2 gap-2">

@@ -27,12 +27,6 @@ export const AceCaddie = () => {
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = () => setOpen(true);
-    window.addEventListener("gswing:openAce", handler);
-    return () => window.removeEventListener("gswing:openAce", handler);
-  }, []);
-
-  useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
