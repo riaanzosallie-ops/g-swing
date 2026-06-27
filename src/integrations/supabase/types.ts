@@ -719,6 +719,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       geography_columns: {
@@ -1028,6 +1049,14 @@ export type Database = {
         Returns: Json
       }
       gettransactionid: { Args: never; Returns: unknown }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_gswing_admin: { Args: { _user_id: string }; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
@@ -1663,6 +1692,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "owner" | "platform_owner" | "admin" | "user"
       golf_hazard_type:
         | "bunker"
         | "water"
@@ -1818,6 +1848,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["owner", "platform_owner", "admin", "user"],
       golf_hazard_type: [
         "bunker",
         "water",
