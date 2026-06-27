@@ -329,6 +329,27 @@ All colors MUST be HSL.
 .gswing-map .mapboxgl-ctrl-top-left {
   display: none !important;
 }
+/* The bottom-right zoom group exists for accessibility but is also
+   redundant with our custom HUD controls. Hide it entirely so no
+   white Mapbox chrome leaks through the premium GPS view. */
+.gswing-map .mapboxgl-ctrl-bottom-right {
+  display: none !important;
+}
+/* Premium GPS overlay — emerald wash + radial vignette painted over
+   the canvas itself so toggling the in-HUD overlays cannot remove it. */
+.gswing-map::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(180deg, rgba(4, 28, 18, 0.32) 0%, rgba(4, 28, 18, 0) 35%, rgba(4, 28, 18, 0.45) 100%);
+  mix-blend-mode: multiply;
+}
+.gswing-map.is-satellite::after {
+  background: none;
+}
 .gswing-map .mapboxgl-ctrl-bottom-right {
   margin: 0 8px 6px 0;
 }
