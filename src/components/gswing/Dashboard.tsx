@@ -5,7 +5,9 @@ import {
   BarChart3, Swords, MessagesSquare, Film, Radio, Flag, Sparkles,
   CloudSun, Bot, Award, CircleDot, Dumbbell, Check, Circle,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { usePlayer, useRounds } from "@/lib/gswing-store";
+import { listTournaments, type Tournament } from "@/lib/tournament-engine";
 import { LaunchIntro } from "./LaunchIntro";
 import { HeroAmbience } from "./HeroAmbience";
 
@@ -42,24 +44,48 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
     ? Math.round(rounds.reduce((a, r) => a + r.score, 0) / roundsPlayed)
     : null;
 
-  // Today's Journey — never fabricate progress
+  // Real tournament data (evidence-only)
+  const [tournaments, setTournaments] = useState<Tournament[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    listTournaments()
+      .then((rows) => { if (alive) setTournaments(rows ?? []); })
+      .catch(() => { if (alive) setTournaments([]); });
+    return () => { alive = false; };
+  }, []);
+
+  const liveTournaments = (tournaments ?? []).filter((t) => t.status === "Live" || t.status === "Open");
+  const latestTournament = liveTournaments[0];
+  const tournamentLabel =
+    tournaments === null
+      ? "Checking…"
+      : liveTournaments.length === 0
+      ? "No live tournaments"
+      : `${liveTournaments.length} live · ${latestTournament?.name ?? ""}`.trim();
+
+  // Today's Journey — derived from real round evidence
+  const latestRound = rounds[0];
+  const activeHoles = latestRound?.holes ?? 0;
+  const hasActiveRound = roundsPlayed > 0;
   const journey = [
-    { label: "Warm Up", done: false },
-    { label: "Start Round", done: false },
-    { label: "Complete Front Nine", done: false },
-    { label: "Back Nine", done: false },
-    { label: "Finish Round", done: false },
-    { label: "Review with AI", done: false },
+    { label: "Warm Up", done: hasActiveRound },
+    { label: "Start Round", done: hasActiveRound },
+    { label: "Complete Front Nine", done: activeHoles >= 9 },
+    { label: "Back Nine", done: activeHoles >= 18 },
+    { label: "Finish Round", done: activeHoles >= 18 },
+    { label: "Review with AI", done: activeHoles >= 18 },
   ];
 
   // Live Activity — only real events
   const activity: string[] = [];
-  if (roundsPlayed) {
-    const latest = rounds[0];
-    activity.push(`Round completed · ${latest.course} · ${latest.score}`);
+  if (latestRound) activity.push(`Round completed · ${latestRound.course} · ${latestRound.score}`);
+  if (bestScore !== null && latestRound && latestRound.score === bestScore) {
+    activity.push(`Personal best · ${bestScore}`);
+  } else if (bestScore !== null) {
+    activity.push(`Season best · ${bestScore}`);
   }
-  if (bestScore !== null) activity.push(`Season best · ${bestScore}`);
-  activity.push(`Handicap updated · ${player.handicap}`);
+  if (latestTournament) activity.push(`Tournament · ${latestTournament.name}`);
+  if (typeof player.handicap === "number") activity.push(`Handicap · ${player.handicap}`);
 
   const ribbonText =
     activity.length > 0
@@ -128,15 +154,15 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
         <div className="mt-5 space-y-2 text-xs text-muted-foreground">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2"><CloudSun className="h-3.5 w-3.5 text-gold" /> Weather</span>
-            <span className="text-foreground/80">28°C · Light breeze</span>
+            <span className="text-muted-foreground/80">Course weather unavailable</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2"><Radio className="h-3.5 w-3.5 text-gold" /> Tournament</span>
-            <span className="text-foreground/80">Open · Tap to join</span>
+            <span className="text-foreground/80">{tournamentLabel}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2"><Bot className="h-3.5 w-3.5 text-gold" /> AI Caddie</span>
-            <span className="text-emerald-300/90">ACE online</span>
+            <span className="text-emerald-300/90">AI Caddie ready</span>
           </div>
         </div>
       </section>
