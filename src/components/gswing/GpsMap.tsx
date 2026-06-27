@@ -994,6 +994,20 @@ function MapboxCourseView({
       {/* Mapping status badge + Refresh control. Honest about whether
           the screen is showing real surveyed geometry or placeholders. */}
       <div className="pointer-events-auto absolute bottom-1 left-2 flex items-center gap-1">
+      </div>
+
+      {/* Honest GPS lock banner — no fake "locked" state. Tells the truth
+          about location permission, accuracy, and whether a mapped course
+          was actually detected nearby. Sits above the bottom HUD. */}
+      <GpsLockBanner
+        playerPosition={playerPosition}
+        playerAccuracy={playerAccuracy}
+        nearestCourseFound={nearestCourseFound}
+        mappingStatus={mappingStatus}
+        courseName={selectedCourse.name}
+      />
+
+      <div className="pointer-events-auto absolute bottom-1 left-2 hidden items-center gap-1">
         <div
           className={`rounded-md border px-1.5 py-0.5 text-[8px] uppercase tracking-wider backdrop-blur-sm ${
             mappingStatus === "mapped"
