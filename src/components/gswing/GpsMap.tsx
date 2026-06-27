@@ -97,6 +97,18 @@ import { useGswingWeather } from "@/lib/use-gswing-weather";
 import { Ruler, X as XIcon, Wifi, WifiOff, Wind } from "lucide-react";
 import { GpsHud } from "@/components/gswing/gps/GpsHud";
 import type { YardageReadout } from "@/lib/yardage-engine";
+import {
+  ensureMappedLayers,
+  setMappedHoleData,
+  clearMappedHoleData,
+} from "@/lib/mapbox-mapped-layers";
+import {
+  findNearestCourseMap,
+  loadMappedHole,
+} from "@/lib/gswing-course-map-loader";
+import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
+import type { MappedHole } from "@/types/gswing-course-map";
+import { RefreshCw } from "lucide-react";
 
 const MEASURE_SRC = "gs-measure-src";
 const MEASURE_LINE = "gs-measure-line";
