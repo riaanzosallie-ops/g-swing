@@ -811,6 +811,7 @@ export const GpsMap = () => {
   const [unit, setUnit] = useState<"yards" | "meters">("yards");
   const [playerPos, setPlayerPos] = useState<LatLng | null>(DEFAULT_POSITION);
   const [gps, setGps] = useState<HoleGpsResponse | null>(null);
+  const [geometryPayload, setGeometryPayload] = useState<HoleGeometryPayload | null>(null);
   const [activeRound, setActiveRound] = useState<ActiveRound | null>(null);
   const [activeShot, setActiveShot] = useState<Shot | null>(null);
   const [lastShotYards, setLastShotYards] = useState<number | null>(null);
@@ -854,11 +855,14 @@ export const GpsMap = () => {
       try {
         const geom = await fetchHoleGeometry(courseId, hole);
         if (geom) {
+          setGeometryPayload(geom);
           setGps(geometryToHoleGpsResponse(courseId, geom, unit, playerPos));
           return;
         }
+        setGeometryPayload(null);
       } catch {
         // DB lookup failed — fall through to the edge function.
+        setGeometryPayload(null);
       }
 
       // 2. Edge-function backed geometry (legacy path).
@@ -869,6 +873,7 @@ export const GpsMap = () => {
       setGps(data);
     } catch (error) {
       // 3. Last-resort offline demo geometry so the map still renders.
+      setGeometryPayload(null);
       setGps(createFallbackHoleGps(selectedCourse, hole, unit, playerPos));
       setGpsError(null);
     } finally {
@@ -1168,6 +1173,7 @@ export const GpsMap = () => {
         hole={hole}
         centerDistance={loading ? null : displayCenterDistance}
         displayUnit={displayUnit}
+        geometry={geometryPayload}
       />
 
       <div className="grid grid-cols-2 gap-2">
