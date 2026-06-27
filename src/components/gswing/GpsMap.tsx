@@ -46,6 +46,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { fetchHoleGeometry, geometryToHoleGpsResponse } from "@/lib/course-geometry";
 import type { HoleGeometryPayload } from "@/lib/course-geometry";
+import { supabase } from "@/integrations/supabase/client";
 import {
   applyCourseGeometry,
   clearCourseGeometry,
@@ -56,8 +57,30 @@ import {
   updateYardageLabels,
 } from "@/lib/mapbox-course-layers";
 
-// Public Mapbox token (publishable pk.*). Loaded from Vite env — never hardcoded.
-const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
+// Public Mapbox token (publishable pk.*) is loaded at runtime from the
+// `mapbox-token` edge function — never hardcoded, never baked into the bundle.
+type TokenState =
+  | { status: "loading" }
+  | { status: "ready"; token: string }
+  | { status: "error"; message: string };
+
+let cachedTokenPromise: Promise<string> | null = null;
+function loadMapboxToken(): Promise<string> {
+  if (!cachedTokenPromise) {
+    cachedTokenPromise = (async () => {
+      const { data, error } = await supabase.functions.invoke<{ token?: string; error?: string }>(
+        "mapbox-token",
+      );
+      if (error) throw new Error(error.message || "Failed to load Mapbox token");
+      if (!data?.token) throw new Error(data?.error || "Mapbox token unavailable");
+      return data.token;
+    })().catch((err) => {
+      cachedTokenPromise = null; // allow retry on next mount
+      throw err;
+    });
+  }
+  return cachedTokenPromise;
+}
 
 function MapboxCourseView({
   gps,
@@ -88,6 +111,26 @@ function MapboxCourseView({
   const [showHazards, setShowHazards] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [flyoverRunning, setFlyoverRunning] = useState(false);
+  const [tokenState, setTokenState] = useState<TokenState>({ status: "loading" });
+
+  // Fetch the public Mapbox token from the edge function once per mount.
+  useEffect(() => {
+    let cancelled = false;
+    setTokenState({ status: "loading" });
+    loadMapboxToken()
+      .then((token) => {
+        if (!cancelled) setTokenState({ status: "ready", token });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : "Mapbox token unavailable";
+          setTokenState({ status: "error", message });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Resolve geometry: prefer live gps payload, otherwise fall back to
   // the Sharjah Hole 1 placeholder (only valid for that specific hole).
@@ -109,10 +152,11 @@ function MapboxCourseView({
     pin ??
     { lat: selectedCourse.lat, lng: selectedCourse.lng };
 
-  // Initialise map once.
+  // Initialise map once token is ready.
   useEffect(() => {
-    if (!containerRef.current || mapRef.current || !MAPBOX_TOKEN) return;
-    mapboxgl.accessToken = MAPBOX_TOKEN;
+    if (tokenState.status !== "ready") return;
+    if (!containerRef.current || mapRef.current) return;
+    mapboxgl.accessToken = tokenState.token;
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/satellite-streets-v12",
@@ -141,7 +185,7 @@ function MapboxCourseView({
       pinMarkerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tokenState.status]);
 
   // After map style is ready: install layers and push current data.
   useEffect(() => {
@@ -321,12 +365,22 @@ function MapboxCourseView({
     }
   }, [geometry]);
 
-  if (!MAPBOX_TOKEN) {
+  if (tokenState.status === "loading") {
+    return (
+      <Card className="gradient-card flex h-[58vh] min-h-[410px] items-center justify-center border-gold/30 p-4 text-xs text-muted-foreground">
+        <div className="text-center">
+          <p className="mb-1 font-serif text-base text-gold">Loading Mapbox…</p>
+          <p>Fetching secure satellite token.</p>
+        </div>
+      </Card>
+    );
+  }
+
+  if (tokenState.status === "error") {
     return (
       <Card className="gradient-card border-gold/30 p-4 text-xs text-muted-foreground">
-        <p className="mb-1 font-serif text-base text-gold">Mapbox not configured</p>
-        Set <code className="text-gold">VITE_MAPBOX_ACCESS_TOKEN</code> with a public{" "}
-        <code>pk.*</code> token and reload to see the live satellite course view.
+        <p className="mb-1 font-serif text-base text-gold">Mapbox token unavailable</p>
+        {tokenState.message}
       </Card>
     );
   }
