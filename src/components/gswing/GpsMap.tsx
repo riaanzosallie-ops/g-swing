@@ -1018,29 +1018,49 @@ function applyPremiumMapStyle(map: mapboxgl.Map, mode: "premium" | "satellite"):
     const style = map.getStyle();
     const layers = style?.layers ?? [];
     for (const layer of layers) {
-      // Restore everything first so toggling back to Satellite is clean.
+      const id = layer.id;
+      // Never touch G-Swing custom layers (gs-*, gsm-*) — those are
+      // our mapped course features and stylized overlays.
+      if (id.startsWith("gs-") || id.startsWith("gsm-")) continue;
+
+      // Hide ALL Mapbox labels / icons / POIs in premium so no
+      // "Golf & Shooting Club Sharjah" text leaks through.
       if (layer.type === "symbol") {
-        map.setLayoutProperty(layer.id, "visibility", mode === "premium" ? "none" : "visible");
-      }
-      if (
-        layer.type === "line" &&
-        (layer.id.includes("road") || layer.id.includes("street") || layer.id.includes("path"))
-      ) {
         try {
-          map.setPaintProperty(layer.id, "line-opacity", mode === "premium" ? 0.18 : 1);
-        } catch {
-          /* not every line layer has line-opacity */
-        }
+          map.setLayoutProperty(id, "visibility", mode === "premium" ? "none" : "visible");
+        } catch { /* ignore */ }
+        continue;
       }
-      if (layer.id === "mapbox-satellite" || layer.id === "satellite") {
+
+      // Hide ALL Mapbox line layers in premium (roads, paths, admin
+      // boundaries, etc). They reappear cleanly in Satellite mode.
+      if (layer.type === "line") {
         try {
-          map.setPaintProperty(layer.id, "raster-brightness-max", mode === "premium" ? 0.65 : 1);
-          map.setPaintProperty(layer.id, "raster-brightness-min", mode === "premium" ? 0.08 : 0);
-          map.setPaintProperty(layer.id, "raster-saturation", mode === "premium" ? -0.45 : 0);
-          map.setPaintProperty(layer.id, "raster-contrast", mode === "premium" ? 0.18 : 0);
-        } catch {
-          /* property unsupported on some mapbox versions */
-        }
+          map.setLayoutProperty(id, "visibility", mode === "premium" ? "none" : "visible");
+        } catch { /* ignore */ }
+        continue;
+      }
+
+      // Hide fill / fill-extrusion clutter (parks, buildings, etc.)
+      // in premium so only our golf overlays show.
+      if (layer.type === "fill" || layer.type === "fill-extrusion") {
+        try {
+          map.setLayoutProperty(id, "visibility", mode === "premium" ? "none" : "visible");
+        } catch { /* ignore */ }
+        continue;
+      }
+
+      // Satellite raster — fully invisible in premium mode so the
+      // emerald CSS background becomes the map base. Restored at full
+      // brightness in Satellite mode.
+      if (layer.type === "raster") {
+        try {
+          map.setPaintProperty(id, "raster-opacity", mode === "premium" ? 0 : 1);
+          map.setPaintProperty(id, "raster-brightness-max", 1);
+          map.setPaintProperty(id, "raster-brightness-min", 0);
+          map.setPaintProperty(id, "raster-saturation", 0);
+          map.setPaintProperty(id, "raster-contrast", 0);
+        } catch { /* ignore */ }
       }
     }
   } catch {
