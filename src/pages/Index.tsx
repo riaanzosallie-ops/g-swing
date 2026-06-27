@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Splash } from "@/components/gswing/Splash";
+import { PremiumAuth } from "@/components/gswing/auth/PremiumAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Dashboard } from "@/components/gswing/Dashboard";
 import { GpsMap } from "@/components/gswing/GpsMap";
 import { MyBag } from "@/components/gswing/MyBag";
@@ -39,10 +41,39 @@ const TITLES: Record<string, string> = {
 };
 
 const Index = () => {
-  const [splashGone, setSplashGone] = useState(false);
+  const [stage, setStage] = useState<"splash" | "auth" | "app">("splash");
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [view, setView] = useState("home");
 
-  if (!splashGone) return <Splash onEnter={() => setSplashGone(true)} />;
+  // Track auth session.
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      setHasSession(!!data.session);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setHasSession(!!session);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  function handleEnter() {
+    if (hasSession) setStage("app");
+    else setStage("auth");
+  }
+
+  if (stage === "splash") return <Splash onEnter={handleEnter} />;
+  if (stage === "auth" && !hasSession) {
+    return (
+      <PremiumAuth
+        onAuthenticated={() => setStage("app")}
+        onBack={() => setStage("splash")}
+      />
+    );
+  }
+  // Session existed during auth stage — slide into app.
+  if (stage === "auth" && hasSession) {
+    setStage("app");
+  }
 
   const showBack = !NAV.some((n) => n.id === view);
 
