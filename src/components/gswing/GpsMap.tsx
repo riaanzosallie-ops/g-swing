@@ -755,6 +755,104 @@ function MapboxCourseView({
     }
   }, [geometry]);
 
+  // Derive an honest readout + insight from mapped data. We only
+  // override the parent-supplied yardageReadout/caddieInsight when the
+  // mapped hole actually contains supporting geometry — otherwise the
+  // existing fallback (computeYardages from raw DB geometry) wins.
+  const mappedOverride = useMemo(() => {
+    if (!mappedHole) return null;
+    const snap = buildGolfGpsSnapshot(playerPosition, mappedHole, unit);
+    if (!snap.hasMapping) return null;
+    const hazardKind = (
+      t: string,
+    ): "water" | "bunker" | "trees" | "waste" | "ob" | "other" => {
+      switch (t) {
+        case "water":
+          return "water";
+        case "bunker":
+          return "bunker";
+        case "trees":
+          return "trees";
+        case "waste_area":
+          return "waste";
+        case "out_of_bounds":
+          return "ob";
+        default:
+          return "other";
+      }
+    };
+    const carries = snap.hazards
+      .filter((h) => h.carry != null)
+      .map((h) => ({
+        id: h.id,
+        kind: hazardKind(h.type),
+        label: h.name,
+        carry: h.carry as number,
+        near: h.reach ?? (h.carry as number),
+      }));
+    const layups = snap.layups
+      .filter((l) => l.distance != null)
+      .map((l) => ({ label: l.name, yards: l.distance as number }));
+    const doglegs =
+      snap.dogleg != null ? [{ label: "Dogleg", yards: snap.dogleg }] : [];
+    const readout: YardageReadout = {
+      pin: snap.pin,
+      front: snap.green.front,
+      center: snap.green.center,
+      back: snap.green.back,
+      carries,
+      layups,
+      doglegs,
+      fromLastShot: yardageReadout.fromLastShot,
+      inGreenMode:
+        snap.pin != null
+          ? snap.pin <= (unit === "meters" ? 55 : 60)
+          : snap.green.center != null
+            ? snap.green.center <= (unit === "meters" ? 55 : 60)
+            : false,
+      dailyPin: yardageReadout.dailyPin,
+      missSide: null,
+      missReason: null,
+    };
+    // Evidence-only caddie insight, never invents wind/club/slope.
+    const parts: string[] = [];
+    if (snap.green.center != null) {
+      parts.push(`Center is ${snap.green.center}${unit === "meters" ? "m" : "y"}.`);
+    }
+    if (snap.pin != null) {
+      parts.push(`Pin ${snap.pin}${unit === "meters" ? "m" : "y"}.`);
+    } else {
+      parts.push("Pin not set. Playing to center green.");
+    }
+    const nearest = snap.hazards
+      .filter((h) => h.reach != null)
+      .sort((a, b) => (a.reach as number) - (b.reach as number))[0];
+    if (nearest) {
+      const side = nearest.side ? ` ${nearest.side}` : "";
+      const carry =
+        nearest.carry != null
+          ? ` Carry ${nearest.carry}${unit === "meters" ? "m" : "y"}.`
+          : "";
+      parts.push(
+        `${nearest.name} reach ${nearest.reach}${unit === "meters" ? "m" : "y"}${side}.${carry}`,
+      );
+    }
+    return { readout, insight: parts.join(" ") };
+  }, [mappedHole, playerPosition, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
+
+  const effectiveReadout: YardageReadout = mappedOverride?.readout ?? yardageReadout;
+  const effectiveInsight: string =
+    mappingStatus === "missing"
+      ? "Professional mapping required for this hole."
+      : (mappedOverride?.insight ?? caddieInsight);
+  const effectiveFallbackCenter =
+    mappedOverride ? null : fallbackCenterYards;
+
+  const onRefreshMapping = useCallback(() => {
+    setMappingRefreshTick((t) => t + 1);
+    toast.info("Refreshing course mapping…");
+  }, []);
+
   if (tokenState.status === "loading") {
     return (
       <Card className="gradient-card flex h-[58vh] min-h-[410px] items-center justify-center border-gold/30 p-4 text-xs text-muted-foreground">
