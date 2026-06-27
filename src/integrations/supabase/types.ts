@@ -503,6 +503,9 @@ export type Database = {
         Row: {
           code: string
           course: string
+          course_latitude: number | null
+          course_location_label: string | null
+          course_longitude: number | null
           created_at: string
           director_id: string | null
           format: string
@@ -518,6 +521,9 @@ export type Database = {
         Insert: {
           code: string
           course: string
+          course_latitude?: number | null
+          course_location_label?: string | null
+          course_longitude?: number | null
           created_at?: string
           director_id?: string | null
           format?: string
@@ -533,6 +539,9 @@ export type Database = {
         Update: {
           code?: string
           course?: string
+          course_latitude?: number | null
+          course_location_label?: string | null
+          course_longitude?: number | null
           created_at?: string
           director_id?: string | null
           format?: string

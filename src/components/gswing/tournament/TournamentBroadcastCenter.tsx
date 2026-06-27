@@ -11,6 +11,9 @@ import type {
 } from "@/lib/tournament-engine";
 import { buildEvidencePack } from "@/lib/tournament-engine";
 import type { LiveMoment } from "@/lib/tournament-moments";
+import type { GswingWeather } from "@/lib/gswing-weather";
+import { buildGolfWeatherInsight } from "@/lib/gswing-weather";
+import { WeatherPill, conditionIcon } from "@/components/gswing/WeatherPill";
 import {
   derivePlayerHolePositions,
   deriveCourseProgress,
@@ -25,6 +28,7 @@ type Props = {
   rows: LeaderboardRow[];
   moments: LiveMoment[];
   sponsor?: string | null;
+  weather?: GswingWeather | null;
   onOpenAwards?: () => void;
 };
 
@@ -37,6 +41,7 @@ export const TournamentBroadcastCenter = ({
   rows,
   moments,
   sponsor,
+  weather,
   onOpenAwards,
 }: Props) => {
   const progress = useMemo(
@@ -323,6 +328,61 @@ export const TournamentBroadcastCenter = ({
       </Card>
 
       {/* 6) Broadcast lower-third */}
+      {/* Course Conditions panel — broadcast graphic */}
+      <Card className="border-gold/20 bg-[linear-gradient(180deg,#03110b_0%,#020805_100%)] p-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-widest text-gold/80">Course Conditions</p>
+          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[9px] uppercase tracking-widest text-emerald-300">
+            On-air
+          </span>
+        </div>
+        {weather ? (
+          (() => {
+            const Icon = conditionIcon(weather.condition);
+            return (
+              <>
+                <div className="mt-2 grid grid-cols-4 gap-2 text-center text-[10px]">
+                  <div className="rounded-lg border border-gold/15 bg-background/40 p-2">
+                    <Icon className="mx-auto h-4 w-4 text-gold" />
+                    <p className="mt-1 font-mono text-sm text-gold">{weather.temperatureC}°</p>
+                    <p className="text-muted-foreground">{weather.conditionLabel}</p>
+                  </div>
+                  <div className="rounded-lg border border-gold/15 bg-background/40 p-2">
+                    <p className="text-muted-foreground">Wind</p>
+                    <p className="mt-1 font-mono text-sm text-gold">{weather.windSpeedKmh}</p>
+                    <p className="text-muted-foreground">km/h {weather.windDirectionLabel}</p>
+                  </div>
+                  <div className="rounded-lg border border-gold/15 bg-background/40 p-2">
+                    <p className="text-muted-foreground">Rain</p>
+                    <p className="mt-1 font-mono text-sm text-gold">
+                      {weather.rainProbability != null ? `${weather.rainProbability}%` : "—"}
+                    </p>
+                    <p className="text-muted-foreground">prob.</p>
+                  </div>
+                  <div className="rounded-lg border border-gold/15 bg-background/40 p-2">
+                    <p className="text-muted-foreground">UV</p>
+                    <p className="mt-1 font-mono text-sm text-gold">
+                      {weather.uvIndex != null ? weather.uvIndex.toFixed(1) : "—"}
+                    </p>
+                    <p className="text-muted-foreground">index</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] italic text-gold/85">{buildGolfWeatherInsight(weather)}</p>
+              </>
+            );
+          })()
+        ) : (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Course conditions appear when location is available.
+          </p>
+        )}
+        {weather && (
+          <div className="mt-2 flex justify-end">
+            <WeatherPill w={weather} />
+          </div>
+        )}
+      </Card>
+
       <div className="relative overflow-hidden rounded-xl border border-gold/25 bg-[linear-gradient(90deg,rgba(0,0,0,0.65),rgba(8,30,20,0.55))] p-3 shadow-[0_20px_40px_-25px_rgba(0,0,0,0.8)]">
         <div className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-gold to-amber-300" />
         {lt ? (
