@@ -671,6 +671,24 @@ function MapboxCourseView({
         >
           <Plane className="h-4 w-4" />
         </MapCtrlBtn>
+        <MapCtrlBtn
+          active={measureActive}
+          onClick={() => {
+            setMeasureActive((v) => {
+              const next = !v;
+              if (!next) setMeasurePoint(null);
+              return next;
+            });
+          }}
+          title={measureActive ? "Exit measure mode" : "Tap-to-measure"}
+        >
+          <Ruler className="h-4 w-4" />
+        </MapCtrlBtn>
+        {measurePoint && (
+          <MapCtrlBtn onClick={() => setMeasurePoint(null)} title="Clear measurement">
+            <XIcon className="h-4 w-4" />
+          </MapCtrlBtn>
+        )}
       </div>
 
       <div className="absolute left-4 top-14 flex flex-wrap gap-1 rounded-md border border-gold/30 bg-black/60 p-1 text-[10px] uppercase tracking-wide backdrop-blur-md">
