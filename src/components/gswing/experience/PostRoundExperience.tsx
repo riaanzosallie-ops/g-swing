@@ -13,9 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Award, Film, Sparkles, TimerReset } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReplayStudio } from "@/components/gswing/experience/ReplayStudio";
 import { SignatureMomentCard } from "@/components/gswing/experience/SignatureMomentCard";
 import { ExperienceTimeline } from "@/components/gswing/experience/ExperienceTimeline";
+import { StoryView } from "@/components/gswing/experience/StoryView";
+import { MomentumView } from "@/components/gswing/experience/MomentumView";
+import { CoachView } from "@/components/gswing/experience/CoachView";
 import type {
   RoundExperienceModel,
   SignatureMoment,
@@ -39,7 +43,7 @@ export function PostRoundExperience({ open, onClose, model }: Props) {
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="gradient-card max-h-[92vh] max-w-3xl overflow-y-auto border-gold/30">
+        <DialogContent className="gradient-card max-h-[92vh] w-[min(100vw-1rem,42rem)] max-w-[42rem] overflow-y-auto border-gold/30 p-3 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-serif text-gold">
               <Sparkles className="h-4 w-4" />
@@ -56,7 +60,15 @@ export function PostRoundExperience({ open, onClose, model }: Props) {
               Studio, Signature Moments, and your Experience Timeline.
             </Card>
           ) : (
-            <div className="space-y-5">
+            <Tabs defaultValue="experience" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 gap-1 bg-background/60">
+                <TabsTrigger value="experience" className="text-[11px]">Experience</TabsTrigger>
+                <TabsTrigger value="story" className="text-[11px]">Story</TabsTrigger>
+                <TabsTrigger value="momentum" className="text-[11px]">Momentum</TabsTrigger>
+                <TabsTrigger value="coach" className="text-[11px]">Coach</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="experience" className="mt-3 space-y-5">
               <Card className="relative overflow-hidden border-gold/30 bg-gradient-to-br from-background to-background/60 p-4 shadow-elegant">
                 <div
                   aria-hidden
@@ -137,7 +149,20 @@ export function PostRoundExperience({ open, onClose, model }: Props) {
                 </div>
                 <ExperienceTimeline items={model.player_timeline} />
               </section>
-            </div>
+              </TabsContent>
+
+              <TabsContent value="story" className="mt-3">
+                <StoryView model={model} />
+              </TabsContent>
+
+              <TabsContent value="momentum" className="mt-3">
+                <MomentumView model={model} />
+              </TabsContent>
+
+              <TabsContent value="coach" className="mt-3">
+                <CoachView model={model} />
+              </TabsContent>
+            </Tabs>
           )}
 
           <div className="pt-3">
