@@ -604,11 +604,19 @@ export function updateYardageLabels(
 export type LayerGroup = "overlays" | "hazards" | "labels" | "markers";
 
 const GROUP_LAYERS: Record<LayerGroup, string[]> = {
-  overlays: [LAYERS.fairwayFill, LAYERS.fairwayLine, LAYERS.greenFill, LAYERS.greenLine],
+  overlays: [
+    LAYERS.fairwayFill, LAYERS.fairwayLine, LAYERS.greenFill, LAYERS.greenLine,
+    LAYERS.roughFill, LAYERS.roughLine,
+    LAYERS.teeBoxFill, LAYERS.teeBoxLine,
+  ],
   hazards: [
     LAYERS.waterFill, LAYERS.waterLine, LAYERS.bunkerFill, LAYERS.bunkerLine,
-    LAYERS.obFill, LAYERS.obLine, LAYERS.otherFill, LAYERS.otherLine,
-    LAYERS.cartLine, LAYERS.hazardPoints,
+    LAYERS.waterShimmer,
+    LAYERS.obFill, LAYERS.obLine, LAYERS.obDash,
+    LAYERS.otherFill, LAYERS.otherLine,
+    LAYERS.wasteFill, LAYERS.wasteLine,
+    LAYERS.treesFill, LAYERS.treesLine,
+    LAYERS.cartCasing, LAYERS.cartLine, LAYERS.hazardPoints,
   ],
   labels: [LAYERS.teeLabels, LAYERS.greenPtLabels, LAYERS.layupLabels, LAYERS.yardage],
   markers: [
