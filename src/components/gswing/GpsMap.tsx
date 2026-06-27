@@ -1006,6 +1006,7 @@ function PremiumGpsChrome(props: {
   playerAccuracy: number | null;
   weather: { status: string; data?: GswingWeather };
   caddieInsight: string;
+  onNextHole?: () => void;
 }): JSX.Element {
   const {
     hole,
