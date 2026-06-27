@@ -2282,6 +2282,7 @@ export const GpsMap = () => {
         fallbackCenterYards={loading ? null : displayCenterDistance}
       />
 
+      <div className="hidden md:block">
       <YardagePanel
         geometry={geometryPayload}
         playerPosition={playerPos}
@@ -2289,8 +2290,9 @@ export const GpsMap = () => {
         unit={unit}
         fallbackCenterYards={loading ? null : displayCenterDistance}
       />
+      </div>
 
-      <Card className="gradient-card border-gold/25 p-3">
+      <Card className="gradient-card hidden md:block border-gold/25 p-3">
         <div className="flex items-start gap-2">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
           <div className="min-w-0 flex-1">
@@ -2318,7 +2320,7 @@ export const GpsMap = () => {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="hidden md:grid grid-cols-2 gap-2">
         <Card className="gradient-card border-gold/20 p-3">
           <div className="flex items-center gap-2">
             <Crosshair className="h-4 w-4 text-gold" />
@@ -2342,7 +2344,7 @@ export const GpsMap = () => {
         </Card>
       </div>
 
-      <Card className="gradient-card border-gold/20 p-3">
+      <Card className="gradient-card hidden md:block border-gold/20 p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Navigation className="h-4 w-4 text-gold" />
