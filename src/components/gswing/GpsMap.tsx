@@ -455,8 +455,11 @@ function MapboxCourseView({
   // "Professional mapping required" state.
   useEffect(() => {
     let cancelled = false;
+    // Clear stale mapped data immediately so the previous hole's
+    // numbers can never flash for the new hole during the async load.
+    setMappedHole(null);
+    setMappingStatus("loading");
     (async () => {
-      setMappingStatus("loading");
       try {
         // Prefer the nearest mapped course to the player's real GPS
         // location; fall back to the selected course centre so the
@@ -470,6 +473,13 @@ function MapboxCourseView({
           setMappedHole(null);
           setMappingStatus("missing");
           setNearestCourseFound(false);
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line no-console
+            console.info("[gswing.gps] mapping: no course found near anchor", {
+              hole,
+              anchor,
+            });
+          }
           return;
         }
         setMappedCourseId(courseMap.id);
@@ -478,6 +488,19 @@ function MapboxCourseView({
         if (cancelled) return;
         setMappedHole(hp);
         setMappingStatus(hp ? "mapped" : "missing");
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.info("[gswing.gps] mapping loaded", {
+            course: courseMap.courseName,
+            course_map_id: courseMap.id,
+            hole_number: hole,
+            mapped_hole_id: hp?.id ?? null,
+            green_front: hp?.green?.front ?? null,
+            green_center: hp?.green?.center ?? null,
+            green_back: hp?.green?.back ?? null,
+            source: hp ? "mapped" : "missing",
+          });
+        }
       } catch {
         if (!cancelled) {
           setMappedHole(null);
