@@ -266,6 +266,13 @@ function MapboxCourseView({
   const [measureActive, setMeasureActive] = useState(false);
   const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
 
+  // Live weather for the in-map HUD (real Open-Meteo via existing hook).
+  const hudWeather = useGswingWeather(
+    playerPosition
+      ? { latitude: playerPosition.lat, longitude: playerPosition.lng }
+      : { latitude: selectedCourse.lat ?? null, longitude: selectedCourse.lng ?? null },
+  );
+
   // Fetch the public Mapbox token from the edge function once per mount.
   useEffect(() => {
     let cancelled = false;
