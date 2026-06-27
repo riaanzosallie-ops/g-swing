@@ -2471,9 +2471,10 @@ export const GpsMap = () => {
     }
   };
 
-  const courseCenter = { lat: selectedCourse.lat, lng: selectedCourse.lng };
-  const fallbackDistance = playerPos ? toDisplayUnit(haversineYards(playerPos, courseCenter), unit) : null;
-  const displayCenterDistance = centerDistance ?? fallbackDistance;
+  // No player→course-centroid fallback. If real green geometry (mapped
+  // or PostGIS) is not available we render an empty value rather than
+  // an invented distance to the course centre.
+  const displayCenterDistance = centerDistance ?? null;
 
   const savePendingTags = async (tags: ShotTagInput) => {
     if (!pendingTagShot) return;
