@@ -1097,6 +1097,7 @@ function PremiumGpsChrome(props: {
   weather: { status: string; data?: GswingWeather };
   caddieInsight: string;
   onNextHole?: () => void;
+  debug?: Omit<MappingDebugPanelProps, "playerPosition" | "playerAccuracy">;
 }): JSX.Element {
   const {
     hole,
@@ -1126,6 +1127,7 @@ function PremiumGpsChrome(props: {
     playerAccuracy,
     weather,
     onNextHole,
+    debug,
   } = props;
 
   const wx = weather.status === "ready" && weather.data ? weather.data : null;
