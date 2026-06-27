@@ -876,10 +876,17 @@ function MapboxCourseView({
   return (
     <div
       className={`gswing-map relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant ${
-        mapView === "satellite" ? "is-satellite" : ""
+        mapView === "satellite" ? "is-satellite" : "is-premium"
       }`}
     >
       <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
+
+      {/* Stylized "mapping preview" placeholder — shown only when we
+          have no real surveyed geometry AND the user is in Premium
+          mode. Honest: no fake distances, no fake hazards. */}
+      {mapView === "premium" && mappingStatus !== "mapped" && mappingStatus !== "loading" && (
+        <PremiumPlaceholderHole />
+      )}
 
       <GpsHud
         holeNumber={gps?.hole_number ?? hole}
