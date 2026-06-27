@@ -1246,6 +1246,25 @@ export const GpsMap = () => {
   const selectableHoleCount = selectedCourse.holes_count >= 18 ? 18 : selectedCourse.holes_count || 18;
 
   const displayUnit = unitLabel(unit);
+  // Weather (real, no fabrication) for the GPS Caddie insight panel.
+  const weatherState = useGswingWeather(
+    playerPos
+      ? { latitude: playerPos.lat, longitude: playerPos.lng }
+      : { latitude: selectedCourse?.lat ?? null, longitude: selectedCourse?.lng ?? null },
+  );
+  const caddieReadout = useMemo(
+    () => computeYardages(playerPos, geometryPayload, lastShotEnd),
+    [playerPos?.lat, playerPos?.lng, geometryPayload, lastShotEnd?.lat, lastShotEnd?.lng], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const caddieInsight = useMemo(
+    () =>
+      buildGpsCaddieInsight({
+        readout: caddieReadout,
+        weather: weatherState.status === "ready" ? weatherState.data : null,
+        unit,
+      }),
+    [caddieReadout, weatherState, unit],
+  );
   const centerDistance = gps?.distances?.to_center_of_green ?? null;
   const frontDistance = gps?.distances?.to_front_of_green ?? null;
   const backDistance = gps?.distances?.to_back_of_green ?? null;
