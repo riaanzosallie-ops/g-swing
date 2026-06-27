@@ -15,6 +15,8 @@ import {
   LocateOff,
   Maximize2,
   MapPin,
+  MoreHorizontal,
+  Mountain,
   Navigation,
   Plane,
   Play,
@@ -112,6 +114,8 @@ import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { GswingWeather } from "@/lib/gswing-weather";
 import {
   Select,
   SelectContent,
