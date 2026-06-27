@@ -21,6 +21,9 @@ import { TournamentLiveTV } from "./TournamentLiveTV";
 import { TournamentAwards } from "./TournamentAwards";
 import { buildLiveMoments } from "@/lib/tournament-moments";
 import { TournamentBroadcastCenter } from "./TournamentBroadcastCenter";
+import { useGswingWeather, useBrowserCoords } from "@/lib/use-gswing-weather";
+import { WeatherPill } from "@/components/gswing/WeatherPill";
+import { buildGolfWeatherInsight } from "@/lib/gswing-weather";
 
 type Props = { tournamentId: string; spectator?: boolean; onExit: () => void };
 
@@ -42,6 +45,22 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
     setPlayers(b.players);
     setScores(b.scores);
   }, [tournamentId]);
+
+  // Weather — prefer tournament course coordinates, fall back to browser geolocation.
+  const browserCoords = useBrowserCoords();
+  const tournamentCoords = tournament
+    ? {
+        latitude: (tournament as Tournament & { course_latitude?: number | null }).course_latitude ?? null,
+        longitude: (tournament as Tournament & { course_longitude?: number | null }).course_longitude ?? null,
+      }
+    : null;
+  const activeCoords =
+    tournamentCoords && tournamentCoords.latitude != null && tournamentCoords.longitude != null
+      ? tournamentCoords
+      : browserCoords;
+  const weatherState = useGswingWeather(activeCoords);
+  const weather = weatherState.status === "ready" ? weatherState.data : null;
+  const weatherInsight = weather ? buildGolfWeatherInsight(weather) : null;
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -164,6 +183,24 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
           </div>
         </div>
 
+        {/* Weather strip */}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {weather ? (
+            <>
+              <WeatherPill w={weather} />
+              <span className="truncate text-[10px] text-gold/80">{weatherInsight}</span>
+            </>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">
+              {weatherState.status === "loading"
+                ? "Reading course conditions…"
+                : weatherState.status === "no_location"
+                ? "Weather ready when course location is added."
+                : "Weather unavailable."}
+            </span>
+          )}
+        </div>
+
         {/* Header actions */}
         <div className="mt-2 grid grid-cols-3 gap-2">
           <Button size="sm" variant="outline" className="border-gold/30" onClick={handleShare}>
@@ -277,6 +314,7 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
             scores={scores}
             rows={rows}
             moments={moments}
+            weather={weather}
             onOpenAwards={() => setTab("awards")}
           />
         </TabsContent>
@@ -292,7 +330,12 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
         </TabsContent>
 
         <TabsContent value="awards" className="mt-3">
-          <TournamentAwards tournament={tournament} rows={rows} prevPositions={prevPosRef.current} />
+          <TournamentAwards
+            tournament={tournament}
+            rows={rows}
+            prevPositions={prevPosRef.current}
+            weather={weather}
+          />
         </TabsContent>
       </Tabs>
 
