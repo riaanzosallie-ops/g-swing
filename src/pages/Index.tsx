@@ -19,6 +19,7 @@ import { FairwayMemories } from "@/components/gswing/FairwayMemories";
 import { Tournaments } from "@/components/gswing/tournament/Tournaments";
 import { Home, MapPin, Trophy, Target, User, ChevronLeft, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MembershipGate } from "@/components/gswing/membership/MembershipGate";
 
 const NAV = [
   { id: "home", label: "Home", icon: Home },
@@ -61,21 +62,37 @@ const Index = () => {
 
       <main className="px-4 py-4">
         {view === "home" && <Dashboard go={setView} />}
-        {view === "gps" && <GpsMap />}
+        {view === "gps" && (
+          <MembershipGate featureKey="gps.full"><GpsMap /></MembershipGate>
+        )}
         {view === "bag" && <MyBag go={setView} />}
-        {view === "swing" && <SwingAnalysis />}
+        {view === "swing" && (
+          <MembershipGate featureKey="swing.analysis"><SwingAnalysis /></MembershipGate>
+        )}
         {view === "scorecard" && <Scorecard />}
         {view === "pros" && <ProsBags />}
         {view === "news" && <News />}
-        {view === "stats" && <Stats />}
+        {view === "stats" && (
+          <MembershipGate featureKey="stats.advanced"><Stats /></MembershipGate>
+        )}
         {view === "profile" && <Profile />}
         {view === "clublink" && <ClubLink />}
-        {view === "arena" && <Arena go={setView} />}
-        {view === "live" && <LiveDashboard go={setView} />}
+        {view === "arena" && (
+          <MembershipGate featureKey="arena.full"><Arena go={setView} /></MembershipGate>
+        )}
+        {view === "live" && (
+          <MembershipGate featureKey="live.dashboard"><LiveDashboard go={setView} /></MembershipGate>
+        )}
         {view === "chat" && <RoundChat />}
-        {view === "roast" && <Roast />}
-        {view === "memories" && <FairwayMemories />}
-        {view === "tournament" && <Tournaments />}
+        {view === "roast" && (
+          <MembershipGate featureKey="roast.full"><Roast /></MembershipGate>
+        )}
+        {view === "memories" && (
+          <MembershipGate featureKey="memories.full"><FairwayMemories /></MembershipGate>
+        )}
+        {view === "tournament" && (
+          <MembershipGate featureKey="tournament.create"><Tournaments /></MembershipGate>
+        )}
       </main>
 
       <AceCaddie />
