@@ -2467,6 +2467,8 @@ export const GpsMap = () => {
         caddieInsight={caddieInsight}
         unit={unit}
         fallbackCenterYards={loading ? null : displayCenterDistance}
+        onChangeHole={changeHole}
+        holeCount={selectableHoleCount}
       />
 
       <div className="hidden md:block">
