@@ -160,6 +160,8 @@ function MapboxCourseView({
   const [flyoverRunning, setFlyoverRunning] = useState(false);
   const [tokenState, setTokenState] = useState<TokenState>({ status: "loading" });
   const [cameraMode, setCameraMode] = useState<CameraMode>("playing");
+  const [measureActive, setMeasureActive] = useState(false);
+  const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
 
   // Fetch the public Mapbox token from the edge function once per mount.
   useEffect(() => {
