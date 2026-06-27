@@ -5,6 +5,9 @@ import { Trophy, Medal, Crown, Sparkles, Copy, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import type { LeaderboardRow, Tournament } from "@/lib/tournament-engine";
 import { buildAwards, awardsSummaryText, type TournamentAward } from "@/lib/tournament-moments";
+import type { GswingWeather } from "@/lib/gswing-weather";
+import { TournamentResultsPoster } from "./TournamentResultsPoster";
+import { WeatherPill } from "@/components/gswing/WeatherPill";
 
 const iconFor = (key: string) => {
   if (key === "gross_champion") return <Crown className="h-5 w-5 text-gold" />;
@@ -18,9 +21,11 @@ type Props = {
   tournament: Tournament;
   rows: LeaderboardRow[];
   prevPositions?: Record<string, number>;
+  weather?: GswingWeather | null;
+  sponsor?: string | null;
 };
 
-export const TournamentAwards = ({ tournament, rows, prevPositions }: Props) => {
+export const TournamentAwards = ({ tournament, rows, prevPositions, weather, sponsor }: Props) => {
   const { awards } = useMemo(
     () => buildAwards(tournament, rows, prevPositions),
     [tournament, rows, prevPositions],
@@ -107,8 +112,28 @@ export const TournamentAwards = ({ tournament, rows, prevPositions }: Props) => 
       {/* Sponsor thank-you */}
       <Card className="border-dashed border-gold/20 bg-black/30 p-4 text-center">
         <p className="text-[9px] uppercase tracking-[0.3em] text-gold/70">Thank you to our sponsor</p>
-        <p className="mt-1 font-serif text-base text-muted-foreground">Your sponsor here</p>
+        <p className="mt-1 font-serif text-base text-muted-foreground">
+          {sponsor ?? "Your sponsor here"}
+        </p>
       </Card>
+
+      {weather && (
+        <Card className="border-gold/20 bg-black/40 p-3 text-center">
+          <p className="text-[9px] uppercase tracking-[0.3em] text-gold/70">Conditions</p>
+          <div className="mt-2 flex items-center justify-center">
+            <WeatherPill w={weather} />
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">{weather.conditionLabel}</p>
+        </Card>
+      )}
+
+      <TournamentResultsPoster
+        tournament={tournament}
+        rows={rows}
+        weather={weather ?? null}
+        sponsor={sponsor ?? null}
+        prevPositions={prevPositions}
+      />
 
       <p className="px-2 text-center text-[10px] text-muted-foreground">
         Final results are calculated from submitted scorecards only.
