@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import courseBg from "@/assets/course-bg.jpg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { fetchHoleGeometry, geometryToHoleGpsResponse } from "@/lib/course-geometry";
 
 // Public Mapbox token (publishable pk.*). Loaded from Vite env — never hardcoded.
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
@@ -639,12 +640,25 @@ export const GpsMap = () => {
     setLoading(true);
     setGpsError(null);
     try {
+      // 1. Prefer production geometry from the PostGIS-backed tables.
+      try {
+        const geom = await fetchHoleGeometry(courseId, hole);
+        if (geom) {
+          setGps(geometryToHoleGpsResponse(courseId, geom, unit, playerPos));
+          return;
+        }
+      } catch {
+        // DB lookup failed — fall through to the edge function.
+      }
+
+      // 2. Edge-function backed geometry (legacy path).
       const data = await fetchHoleGps(courseId, hole, {
         unit,
         playerPos: playerPos ?? undefined,
       });
       setGps(data);
     } catch (error) {
+      // 3. Last-resort offline demo geometry so the map still renders.
       setGps(createFallbackHoleGps(selectedCourse, hole, unit, playerPos));
       setGpsError(null);
     } finally {
