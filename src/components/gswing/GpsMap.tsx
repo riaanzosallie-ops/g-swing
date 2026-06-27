@@ -86,6 +86,15 @@ import {
   CAMERA_MODES,
   type CameraMode,
 } from "@/lib/camera-engine";
+import {
+  buildGpsCaddieInsight,
+  classifyAccuracy,
+  measureBetween,
+  midpoint,
+} from "@/lib/gswing-gps";
+import { computeYardages } from "@/lib/yardage-engine";
+import { useGswingWeather } from "@/lib/use-gswing-weather";
+import { Ruler, X as XIcon, Wifi, WifiOff, Wind } from "lucide-react";
 
 // Public Mapbox token (publishable pk.*) is loaded at runtime from the
 // `mapbox-token` edge function — never hardcoded, never baked into the bundle.
