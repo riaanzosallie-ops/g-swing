@@ -984,13 +984,23 @@ function MapboxCourseView({
     >
       <div
         ref={containerRef}
-        className="h-[80vh] min-h-[560px] w-full md:h-[78vh] md:min-h-[600px]"
+        className={`h-[80vh] min-h-[560px] w-full md:h-[78vh] md:min-h-[600px] ${
+          mapView === "premium"
+            ? "bg-[radial-gradient(140%_120%_at_50%_55%,#0a3a26_0%,#062418_55%,#020c08_100%)]"
+            : "bg-black"
+        }`}
       />
 
-      {/* Premium ambience — soft vignette + emerald wash; no clutter. */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_50%,transparent_55%,rgba(0,0,0,0.55)_100%)]" />
-      {mapView === "premium" && (
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(160%_120%_at_50%_60%,rgba(8,52,32,0.18)_0%,rgba(2,16,10,0.55)_100%)]" />
+      {/* Mode-specific ambience. Premium = saturated emerald wash so the
+          stylized geometry pops. Satellite = subtle neutral vignette so
+          real Mapbox imagery stays legible. They MUST look different. */}
+      {mapView === "satellite" ? (
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_50%,transparent_60%,rgba(0,0,0,0.55)_100%)]" />
+      ) : (
+        <>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(140%_110%_at_50%_55%,rgba(16,90,55,0.22)_0%,rgba(2,14,9,0.78)_100%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,0.45)_100%)]" />
+        </>
       )}
 
       <PremiumGpsChrome
