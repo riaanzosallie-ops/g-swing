@@ -1112,143 +1112,75 @@ function MapCtrlBtn({
 }
 
 /**
- * Premium "mapping preview" placeholder — a fully stylized golf-hole
- * illustration painted into the map area whenever we don't yet have
- * real surveyed geometry for the active course/hole. Intentionally
- * carries no numbers, no hazards, no distances — only a tee, a
- * fairway corridor, a green target and an honest mapping-preview
- * badge. `pointer-events:none` keeps any underlying map interaction
- * (if a satellite is ever shown) untouched.
+ * Premium honest empty-mapping experience. Shown only when no real
+ * surveyed geometry exists for the active course/hole AND the user is
+ * in Premium mode. Contains NO fabricated golf data — no fairway, no
+ * green, no hazards, no distances. Just an elegant glass card that
+ * tells the truth and offers safe next actions. Player GPS, measure
+ * mode, weather, and accuracy continue to function on the map below.
  */
-function PremiumPlaceholderHole(): JSX.Element {
+function PremiumEmptyMappingCard({
+  courseName,
+  onRefresh,
+  onSwitchToSatellite,
+}: {
+  courseName: string;
+  onRefresh: () => void;
+  onSwitchToSatellite: () => void;
+}): JSX.Element {
+  const navigate = useNavigate();
+  const admin = useGswingAdmin();
+  const isAdmin = admin.status === "admin";
   return (
-    <div className="gswing-premium-placeholder" aria-hidden="true">
-      <svg viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <radialGradient id="gs-bg" cx="50%" cy="45%" r="75%">
-            <stop offset="0%" stopColor="#125c3b" stopOpacity="0.95" />
-            <stop offset="55%" stopColor="#08321f" stopOpacity="0.92" />
-            <stop offset="100%" stopColor="#02110a" stopOpacity="1" />
-          </radialGradient>
-          <linearGradient id="gs-fairway" x1="50%" y1="100%" x2="50%" y2="0%">
-            <stop offset="0%" stopColor="#1e7a4c" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#2ea36a" stopOpacity="0.95" />
-          </linearGradient>
-          <radialGradient id="gs-green" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#46d088" stopOpacity="1" />
-            <stop offset="100%" stopColor="#1e7a4c" stopOpacity="0.9" />
-          </radialGradient>
-        </defs>
-
-        {/* Deep emerald base */}
-        <rect x="0" y="0" width="400" height="600" fill="url(#gs-bg)" />
-
-        {/* Fairway corridor — soft curved ribbon from tee → green */}
-        <path
-          d="M 160 560 C 150 440, 240 360, 230 260 C 222 180, 180 150, 200 110"
-          stroke="url(#gs-fairway)"
-          strokeWidth="72"
-          strokeLinecap="round"
-          fill="none"
-          opacity="0.95"
-        />
-        {/* Fairway highlight */}
-        <path
-          d="M 160 560 C 150 440, 240 360, 230 260 C 222 180, 180 150, 200 110"
-          stroke="#7be0a8"
-          strokeWidth="2"
-          strokeDasharray="2 10"
-          fill="none"
-          opacity="0.55"
-        />
-
-        {/* Gold center line (ideal line) */}
-        <path
-          d="M 160 560 C 150 440, 240 360, 230 260 C 222 180, 180 150, 200 110"
-          stroke="#F5C84B"
-          strokeWidth="1.2"
-          strokeDasharray="4 8"
-          fill="none"
-          opacity="0.7"
-        />
-
-        {/* Green target */}
-        <ellipse
-          cx="200"
-          cy="105"
-          rx="58"
-          ry="36"
-          fill="url(#gs-green)"
-          stroke="#F5C84B"
-          strokeOpacity="0.55"
-          strokeWidth="1.5"
-        />
-        {/* Pin */}
-        <line x1="200" y1="105" x2="200" y2="70" stroke="#F5C84B" strokeWidth="1.6" />
-        <polygon points="200,70 218,76 200,82" fill="#F5C84B" />
-        <circle cx="200" cy="105" r="3" fill="#0a0a0a" stroke="#F5C84B" strokeWidth="1" />
-
-        {/* Tee box marker */}
-        <g className="gs-tee-dot">
-          <circle cx="160" cy="560" r="13" fill="rgba(245,200,75,0.18)" />
-          <circle cx="160" cy="560" r="6" fill="#F5C84B" stroke="#1a1300" strokeWidth="1.5" />
-        </g>
-
-        {/* Subtle decorative tree dots framing the corridor */}
-        <g fill="#0d3a25" opacity="0.85">
-          <circle cx="70" cy="500" r="10" />
-          <circle cx="92" cy="430" r="8" />
-          <circle cx="80" cy="360" r="9" />
-          <circle cx="100" cy="290" r="7" />
-          <circle cx="330" cy="520" r="9" />
-          <circle cx="320" cy="440" r="8" />
-          <circle cx="310" cy="360" r="10" />
-          <circle cx="300" cy="280" r="7" />
-          <circle cx="280" cy="180" r="8" />
-          <circle cx="120" cy="170" r="9" />
-        </g>
-      </svg>
-
-      {/* Honest mapping-preview badge */}
+    <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center px-4">
       <div
-        style={{
-          position: "absolute",
-          top: "12px",
-          right: "12px",
-          padding: "4px 10px",
-          borderRadius: "999px",
-          border: "1px solid rgba(245,200,75,0.45)",
-          background: "rgba(0,0,0,0.55)",
-          color: "#F5C84B",
-          fontSize: "9px",
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          backdropFilter: "blur(8px)",
-        }}
+        className="pointer-events-auto w-full max-w-[22rem] rounded-2xl border border-gold/35 bg-black/70 p-4 text-center shadow-elegant backdrop-blur-xl"
+        role="status"
+        aria-live="polite"
       >
-        Mapping preview
-      </div>
-
-      <div
-        style={{
-          position: "absolute",
-          bottom: "44%",
-          left: "50%",
-          transform: "translateX(-50%)",
-          padding: "6px 14px",
-          borderRadius: "999px",
-          border: "1px solid rgba(245,200,75,0.35)",
-          background: "rgba(0,0,0,0.55)",
-          color: "rgba(255,255,255,0.85)",
-          fontSize: "10px",
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          backdropFilter: "blur(8px)",
-          textAlign: "center",
-          whiteSpace: "nowrap",
-        }}
-      >
-        Professional mapping required
+        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-black/55 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-gold">
+          <MapPin className="h-3 w-3" />
+          Mapping required
+        </div>
+        <h3 className="font-serif text-lg leading-tight text-gold">
+          Professional Mapping Required
+        </h3>
+        <p className="mx-auto mt-1 max-w-[18rem] text-[11px] leading-snug text-white/75">
+          <span className="text-white/90">{courseName}</span> has not yet been
+          professionally mapped for advanced GPS features. Live player
+          position, measure tool and weather remain active.
+        </p>
+        <div className="mt-3 flex flex-col gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            onClick={onRefresh}
+            className="h-8 rounded-full bg-gradient-to-r from-gold to-amber-400 text-[11px] font-semibold uppercase tracking-wider text-black hover:from-gold hover:to-gold"
+          >
+            <RefreshCw className="mr-1.5 h-3 w-3" />
+            Refresh Mapping
+          </Button>
+          {isAdmin && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/gswing/course-mapper")}
+              className="h-8 rounded-full border-gold/40 bg-black/40 text-[11px] font-semibold uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
+            >
+              Open Course Mapper
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onSwitchToSatellite}
+            className="h-8 rounded-full text-[11px] font-semibold uppercase tracking-wider text-white/75 hover:bg-white/5 hover:text-white"
+          >
+            Continue with Satellite
+          </Button>
+        </div>
       </div>
     </div>
   );
