@@ -78,10 +78,7 @@ import { ShotTagPrompt } from "@/components/gswing/ShotTagPrompt";
 import { RoundShotReview } from "@/components/gswing/RoundShotReview";
 import { BookOpen, Film, Sparkles } from "lucide-react";
 import { PostRoundExperience } from "@/components/gswing/experience/PostRoundExperience";
-import {
-  buildRoundExperience,
-  type RoundMeta,
-} from "@/lib/experience/experience-engine";
+import { buildRoundExperience, type RoundMeta } from "@/lib/experience/experience-engine";
 import { usePlayer } from "@/lib/gswing-store";
 import {
   applyMode as applyCameraMode,
@@ -1026,6 +1023,8 @@ export const GpsMap = () => {
   );
   const watchIdRef = useRef<number | null>(null);
   const [bag] = useBag();
+  const [player] = usePlayer();
+  const [experienceOpen, setExperienceOpen] = useState(false);
 
   // Lazy-load the publishable Mapbox token at the parent level too —
   // used for static shot preview images in the Round Shot Review.
