@@ -1560,6 +1560,8 @@ export const GpsMap = () => {
         </Card>
       )}
 
+      <RoundIntelligence stats={roundStats} loading={statsLoading} />
+
       <div className="flex gap-2 overflow-x-auto pb-2">
         {Array.from({ length: selectableHoleCount }, (_, index) => index + 1).map((holeNumber) => (
           <button
