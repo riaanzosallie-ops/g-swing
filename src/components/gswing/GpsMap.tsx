@@ -890,12 +890,12 @@ function MapboxCourseView({
         holeName={gps?.notes ?? null}
         liveTournament={null}
         unit={unit}
-        readout={yardageReadout}
-        fallbackCenterYards={fallbackCenterYards}
+        readout={effectiveReadout}
+        fallbackCenterYards={effectiveFallbackCenter}
         playerPosition={playerPosition}
         playerAccuracy={playerAccuracy}
         weather={hudWeather}
-        caddieInsight={caddieInsight}
+        caddieInsight={effectiveInsight}
         measureActive={measureActive}
         onToggleMeasure={() =>
           setMeasureActive((v) => {
@@ -974,11 +974,34 @@ function MapboxCourseView({
         </div>
       </div>
 
-      {usePlaceholder && (
-        <div className="pointer-events-none absolute bottom-1 left-2 rounded-md border border-gold/25 bg-black/55 px-1.5 py-0.5 text-[8px] uppercase tracking-wider text-gold-soft/80 backdrop-blur-sm">
-          Professional mapping required
+      {/* Mapping status badge + Refresh control. Honest about whether
+          the screen is showing real surveyed geometry or placeholders. */}
+      <div className="pointer-events-auto absolute bottom-1 left-2 flex items-center gap-1">
+        <div
+          className={`rounded-md border px-1.5 py-0.5 text-[8px] uppercase tracking-wider backdrop-blur-sm ${
+            mappingStatus === "mapped"
+              ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
+              : mappingStatus === "loading"
+                ? "border-gold/30 bg-black/55 text-gold-soft/85"
+                : "border-gold/25 bg-black/55 text-gold-soft/80"
+          }`}
+        >
+          {mappingStatus === "mapped"
+            ? "Mapped course"
+            : mappingStatus === "loading"
+              ? "Loading mapping…"
+              : "Professional mapping required"}
         </div>
-      )}
+        <button
+          type="button"
+          onClick={onRefreshMapping}
+          title="Refresh mapping"
+          aria-label="Refresh mapping"
+          className="flex h-5 w-5 items-center justify-center rounded-md border border-gold/30 bg-black/55 text-gold-soft backdrop-blur-sm transition-colors hover:text-gold active:scale-95"
+        >
+          <RefreshCw className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   );
 }
