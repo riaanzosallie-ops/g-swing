@@ -97,6 +97,18 @@ import { useGswingWeather } from "@/lib/use-gswing-weather";
 import { Ruler, X as XIcon, Wifi, WifiOff, Wind } from "lucide-react";
 import { GpsHud } from "@/components/gswing/gps/GpsHud";
 import type { YardageReadout } from "@/lib/yardage-engine";
+import {
+  ensureMappedLayers,
+  setMappedHoleData,
+  clearMappedHoleData,
+} from "@/lib/mapbox-mapped-layers";
+import {
+  findNearestCourseMap,
+  loadMappedHole,
+} from "@/lib/gswing-course-map-loader";
+import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
+import type { MappedHole } from "@/types/gswing-course-map";
+import { RefreshCw } from "lucide-react";
 
 const MEASURE_SRC = "gs-measure-src";
 const MEASURE_LINE = "gs-measure-line";
@@ -267,6 +279,16 @@ function MapboxCourseView({
   const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
   const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
 
+  // Premium Course Mapping Engine — mapped hole data sourced from
+  // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
+  // Drives both the Mapbox overlay layers and the HUD distances/insight.
+  const [mappedHole, setMappedHole] = useState<MappedHole | null>(null);
+  const [mappedCourseId, setMappedCourseId] = useState<string | null>(null);
+  const [mappingStatus, setMappingStatus] = useState<
+    "idle" | "loading" | "mapped" | "missing"
+  >("idle");
+  const [mappingRefreshTick, setMappingRefreshTick] = useState(0);
+
   // Live weather for the in-map HUD (real Open-Meteo via existing hook).
   const hudWeather = useGswingWeather(
     playerPosition
@@ -378,6 +400,8 @@ function MapboxCourseView({
       setLayerGroupVisibility(map, "hazards", showHazards);
       setLayerGroupVisibility(map, "labels", showLabels);
       ensureMeasureLayers(map);
+      ensureMappedLayers(map);
+      if (mappedHole) setMappedHoleData(map, mappedHole);
     };
     if (map.isStyleLoaded()) onLoad();
     else map.on("load", onLoad);
@@ -393,6 +417,101 @@ function MapboxCourseView({
     if (!map || !styleLoadedRef.current) return;
     applyPremiumMapStyle(map, mapView);
   }, [mapView]);
+
+  // Load mapped course/hole geometry from Supabase whenever the
+  // course, hole, first GPS fix, or manual refresh changes. Never
+  // fabricates — when no mapping exists we render the honest
+  // "Professional mapping required" state.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setMappingStatus("loading");
+      try {
+        // Prefer the nearest mapped course to the player's real GPS
+        // location; fall back to the selected course centre so the
+        // mapper still works pre-fix.
+        const anchor =
+          playerPosition ?? { lat: selectedCourse.lat, lng: selectedCourse.lng };
+        const courseMap = await findNearestCourseMap(anchor);
+        if (cancelled) return;
+        if (!courseMap) {
+          setMappedCourseId(null);
+          setMappedHole(null);
+          setMappingStatus("missing");
+          return;
+        }
+        setMappedCourseId(courseMap.id);
+        const hp = await loadMappedHole(courseMap.id, hole);
+        if (cancelled) return;
+        setMappedHole(hp);
+        setMappingStatus(hp ? "mapped" : "missing");
+      } catch {
+        if (!cancelled) {
+          setMappedHole(null);
+          setMappingStatus("missing");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedCourse.id,
+    selectedCourse.lat,
+    selectedCourse.lng,
+    hole,
+    // Only the *presence* of a fix should retrigger, not every metre.
+    playerPosition != null,
+    mappingRefreshTick,
+  ]);
+
+  // Push mapped hole into the Mapbox sources/layers. Additive — never
+  // touches Slice A/B/C layers. Hidden in Satellite mode by toggling
+  // opacity off so the raw imagery can dominate.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    ensureMappedLayers(map);
+    if (mappedHole) setMappedHoleData(map, mappedHole);
+    else clearMappedHoleData(map);
+  }, [mappedHole]);
+
+  // Visibility of mapped overlays follows the Premium / Satellite toggle
+  // and the hazards toggle, so the user can declutter without losing the
+  // mapped greens / pin / layups.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    const hazardLayers = [
+      "gsm-water-fill",
+      "gsm-water-line",
+      "gsm-bunker-fill",
+      "gsm-bunker-line",
+      "gsm-penalty-fill",
+      "gsm-penalty-line",
+      "gsm-ob-dash",
+    ];
+    const greenLayers = [
+      "gsm-green-front",
+      "gsm-green-center",
+      "gsm-green-back",
+      "gsm-green-labels",
+      "gsm-pin-flag",
+      "gsm-layup-rings",
+      "gsm-layup-labels",
+      "gsm-dogleg",
+      "gsm-dogleg-labels",
+      "gsm-landing-fill",
+    ];
+    const hazardVis = mapView === "satellite" || !showHazards ? "none" : "visible";
+    const greenVis = mapView === "satellite" ? "none" : "visible";
+    for (const id of hazardLayers) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", hazardVis);
+    }
+    for (const id of greenLayers) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", greenVis);
+    }
+  }, [mapView, showHazards, mappedHole]);
 
   // Course geometry — re-apply when the hole/payload changes.
   useEffect(() => {
@@ -636,6 +755,104 @@ function MapboxCourseView({
     }
   }, [geometry]);
 
+  // Derive an honest readout + insight from mapped data. We only
+  // override the parent-supplied yardageReadout/caddieInsight when the
+  // mapped hole actually contains supporting geometry — otherwise the
+  // existing fallback (computeYardages from raw DB geometry) wins.
+  const mappedOverride = useMemo(() => {
+    if (!mappedHole) return null;
+    const snap = buildGolfGpsSnapshot(playerPosition, mappedHole, unit);
+    if (!snap.hasMapping) return null;
+    const hazardKind = (
+      t: string,
+    ): "water" | "bunker" | "trees" | "waste" | "ob" | "other" => {
+      switch (t) {
+        case "water":
+          return "water";
+        case "bunker":
+          return "bunker";
+        case "trees":
+          return "trees";
+        case "waste_area":
+          return "waste";
+        case "out_of_bounds":
+          return "ob";
+        default:
+          return "other";
+      }
+    };
+    const carries = snap.hazards
+      .filter((h) => h.carry != null)
+      .map((h) => ({
+        id: h.id,
+        kind: hazardKind(h.type),
+        label: h.name,
+        carry: h.carry as number,
+        near: h.reach ?? (h.carry as number),
+      }));
+    const layups = snap.layups
+      .filter((l) => l.distance != null)
+      .map((l) => ({ label: l.name, yards: l.distance as number }));
+    const doglegs =
+      snap.dogleg != null ? [{ label: "Dogleg", yards: snap.dogleg }] : [];
+    const readout: YardageReadout = {
+      pin: snap.pin,
+      front: snap.green.front,
+      center: snap.green.center,
+      back: snap.green.back,
+      carries,
+      layups,
+      doglegs,
+      fromLastShot: yardageReadout.fromLastShot,
+      inGreenMode:
+        snap.pin != null
+          ? snap.pin <= (unit === "meters" ? 55 : 60)
+          : snap.green.center != null
+            ? snap.green.center <= (unit === "meters" ? 55 : 60)
+            : false,
+      dailyPin: yardageReadout.dailyPin,
+      missSide: null,
+      missReason: null,
+    };
+    // Evidence-only caddie insight, never invents wind/club/slope.
+    const parts: string[] = [];
+    if (snap.green.center != null) {
+      parts.push(`Center is ${snap.green.center}${unit === "meters" ? "m" : "y"}.`);
+    }
+    if (snap.pin != null) {
+      parts.push(`Pin ${snap.pin}${unit === "meters" ? "m" : "y"}.`);
+    } else {
+      parts.push("Pin not set. Playing to center green.");
+    }
+    const nearest = snap.hazards
+      .filter((h) => h.reach != null)
+      .sort((a, b) => (a.reach as number) - (b.reach as number))[0];
+    if (nearest) {
+      const side = nearest.side ? ` ${nearest.side}` : "";
+      const carry =
+        nearest.carry != null
+          ? ` Carry ${nearest.carry}${unit === "meters" ? "m" : "y"}.`
+          : "";
+      parts.push(
+        `${nearest.name} reach ${nearest.reach}${unit === "meters" ? "m" : "y"}${side}.${carry}`,
+      );
+    }
+    return { readout, insight: parts.join(" ") };
+  }, [mappedHole, playerPosition, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
+
+  const effectiveReadout: YardageReadout = mappedOverride?.readout ?? yardageReadout;
+  const effectiveInsight: string =
+    mappingStatus === "missing"
+      ? "Professional mapping required for this hole."
+      : (mappedOverride?.insight ?? caddieInsight);
+  const effectiveFallbackCenter =
+    mappedOverride ? null : fallbackCenterYards;
+
+  const onRefreshMapping = useCallback(() => {
+    setMappingRefreshTick((t) => t + 1);
+    toast.info("Refreshing course mapping…");
+  }, []);
+
   if (tokenState.status === "loading") {
     return (
       <Card className="gradient-card flex h-[58vh] min-h-[410px] items-center justify-center border-gold/30 p-4 text-xs text-muted-foreground">
@@ -673,12 +890,12 @@ function MapboxCourseView({
         holeName={gps?.notes ?? null}
         liveTournament={null}
         unit={unit}
-        readout={yardageReadout}
-        fallbackCenterYards={fallbackCenterYards}
+        readout={effectiveReadout}
+        fallbackCenterYards={effectiveFallbackCenter}
         playerPosition={playerPosition}
         playerAccuracy={playerAccuracy}
         weather={hudWeather}
-        caddieInsight={caddieInsight}
+        caddieInsight={effectiveInsight}
         measureActive={measureActive}
         onToggleMeasure={() =>
           setMeasureActive((v) => {
@@ -757,11 +974,34 @@ function MapboxCourseView({
         </div>
       </div>
 
-      {usePlaceholder && (
-        <div className="pointer-events-none absolute bottom-1 left-2 rounded-md border border-gold/25 bg-black/55 px-1.5 py-0.5 text-[8px] uppercase tracking-wider text-gold-soft/80 backdrop-blur-sm">
-          Professional mapping required
+      {/* Mapping status badge + Refresh control. Honest about whether
+          the screen is showing real surveyed geometry or placeholders. */}
+      <div className="pointer-events-auto absolute bottom-1 left-2 flex items-center gap-1">
+        <div
+          className={`rounded-md border px-1.5 py-0.5 text-[8px] uppercase tracking-wider backdrop-blur-sm ${
+            mappingStatus === "mapped"
+              ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
+              : mappingStatus === "loading"
+                ? "border-gold/30 bg-black/55 text-gold-soft/85"
+                : "border-gold/25 bg-black/55 text-gold-soft/80"
+          }`}
+        >
+          {mappingStatus === "mapped"
+            ? "Mapped course"
+            : mappingStatus === "loading"
+              ? "Loading mapping…"
+              : "Professional mapping required"}
         </div>
-      )}
+        <button
+          type="button"
+          onClick={onRefreshMapping}
+          title="Refresh mapping"
+          aria-label="Refresh mapping"
+          className="flex h-5 w-5 items-center justify-center rounded-md border border-gold/30 bg-black/55 text-gold-soft backdrop-blur-sm transition-colors hover:text-gold active:scale-95"
+        >
+          <RefreshCw className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   );
 }
