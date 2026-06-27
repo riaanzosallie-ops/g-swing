@@ -279,6 +279,16 @@ function MapboxCourseView({
   const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
   const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
 
+  // Premium Course Mapping Engine — mapped hole data sourced from
+  // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
+  // Drives both the Mapbox overlay layers and the HUD distances/insight.
+  const [mappedHole, setMappedHole] = useState<MappedHole | null>(null);
+  const [mappedCourseId, setMappedCourseId] = useState<string | null>(null);
+  const [mappingStatus, setMappingStatus] = useState<
+    "idle" | "loading" | "mapped" | "missing"
+  >("idle");
+  const [mappingRefreshTick, setMappingRefreshTick] = useState(0);
+
   // Live weather for the in-map HUD (real Open-Meteo via existing hook).
   const hudWeather = useGswingWeather(
     playerPosition
@@ -405,6 +415,101 @@ function MapboxCourseView({
     if (!map || !styleLoadedRef.current) return;
     applyPremiumMapStyle(map, mapView);
   }, [mapView]);
+
+  // Load mapped course/hole geometry from Supabase whenever the
+  // course, hole, first GPS fix, or manual refresh changes. Never
+  // fabricates — when no mapping exists we render the honest
+  // "Professional mapping required" state.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setMappingStatus("loading");
+      try {
+        // Prefer the nearest mapped course to the player's real GPS
+        // location; fall back to the selected course centre so the
+        // mapper still works pre-fix.
+        const anchor =
+          playerPosition ?? { lat: selectedCourse.lat, lng: selectedCourse.lng };
+        const courseMap = await findNearestCourseMap(anchor);
+        if (cancelled) return;
+        if (!courseMap) {
+          setMappedCourseId(null);
+          setMappedHole(null);
+          setMappingStatus("missing");
+          return;
+        }
+        setMappedCourseId(courseMap.id);
+        const hp = await loadMappedHole(courseMap.id, hole);
+        if (cancelled) return;
+        setMappedHole(hp);
+        setMappingStatus(hp ? "mapped" : "missing");
+      } catch {
+        if (!cancelled) {
+          setMappedHole(null);
+          setMappingStatus("missing");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedCourse.id,
+    selectedCourse.lat,
+    selectedCourse.lng,
+    hole,
+    // Only the *presence* of a fix should retrigger, not every metre.
+    playerPosition != null,
+    mappingRefreshTick,
+  ]);
+
+  // Push mapped hole into the Mapbox sources/layers. Additive — never
+  // touches Slice A/B/C layers. Hidden in Satellite mode by toggling
+  // opacity off so the raw imagery can dominate.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    ensureMappedLayers(map);
+    if (mappedHole) setMappedHoleData(map, mappedHole);
+    else clearMappedHoleData(map);
+  }, [mappedHole]);
+
+  // Visibility of mapped overlays follows the Premium / Satellite toggle
+  // and the hazards toggle, so the user can declutter without losing the
+  // mapped greens / pin / layups.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    const hazardLayers = [
+      "gsm-water-fill",
+      "gsm-water-line",
+      "gsm-bunker-fill",
+      "gsm-bunker-line",
+      "gsm-penalty-fill",
+      "gsm-penalty-line",
+      "gsm-ob-dash",
+    ];
+    const greenLayers = [
+      "gsm-green-front",
+      "gsm-green-center",
+      "gsm-green-back",
+      "gsm-green-labels",
+      "gsm-pin-flag",
+      "gsm-layup-rings",
+      "gsm-layup-labels",
+      "gsm-dogleg",
+      "gsm-dogleg-labels",
+      "gsm-landing-fill",
+    ];
+    const hazardVis = mapView === "satellite" || !showHazards ? "none" : "visible";
+    const greenVis = mapView === "satellite" ? "none" : "visible";
+    for (const id of hazardLayers) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", hazardVis);
+    }
+    for (const id of greenLayers) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", greenVis);
+    }
+  }, [mapView, showHazards, mappedHole]);
 
   // Course geometry — re-apply when the hole/payload changes.
   useEffect(() => {
