@@ -25,15 +25,26 @@ const LAYERS = {
   fairwayLine: "gs-fairway-line",
   greenFill: "gs-green-fill",
   greenLine: "gs-green-line",
+  roughFill: "gs-hazard-rough-fill",
+  roughLine: "gs-hazard-rough-line",
+  teeBoxFill: "gs-hazard-teebox-fill",
+  teeBoxLine: "gs-hazard-teebox-line",
+  wasteFill: "gs-hazard-waste-fill",
+  wasteLine: "gs-hazard-waste-line",
+  treesFill: "gs-hazard-trees-fill",
+  treesLine: "gs-hazard-trees-line",
   waterFill: "gs-hazard-water-fill",
   waterLine: "gs-hazard-water-line",
+  waterShimmer: "gs-hazard-water-shimmer",
   bunkerFill: "gs-hazard-bunker-fill",
   bunkerLine: "gs-hazard-bunker-line",
   obFill: "gs-hazard-ob-fill",
   obLine: "gs-hazard-ob-line",
+  obDash: "gs-hazard-ob-dash",
   otherFill: "gs-hazard-other-fill",
   otherLine: "gs-hazard-other-line",
   cartLine: "gs-hazard-cart-line",
+  cartCasing: "gs-hazard-cart-casing",
   hazardPoints: "gs-hazard-points",
   teeCircles: "gs-tee-circles",
   teeLabels: "gs-tee-labels",
@@ -49,13 +60,26 @@ const LAYERS = {
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
-type HazardCategory = "water" | "bunker" | "ob" | "cartpath" | "other";
+type HazardCategory =
+  | "water"
+  | "bunker"
+  | "ob"
+  | "cartpath"
+  | "rough"
+  | "tee_box"
+  | "trees"
+  | "waste"
+  | "other";
 
 function hazardCategory(type: string): HazardCategory {
   if (type === "water" || type === "creek") return "water";
   if (type === "bunker") return "bunker";
   if (type === "ob") return "ob";
   if (type === "cart_path") return "cartpath";
+  if (type === "rough") return "rough";
+  if (type === "tee_box" || type === "teebox") return "tee_box";
+  if (type === "trees" || type === "tree" || type === "woods") return "trees";
+  if (type === "waste" || type === "waste_area" || type === "sand_waste") return "waste";
   return "other";
 }
 
