@@ -173,7 +173,7 @@ export function GpsBottomSheet({
             />
             <div className="max-h-[28vh] overflow-y-auto px-4 pb-3">
               {open === "hazards" && (
-          {readout.carries.length === 0 ? (
+                readout.carries.length === 0 ? (
             <p className="text-[11px] text-white/70">
               No mapped hazards in play from your current position.
             </p>
@@ -183,13 +183,13 @@ export function GpsBottomSheet({
                 <HazardRow key={c.id} c={c} unit={u} />
               ))}
             </ul>
-          )}
+                )
               )}
               {open === "ace" && (
                 <p className="text-[12px] leading-snug text-foreground">{caddieInsight}</p>
               )}
               {open === "yardages" && (
-          {readout.layups.length === 0 && readout.doglegs.length === 0 ? (
+                readout.layups.length === 0 && readout.doglegs.length === 0 ? (
             <p className="text-[11px] text-white/70">
               Layup and dogleg distances appear here once the hole has been mapped.
             </p>
@@ -222,7 +222,7 @@ export function GpsBottomSheet({
                 </li>
               ))}
             </ul>
-          )}
+                )
               )}
             </div>
           </div>
