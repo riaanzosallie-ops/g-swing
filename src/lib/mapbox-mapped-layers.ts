@@ -8,6 +8,8 @@ import type { MappedHole } from "@/types/gswing-course-map";
 
 const SRC = {
   hazardPoly: "gsm-hazard-poly",
+  hazardLabels: "gsm-hazard-labels",
+  greenPoly: "gsm-green-poly",
   greenPts: "gsm-green-pts",
   pin: "gsm-pin",
   layups: "gsm-layups",
@@ -24,12 +26,24 @@ const LAYER = {
   penaltyLine: "gsm-penalty-line",
   penaltyFill: "gsm-penalty-fill",
   obDash: "gsm-ob-dash",
+  treesFill: "gsm-trees-fill",
+  treesLine: "gsm-trees-line",
+  roughFill: "gsm-rough-fill",
+  wasteFill: "gsm-waste-fill",
+  wasteLine: "gsm-waste-line",
+  customFill: "gsm-custom-fill",
+  customLine: "gsm-custom-line",
+  hazardLabels: "gsm-hazard-labels",
+  greenPolyFill: "gsm-green-poly-fill",
+  greenPolyGlow: "gsm-green-poly-glow",
+  greenPolyStroke: "gsm-green-poly-stroke",
   greenFront: "gsm-green-front",
   greenCenter: "gsm-green-center",
   greenBack: "gsm-green-back",
   greenLabels: "gsm-green-labels",
   pin: "gsm-pin",
   pinFlag: "gsm-pin-flag",
+  pinPole: "gsm-pin-pole",
   layupRings: "gsm-layup-rings",
   layupLabels: "gsm-layup-labels",
   doglegPoint: "gsm-dogleg",
@@ -48,12 +62,50 @@ function ensureSource(map: mapboxgl.Map, id: string) {
 
 export function ensureMappedLayers(map: mapboxgl.Map) {
   ensureSource(map, SRC.hazardPoly);
+  ensureSource(map, SRC.hazardLabels);
+  ensureSource(map, SRC.greenPoly);
   ensureSource(map, SRC.greenPts);
   ensureSource(map, SRC.pin);
   ensureSource(map, SRC.layups);
   ensureSource(map, SRC.doglegs);
   ensureSource(map, SRC.landing);
   ensureSource(map, SRC.obLines);
+
+  // ===== Green polygon — emerald glass surface + gold perimeter =====
+  if (!map.getLayer(LAYER.greenPolyGlow)) {
+    map.addLayer({
+      id: LAYER.greenPolyGlow,
+      type: "fill",
+      source: SRC.greenPoly,
+      paint: {
+        "fill-color": "#34d399",
+        "fill-opacity": 0.18,
+      },
+    });
+  }
+  if (!map.getLayer(LAYER.greenPolyFill)) {
+    map.addLayer({
+      id: LAYER.greenPolyFill,
+      type: "fill",
+      source: SRC.greenPoly,
+      paint: {
+        "fill-color": "#10b981",
+        "fill-opacity": 0.55,
+      },
+    });
+  }
+  if (!map.getLayer(LAYER.greenPolyStroke)) {
+    map.addLayer({
+      id: LAYER.greenPolyStroke,
+      type: "line",
+      source: SRC.greenPoly,
+      paint: {
+        "line-color": "#F5C84B",
+        "line-width": 1.6,
+        "line-opacity": 0.9,
+      },
+    });
+  }
 
   // Water polygons — deep blue
   if (!map.getLayer(LAYER.waterFill)) {
@@ -62,7 +114,11 @@ export function ensureMappedLayers(map: mapboxgl.Map) {
       type: "fill",
       source: SRC.hazardPoly,
       filter: ["==", ["get", "kind"], "water"],
-      paint: { "fill-color": "#1e6fbb", "fill-opacity": 0.55 },
+      paint: {
+        "fill-color": "#1e6fbb",
+        "fill-opacity": 0.6,
+        "fill-outline-color": "#7ec8ff",
+      },
     });
   }
   if (!map.getLayer(LAYER.waterLine)) {
@@ -71,7 +127,7 @@ export function ensureMappedLayers(map: mapboxgl.Map) {
       type: "line",
       source: SRC.hazardPoly,
       filter: ["==", ["get", "kind"], "water"],
-      paint: { "line-color": "#bcd8ff", "line-width": 1.2, "line-opacity": 0.8 },
+      paint: { "line-color": "#bcd8ff", "line-width": 1.4, "line-opacity": 0.85 },
     });
   }
 
@@ -92,6 +148,73 @@ export function ensureMappedLayers(map: mapboxgl.Map) {
       source: SRC.hazardPoly,
       filter: ["==", ["get", "kind"], "bunker"],
       paint: { "line-color": "#8a7332", "line-width": 1, "line-opacity": 0.85 },
+    });
+  }
+
+  // Trees — dark canopy
+  if (!map.getLayer(LAYER.treesFill)) {
+    map.addLayer({
+      id: LAYER.treesFill,
+      type: "fill",
+      source: SRC.hazardPoly,
+      filter: ["==", ["get", "kind"], "trees"],
+      paint: { "fill-color": "#0d4a2c", "fill-opacity": 0.7 },
+    });
+  }
+  if (!map.getLayer(LAYER.treesLine)) {
+    map.addLayer({
+      id: LAYER.treesLine,
+      type: "line",
+      source: SRC.hazardPoly,
+      filter: ["==", ["get", "kind"], "trees"],
+      paint: { "line-color": "#1b6b3f", "line-width": 1, "line-opacity": 0.7 },
+    });
+  }
+
+  // Rough — muted olive overlay
+  if (!map.getLayer(LAYER.roughFill)) {
+    map.addLayer({
+      id: LAYER.roughFill,
+      type: "fill",
+      source: SRC.hazardPoly,
+      filter: ["==", ["get", "kind"], "rough"],
+      paint: { "fill-color": "#3f5c2a", "fill-opacity": 0.45 },
+    });
+  }
+
+  // Waste area — desaturated tan with gold dash
+  if (!map.getLayer(LAYER.wasteFill)) {
+    map.addLayer({
+      id: LAYER.wasteFill,
+      type: "fill",
+      source: SRC.hazardPoly,
+      filter: ["==", ["get", "kind"], "waste_area"],
+      paint: { "fill-color": "#a89368", "fill-opacity": 0.55 },
+    });
+  }
+  if (!map.getLayer(LAYER.wasteLine)) {
+    map.addLayer({
+      id: LAYER.wasteLine,
+      type: "line",
+      source: SRC.hazardPoly,
+      filter: ["==", ["get", "kind"], "waste_area"],
+      paint: {
+        "line-color": "#F5C84B",
+        "line-width": 1,
+        "line-dasharray": [3, 2],
+        "line-opacity": 0.7,
+      },
+    });
+  }
+
+  // Custom hazards — neutral gold outline
+  if (!map.getLayer(LAYER.customFill)) {
+    map.addLayer({
+      id: LAYER.customFill,
+      type: "fill",
+      source: SRC.hazardPoly,
+      filter: ["==", ["get", "kind"], "custom"],
+      paint: { "fill-color": "#F5C84B", "fill-opacity": 0.18 },
     });
   }
 
@@ -193,6 +316,19 @@ export function ensureMappedLayers(map: mapboxgl.Map) {
   }
 
   // Pin — gold flag (circle stand-in)
+  if (!map.getLayer(LAYER.pinPole)) {
+    map.addLayer({
+      id: LAYER.pinPole,
+      type: "circle",
+      source: SRC.pin,
+      paint: {
+        "circle-radius": 12,
+        "circle-color": "rgba(245,200,75,0.15)",
+        "circle-stroke-color": "rgba(245,200,75,0.55)",
+        "circle-stroke-width": 1,
+      },
+    });
+  }
   if (!map.getLayer(LAYER.pinFlag)) {
     map.addLayer({
       id: LAYER.pinFlag,
@@ -287,6 +423,33 @@ export function ensureMappedLayers(map: mapboxgl.Map) {
       },
     });
   }
+
+  // ===== Hazard labels — premium gold typography, hidden when zoomed
+  // out so labels never collide at course-overview zoom. =====
+  if (!map.getLayer(LAYER.hazardLabels)) {
+    map.addLayer({
+      id: LAYER.hazardLabels,
+      type: "symbol",
+      source: SRC.hazardLabels,
+      minzoom: 15.5,
+      layout: {
+        "text-field": ["get", "label"],
+        "text-size": 10,
+        "text-anchor": "center",
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "text-padding": 4,
+        "text-letter-spacing": 0.08,
+        "text-transform": "uppercase",
+      },
+      paint: {
+        "text-color": "#F5C84B",
+        "text-halo-color": "#000000",
+        "text-halo-width": 1.6,
+        "text-halo-blur": 0.4,
+      },
+    });
+  }
 }
 
 export function setMappedHoleData(map: mapboxgl.Map, hole: MappedHole | null) {
@@ -294,8 +457,27 @@ export function setMappedHoleData(map: mapboxgl.Map, hole: MappedHole | null) {
 
   const hazardFeatures: GeoJSON.Feature[] = [];
   const obFeatures: GeoJSON.Feature[] = [];
+  const hazardLabelFeatures: GeoJSON.Feature[] = [];
+  const labelFromType: Record<string, string> = {
+    water: "Water",
+    bunker: "Bunker",
+    waste_area: "Waste",
+    penalty_area: "Penalty",
+    out_of_bounds: "OB",
+    trees: "Trees",
+    rough: "Rough",
+    custom: "Hazard",
+  };
   if (hole) {
     for (const h of hole.hazards) {
+      const label = (h.name && h.name.trim()) || labelFromType[h.type] || null;
+      if (label && h.center) {
+        hazardLabelFeatures.push({
+          type: "Feature",
+          properties: { id: h.id, label, kind: h.type },
+          geometry: { type: "Point", coordinates: [h.center.lng, h.center.lat] },
+        });
+      }
       if (h.type === "out_of_bounds" && h.polygon) {
         obFeatures.push({
           type: "Feature",
@@ -320,6 +502,24 @@ export function setMappedHoleData(map: mapboxgl.Map, hole: MappedHole | null) {
   (map.getSource(SRC.obLines) as mapboxgl.GeoJSONSource | undefined)?.setData({
     type: "FeatureCollection",
     features: obFeatures,
+  });
+  (map.getSource(SRC.hazardLabels) as mapboxgl.GeoJSONSource | undefined)?.setData({
+    type: "FeatureCollection",
+    features: hazardLabelFeatures,
+  });
+
+  // Green polygon — only render when real geometry is mapped.
+  const greenPolyFeatures: GeoJSON.Feature[] = [];
+  if (hole?.green.polygon && hole.green.polygon.length >= 3) {
+    greenPolyFeatures.push({
+      type: "Feature",
+      properties: {},
+      geometry: { type: "Polygon", coordinates: [hole.green.polygon] },
+    });
+  }
+  (map.getSource(SRC.greenPoly) as mapboxgl.GeoJSONSource | undefined)?.setData({
+    type: "FeatureCollection",
+    features: greenPolyFeatures,
   });
 
   const greenPts: GeoJSON.Feature[] = [];
