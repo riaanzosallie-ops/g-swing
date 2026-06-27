@@ -1028,6 +1028,21 @@ function MapboxCourseView({
         playerAccuracy={playerAccuracy}
         weather={hudWeather}
         caddieInsight={effectiveInsight}
+        debug={
+          membership.isOwner
+            ? {
+                courseName: selectedCourse.name,
+                courseMapId: mappedCourseId,
+                selectedHole: hole,
+                mappedHole,
+                mappingStatus,
+                front: effectiveReadout.front,
+                center: effectiveReadout.center,
+                back: effectiveReadout.back,
+                unitShort,
+              }
+            : undefined
+        }
       />
 
       <GpsBottomSheet
