@@ -86,6 +86,104 @@ import {
   CAMERA_MODES,
   type CameraMode,
 } from "@/lib/camera-engine";
+import {
+  buildGpsCaddieInsight,
+  classifyAccuracy,
+  measureBetween,
+  midpoint,
+} from "@/lib/gswing-gps";
+import { computeYardages } from "@/lib/yardage-engine";
+import { useGswingWeather } from "@/lib/use-gswing-weather";
+import { Ruler, X as XIcon, Wifi, WifiOff, Wind } from "lucide-react";
+
+const MEASURE_SRC = "gs-measure-src";
+const MEASURE_LINE = "gs-measure-line";
+const MEASURE_END = "gs-measure-end";
+const MEASURE_PULSE = "gs-measure-pulse";
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+function ensureMeasureLayers(map: mapboxgl.Map) {
+  if (!map.getSource(MEASURE_SRC)) {
+    map.addSource(MEASURE_SRC, { type: "geojson", data: EMPTY_FC });
+  }
+  if (!map.getLayer(MEASURE_PULSE)) {
+    map.addLayer({
+      id: MEASURE_PULSE,
+      type: "circle",
+      source: MEASURE_SRC,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 18,
+        "circle-color": "#F5C84B",
+        "circle-opacity": 0.18,
+        "circle-blur": 0.4,
+      },
+    });
+  }
+  if (!map.getLayer(MEASURE_LINE)) {
+    map.addLayer({
+      id: MEASURE_LINE,
+      type: "line",
+      source: MEASURE_SRC,
+      filter: ["==", ["geometry-type"], "LineString"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#F5C84B",
+        "line-width": 3,
+        "line-opacity": 0.95,
+        "line-dasharray": [1.5, 1.2],
+      },
+    });
+  }
+  if (!map.getLayer(MEASURE_END)) {
+    map.addLayer({
+      id: MEASURE_END,
+      type: "circle",
+      source: MEASURE_SRC,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 6,
+        "circle-color": "#F5C84B",
+        "circle-stroke-color": "#1a1300",
+        "circle-stroke-width": 2,
+      },
+    });
+  }
+}
+
+function setMeasureGeo(
+  map: mapboxgl.Map,
+  player: LatLng | null,
+  target: LatLng | null,
+) {
+  const src = map.getSource(MEASURE_SRC) as mapboxgl.GeoJSONSource | undefined;
+  if (!src) return;
+  if (!player || !target) {
+    src.setData(EMPTY_FC);
+    return;
+  }
+  src.setData({
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [player.lng, player.lat],
+            [target.lng, target.lat],
+          ],
+        },
+      },
+      {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: [target.lng, target.lat] },
+      },
+    ],
+  });
+}
 
 // Public Mapbox token (publishable pk.*) is loaded at runtime from the
 // `mapbox-token` edge function — never hardcoded, never baked into the bundle.
@@ -151,6 +249,8 @@ function MapboxCourseView({
   const [flyoverRunning, setFlyoverRunning] = useState(false);
   const [tokenState, setTokenState] = useState<TokenState>({ status: "loading" });
   const [cameraMode, setCameraMode] = useState<CameraMode>("playing");
+  const [measureActive, setMeasureActive] = useState(false);
+  const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
 
   // Fetch the public Mapbox token from the edge function once per mount.
   useEffect(() => {
@@ -255,6 +355,7 @@ function MapboxCourseView({
       setLayerGroupVisibility(map, "overlays", showOverlays);
       setLayerGroupVisibility(map, "hazards", showHazards);
       setLayerGroupVisibility(map, "labels", showLabels);
+      ensureMeasureLayers(map);
     };
     if (map.isStyleLoaded()) onLoad();
     else map.on("load", onLoad);
@@ -301,6 +402,30 @@ function MapboxCourseView({
       }
     };
   }, [playerPosition?.lat, playerPosition?.lng, geometry, displayUnit]);
+
+  // Tap-to-measure: install click handler while measure mode is active.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    if (!measureActive) return;
+    const onClick = (e: mapboxgl.MapMouseEvent) => {
+      setMeasurePoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+    };
+    map.getCanvas().style.cursor = "crosshair";
+    map.on("click", onClick);
+    return () => {
+      map.off("click", onClick);
+      map.getCanvas().style.cursor = "";
+    };
+  }, [measureActive]);
+
+  // Tap-to-measure: sync the GeoJSON source whenever endpoints change.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    ensureMeasureLayers(map);
+    setMeasureGeo(map, playerPosition, measurePoint);
+  }, [playerPosition?.lat, playerPosition?.lng, measurePoint?.lat, measurePoint?.lng]);
 
   // Visibility toggles.
   useEffect(() => {
@@ -546,6 +671,24 @@ function MapboxCourseView({
         >
           <Plane className="h-4 w-4" />
         </MapCtrlBtn>
+        <MapCtrlBtn
+          active={measureActive}
+          onClick={() => {
+            setMeasureActive((v) => {
+              const next = !v;
+              if (!next) setMeasurePoint(null);
+              return next;
+            });
+          }}
+          title={measureActive ? "Exit measure mode" : "Tap-to-measure"}
+        >
+          <Ruler className="h-4 w-4" />
+        </MapCtrlBtn>
+        {measurePoint && (
+          <MapCtrlBtn onClick={() => setMeasurePoint(null)} title="Clear measurement">
+            <XIcon className="h-4 w-4" />
+          </MapCtrlBtn>
+        )}
       </div>
 
       <div className="absolute left-4 top-14 flex flex-wrap gap-1 rounded-md border border-gold/30 bg-black/60 p-1 text-[10px] uppercase tracking-wide backdrop-blur-md">
@@ -571,6 +714,60 @@ function MapboxCourseView({
           Placeholder geometry (Sharjah H1)
         </div>
       )}
+
+      {/* GPS Live + accuracy badge */}
+      <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-gold/30 bg-black/65 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-md">
+        {playerPosition ? (
+          <>
+            <span className="relative flex h-2 w-2">
+              <span
+                className={`absolute inline-flex h-full w-full animate-ping rounded-full ${
+                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
+                } opacity-70`}
+              />
+              <span
+                className={`relative inline-flex h-2 w-2 rounded-full ${
+                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
+                }`}
+              />
+            </span>
+            <Wifi className="h-3 w-3 text-emerald-300" />
+            <span className="text-white/90">GPS LIVE</span>
+            {playerAccuracy != null && (
+              <span className="text-white/60">± {Math.round(playerAccuracy)} m</span>
+            )}
+          </>
+        ) : (
+          <>
+            <WifiOff className="h-3 w-3 text-amber-300" />
+            <span className="text-amber-200">GPS waiting</span>
+          </>
+        )}
+      </div>
+
+      {/* Tap-to-measure overlay */}
+      {measureActive && !measurePoint && (
+        <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[11px] font-semibold text-gold backdrop-blur-md">
+          {playerPosition ? "Tap any point on the map to measure" : "GPS location required to measure."}
+        </div>
+      )}
+      {measurePoint && playerPosition && (() => {
+        const m = measureBetween(
+          playerPosition,
+          measurePoint,
+          displayUnit === "m" ? "meters" : "yards",
+        );
+        return (
+          <div className="pointer-events-none absolute left-1/2 top-16 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-gold/40 bg-black/75 px-3 py-1.5 backdrop-blur-md">
+            <Ruler className="h-3.5 w-3.5 text-gold" />
+            <span className="font-serif text-base text-gold">
+              {m.distance}
+              <span className="ml-0.5 text-[10px] text-gold-soft">{m.unit}</span>
+            </span>
+            <span className="text-[10px] text-white/65">brg {Math.round(m.bearing)}°</span>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1049,6 +1246,25 @@ export const GpsMap = () => {
   const selectableHoleCount = selectedCourse.holes_count >= 18 ? 18 : selectedCourse.holes_count || 18;
 
   const displayUnit = unitLabel(unit);
+  // Weather (real, no fabrication) for the GPS Caddie insight panel.
+  const weatherState = useGswingWeather(
+    playerPos
+      ? { latitude: playerPos.lat, longitude: playerPos.lng }
+      : { latitude: selectedCourse?.lat ?? null, longitude: selectedCourse?.lng ?? null },
+  );
+  const caddieReadout = useMemo(
+    () => computeYardages(playerPos, geometryPayload, lastShotEnd),
+    [playerPos?.lat, playerPos?.lng, geometryPayload, lastShotEnd?.lat, lastShotEnd?.lng], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const caddieInsight = useMemo(
+    () =>
+      buildGpsCaddieInsight({
+        readout: caddieReadout,
+        weather: weatherState.status === "ready" ? weatherState.data : null,
+        unit,
+      }),
+    [caddieReadout, weatherState, unit],
+  );
   const centerDistance = gps?.distances?.to_center_of_green ?? null;
   const frontDistance = gps?.distances?.to_front_of_green ?? null;
   const backDistance = gps?.distances?.to_back_of_green ?? null;
@@ -1545,6 +1761,34 @@ export const GpsMap = () => {
         unit={unit}
         fallbackCenterYards={loading ? null : displayCenterDistance}
       />
+
+      <Card className="gradient-card border-gold/25 p-3">
+        <div className="flex items-start gap-2">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wide text-gold-soft">ACE Caddie Insight</p>
+            <p className="mt-0.5 text-sm text-foreground">{caddieInsight}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+              {weatherState.status === "ready" ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-gold/20 bg-black/30 px-2 py-0.5">
+                  <Wind className="h-3 w-3 text-emerald-300" />
+                  {Math.round(weatherState.data.windSpeedKmh)} km/h {weatherState.data.windDirectionLabel}
+                  <span className="text-white/60">· {Math.round(weatherState.data.temperatureC)}°C</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Weather unavailable.</span>
+              )}
+              {!caddieReadout.front || !caddieReadout.back ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-gold/20 bg-black/30 px-2 py-0.5 text-gold-soft">
+                  Mapping required for {!caddieReadout.front ? "front" : null}
+                  {!caddieReadout.front && !caddieReadout.back ? " & " : null}
+                  {!caddieReadout.back ? "back" : null}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 gap-2">
         <Card className="gradient-card border-gold/20 p-3">
