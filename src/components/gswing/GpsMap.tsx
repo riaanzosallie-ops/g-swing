@@ -1098,6 +1098,40 @@ export const GpsMap = () => {
     loadHole();
   }, [loadHole]);
 
+  // Load all stored shots for the active round (for replay + stats).
+  const refreshRoundShots = useCallback(async () => {
+    if (!activeRound) {
+      setRoundShots([]);
+      return;
+    }
+    if (activeRound.id.startsWith("offline-")) return; // offline shots stay local
+    setStatsLoading(true);
+    try {
+      const rows = await fetchRoundShots(activeRound.id);
+      setRoundShots(rows);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [activeRound?.id]);
+
+  useEffect(() => {
+    refreshRoundShots();
+  }, [refreshRoundShots]);
+
+  // Per-hole geometry cache for round-intelligence computation.
+  const [holeGeomCache, setHoleGeomCache] = useState<Record<number, HoleGeometryPayload | null>>({});
+  useEffect(() => {
+    if (!geometryPayload) return;
+    setHoleGeomCache((prev) => (prev[hole] === geometryPayload ? prev : { ...prev, [hole]: geometryPayload }));
+  }, [geometryPayload, hole]);
+
+  const roundStats: RoundStats | null = useMemo(() => {
+    if (!roundShots.length) return null;
+    const holePars: Record<number, number> = {};
+    if (gps?.hole_number && gps?.par) holePars[gps.hole_number] = gps.par;
+    return computeRoundStats(roundShots, { holePars, holeGeometries: holeGeomCache });
+  }, [roundShots, holeGeomCache, gps?.hole_number, gps?.par]);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
