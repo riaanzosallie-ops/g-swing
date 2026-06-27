@@ -340,6 +340,45 @@ export default function CourseMapper() {
     });
   }, [saving]);
 
+  // Sharjah quick-select — finds the seeded course and jumps straight to
+  // hole 1. Falls back to a toast if the seed migration was not applied.
+  const openSharjah = useCallback(async () => {
+    const { data } = await supabase
+      .from("gswing_course_maps")
+      .select("id")
+      .eq("course_name", SHARJAH_QUICK.name)
+      .maybeSingle();
+    if (!data?.id) {
+      toast.error("Sharjah course not seeded yet.");
+      return;
+    }
+    setHoleNumber(1);
+    await onSelectCourse(data.id);
+  }, []);
+
+  // Honest per-hole completeness checklist. Reads the current draft
+  // features — does not invent missing data.
+  const checklist = useMemo(() => {
+    const has = (t: FeatureType) => features.some((f) => f.feature_type === t);
+    return [
+      { key: "tee", label: "Tee", done: has("tee") },
+      { key: "green_front", label: "Green front", done: has("green_front") },
+      { key: "green_center", label: "Green center", done: has("green_center") },
+      { key: "green_back", label: "Green back", done: has("green_back") },
+      { key: "pin", label: "Pin", done: has("pin") },
+      {
+        key: "hazards",
+        label: "Hazards",
+        done: features.some((f) => ["bunker","water","penalty","ob"].includes(f.feature_type)),
+      },
+      {
+        key: "layups",
+        label: "Layups",
+        done: features.some((f) => ["layup","dogleg","landing_zone"].includes(f.feature_type)),
+      },
+    ];
+  }, [features]);
+
   const save = async () => {
     if (admin.status !== "admin") {
       toast.error("Admin role required to save.");
