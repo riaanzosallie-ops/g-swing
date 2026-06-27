@@ -76,7 +76,13 @@ import {
 import { RoundIntelligence } from "@/components/gswing/RoundIntelligence";
 import { ShotTagPrompt } from "@/components/gswing/ShotTagPrompt";
 import { RoundShotReview } from "@/components/gswing/RoundShotReview";
-import { BookOpen, Film } from "lucide-react";
+import { BookOpen, Film, Sparkles } from "lucide-react";
+import { PostRoundExperience } from "@/components/gswing/experience/PostRoundExperience";
+import {
+  buildRoundExperience,
+  type RoundMeta,
+} from "@/lib/experience/experience-engine";
+import { usePlayer } from "@/lib/gswing-store";
 import {
   applyMode as applyCameraMode,
   followPlayer,
