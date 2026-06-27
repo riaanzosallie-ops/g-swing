@@ -61,18 +61,19 @@ const Index = () => {
     else setStage("auth");
   }
 
+  // If a session appears while on auth, advance to app.
+  useEffect(() => {
+    if (stage === "auth" && hasSession) setStage("app");
+  }, [stage, hasSession]);
+
   if (stage === "splash") return <Splash onEnter={handleEnter} />;
-  if (stage === "auth" && !hasSession) {
+  if (stage === "auth") {
     return (
       <PremiumAuth
         onAuthenticated={() => setStage("app")}
         onBack={() => setStage("splash")}
       />
     );
-  }
-  // Session existed during auth stage — slide into app.
-  if (stage === "auth" && hasSession) {
-    setStage("app");
   }
 
   const showBack = !NAV.some((n) => n.id === view);
