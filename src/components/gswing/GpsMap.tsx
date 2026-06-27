@@ -1162,6 +1162,39 @@ export const GpsMap = () => {
     return computeRoundStats(roundShots, { holePars, holeGeometries: holeGeomCache });
   }, [roundShots, holeGeomCache, gps?.hole_number, gps?.par]);
 
+  // Round Experience Model — the single source of truth consumed by
+  // Replay Studio, Signature Moments, Timeline, and (in later slices)
+  // Golf Story, AI Coach, Memory Book, Broadcast.
+  const experienceModel = useMemo(() => {
+    const meta: RoundMeta = {
+      id: activeRound?.id ?? `session-${selectedCourse.id}`,
+      course_id: selectedCourse.id,
+      course_name: selectedCourse.name,
+      started_at: activeRound?.started_at ?? null,
+      player_name: player?.name ?? null,
+      unit,
+    };
+    const holePars: Record<number, number> = {};
+    if (gps?.hole_number && gps?.par) holePars[gps.hole_number] = gps.par;
+    return buildRoundExperience({
+      round: meta,
+      shots: roundShots,
+      hole_geometries: holeGeomCache,
+      hole_pars: holePars,
+    });
+  }, [
+    activeRound?.id,
+    activeRound?.started_at,
+    selectedCourse.id,
+    selectedCourse.name,
+    player?.name,
+    unit,
+    roundShots,
+    holeGeomCache,
+    gps?.hole_number,
+    gps?.par,
+  ]);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
