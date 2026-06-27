@@ -1,4 +1,4 @@
-import { useMemo, useState } from "https://esm.sh/react@18.3.1?dev";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
