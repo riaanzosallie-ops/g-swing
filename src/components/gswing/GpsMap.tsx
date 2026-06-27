@@ -76,7 +76,10 @@ import {
 import { RoundIntelligence } from "@/components/gswing/RoundIntelligence";
 import { ShotTagPrompt } from "@/components/gswing/ShotTagPrompt";
 import { RoundShotReview } from "@/components/gswing/RoundShotReview";
-import { BookOpen, Film } from "lucide-react";
+import { BookOpen, Film, Sparkles } from "lucide-react";
+import { PostRoundExperience } from "@/components/gswing/experience/PostRoundExperience";
+import { buildRoundExperience, type RoundMeta } from "@/lib/experience/experience-engine";
+import { usePlayer } from "@/lib/gswing-store";
 import {
   applyMode as applyCameraMode,
   followPlayer,
@@ -1020,6 +1023,8 @@ export const GpsMap = () => {
   );
   const watchIdRef = useRef<number | null>(null);
   const [bag] = useBag();
+  const [player] = usePlayer();
+  const [experienceOpen, setExperienceOpen] = useState(false);
 
   // Lazy-load the publishable Mapbox token at the parent level too —
   // used for static shot preview images in the Round Shot Review.
@@ -1156,6 +1161,39 @@ export const GpsMap = () => {
     if (gps?.hole_number && gps?.par) holePars[gps.hole_number] = gps.par;
     return computeRoundStats(roundShots, { holePars, holeGeometries: holeGeomCache });
   }, [roundShots, holeGeomCache, gps?.hole_number, gps?.par]);
+
+  // Round Experience Model — the single source of truth consumed by
+  // Replay Studio, Signature Moments, Timeline, and (in later slices)
+  // Golf Story, AI Coach, Memory Book, Broadcast.
+  const experienceModel = useMemo(() => {
+    const meta: RoundMeta = {
+      id: activeRound?.id ?? `session-${selectedCourse.id}`,
+      course_id: selectedCourse.id,
+      course_name: selectedCourse.name,
+      started_at: activeRound?.started_at ?? null,
+      player_name: player?.name ?? null,
+      unit,
+    };
+    const holePars: Record<number, number> = {};
+    if (gps?.hole_number && gps?.par) holePars[gps.hole_number] = gps.par;
+    return buildRoundExperience({
+      round: meta,
+      shots: roundShots,
+      hole_geometries: holeGeomCache,
+      hole_pars: holePars,
+    });
+  }, [
+    activeRound?.id,
+    activeRound?.started_at,
+    selectedCourse.id,
+    selectedCourse.name,
+    player?.name,
+    unit,
+    roundShots,
+    holeGeomCache,
+    gps?.hole_number,
+    gps?.par,
+  ]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1631,6 +1669,15 @@ export const GpsMap = () => {
         </Button>
       </div>
 
+      <Button
+        className="w-full gradient-gold text-primary-foreground shadow-elegant"
+        onClick={() => setExperienceOpen(true)}
+        disabled={roundShots.length === 0}
+      >
+        <Sparkles className="mr-2 h-4 w-4" />
+        Open Round Experience
+      </Button>
+
       <ShotTagPrompt
         open={!!pendingTagShot}
         shotSummary={tagSummary}
@@ -1643,6 +1690,12 @@ export const GpsMap = () => {
         onClose={() => setReviewOpen(false)}
         shots={roundShots}
         mapboxToken={mapboxToken}
+      />
+
+      <PostRoundExperience
+        open={experienceOpen}
+        onClose={() => setExperienceOpen(false)}
+        model={experienceModel}
       />
 
       <div className="flex gap-2 overflow-x-auto pb-2">
