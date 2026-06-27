@@ -1269,6 +1269,7 @@ export const GpsMap = () => {
         const yards = haversineYards({ lat: activeShot.start_lat, lng: activeShot.start_lng }, playerPos);
         setActiveShot(null);
         setLastShotYards(yards);
+        setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
         toast.success(`Shot saved: ${yards} yards`);
         return;
       }
@@ -1281,6 +1282,7 @@ export const GpsMap = () => {
         const result = await endShot(activeRound.id, playerPos, activeShot.id);
         setActiveShot(null);
         setLastShotYards(result.distance_yards);
+        setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
         toast.success(`Shot saved: ${result.distance_yards} yards`);
       }
     } catch (error) {
