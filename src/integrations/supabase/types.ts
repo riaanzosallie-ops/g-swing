@@ -708,6 +708,10 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_hole_geometry: {
+        Args: { p_course_id: string; p_hole_number: number }
+        Returns: Json
+      }
       gettransactionid: { Args: never; Returns: unknown }
       longtransactionsenabled: { Args: never; Returns: boolean }
       populate_geometry_columns:
