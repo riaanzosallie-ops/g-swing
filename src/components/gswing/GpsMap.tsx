@@ -66,6 +66,7 @@ function MapboxCourseView({
   hole,
   centerDistance,
   displayUnit,
+  geometry,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -73,12 +74,20 @@ function MapboxCourseView({
   hole: number;
   centerDistance: number | null;
   displayUnit: "y" | "m";
+  geometry: HoleGeometryPayload | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const playerMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const teeMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const pinMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const styleLoadedRef = useRef(false);
+  const labelTimerRef = useRef<number | null>(null);
+
+  const [showOverlays, setShowOverlays] = useState(true);
+  const [showHazards, setShowHazards] = useState(true);
+  const [showLabels, setShowLabels] = useState(true);
+  const [flyoverRunning, setFlyoverRunning] = useState(false);
 
   // Resolve geometry: prefer live gps payload, otherwise fall back to
   // the Sharjah Hole 1 placeholder (only valid for that specific hole).
@@ -124,6 +133,7 @@ function MapboxCourseView({
     );
     mapRef.current = map;
     return () => {
+      styleLoadedRef.current = false;
       map.remove();
       mapRef.current = null;
       playerMarkerRef.current = null;
@@ -133,6 +143,78 @@ function MapboxCourseView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // After map style is ready: install layers and push current data.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const onLoad = () => {
+      styleLoadedRef.current = true;
+      ensureCourseLayers(map);
+      if (geometry) applyCourseGeometry(map, geometry);
+      updateYardageLabels(
+        map,
+        playerPosition,
+        geometry,
+        displayUnit === "m" ? "meters" : "yards",
+      );
+      setLayerGroupVisibility(map, "overlays", showOverlays);
+      setLayerGroupVisibility(map, "hazards", showHazards);
+      setLayerGroupVisibility(map, "labels", showLabels);
+    };
+    if (map.isStyleLoaded()) onLoad();
+    else map.on("load", onLoad);
+    return () => {
+      map.off("load", onLoad);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Course geometry — re-apply when the hole/payload changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    if (geometry) applyCourseGeometry(map, geometry);
+    else clearCourseGeometry(map);
+  }, [geometry]);
+
+  // Throttled live yardage label refresh (player movement / unit changes).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    if (labelTimerRef.current) window.clearTimeout(labelTimerRef.current);
+    labelTimerRef.current = window.setTimeout(() => {
+      updateYardageLabels(
+        map,
+        playerPosition,
+        geometry,
+        displayUnit === "m" ? "meters" : "yards",
+      );
+    }, 220);
+    return () => {
+      if (labelTimerRef.current) {
+        window.clearTimeout(labelTimerRef.current);
+        labelTimerRef.current = null;
+      }
+    };
+  }, [playerPosition?.lat, playerPosition?.lng, geometry, displayUnit]);
+
+  // Visibility toggles.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    setLayerGroupVisibility(map, "overlays", showOverlays);
+  }, [showOverlays]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    setLayerGroupVisibility(map, "hazards", showHazards);
+  }, [showHazards]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    setLayerGroupVisibility(map, "labels", showLabels);
+  }, [showLabels]);
+
   // Recenter on hole / course change.
   useEffect(() => {
     const map = mapRef.current;
@@ -140,10 +222,18 @@ function MapboxCourseView({
     map.easeTo({ center: [focus.lng, focus.lat], zoom: 17.5, duration: 700 });
   }, [focus.lat, focus.lng]);
 
-  // Tee marker.
+  // Tee marker — placeholder fallback only. When real DB geometry exists,
+  // the gold tee circle is rendered by the Mapbox symbol layer.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !tee) return;
+    if (!map) return;
+    if (geometry || !tee) {
+      if (teeMarkerRef.current) {
+        teeMarkerRef.current.remove();
+        teeMarkerRef.current = null;
+      }
+      return;
+    }
     if (!teeMarkerRef.current) {
       const el = document.createElement("div");
       el.style.cssText =
@@ -152,12 +242,20 @@ function MapboxCourseView({
     } else {
       teeMarkerRef.current.setLngLat([tee.lng, tee.lat]);
     }
-  }, [tee?.lat, tee?.lng]);
+  }, [tee?.lat, tee?.lng, geometry]);
 
-  // Pin marker.
+  // Pin marker — placeholder fallback only (real pin comes from the
+  // gs-pin Mapbox layer when DB geometry is present).
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !pin) return;
+    if (!map) return;
+    if (geometry || !pin) {
+      if (pinMarkerRef.current) {
+        pinMarkerRef.current.remove();
+        pinMarkerRef.current = null;
+      }
+      return;
+    }
     if (!pinMarkerRef.current) {
       const el = document.createElement("div");
       el.style.cssText =
@@ -166,7 +264,7 @@ function MapboxCourseView({
     } else {
       pinMarkerRef.current.setLngLat([pin.lng, pin.lat]);
     }
-  }, [pin?.lat, pin?.lng]);
+  }, [pin?.lat, pin?.lng, geometry]);
 
   // Player marker — updates live as GPS watch fires.
   useEffect(() => {
@@ -183,6 +281,45 @@ function MapboxCourseView({
       playerMarkerRef.current.setLngLat([playerPosition.lng, playerPosition.lat]);
     }
   }, [playerPosition?.lat, playerPosition?.lng]);
+
+  // Control handlers.
+  const onRecenter = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const target = playerPosition ?? tee ?? pin ?? focus;
+    map.easeTo({ center: [target.lng, target.lat], zoom: 18, duration: 700 });
+  }, [playerPosition?.lat, playerPosition?.lng, tee?.lat, tee?.lng, pin?.lat, pin?.lng, focus.lat, focus.lng]);
+
+  const onFitHole = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (fitHole(map, geometry)) return;
+    const pts = [tee, pin, playerPosition].filter(Boolean) as LatLng[];
+    if (pts.length >= 2) {
+      const bounds = new mapboxgl.LngLatBounds(
+        [pts[0].lng, pts[0].lat],
+        [pts[0].lng, pts[0].lat],
+      );
+      for (const p of pts) bounds.extend([p.lng, p.lat]);
+      map.fitBounds(bounds, { padding: 60, duration: 700, maxZoom: 19 });
+    }
+  }, [geometry, tee, pin, playerPosition]);
+
+  const onFlyover = useCallback(async () => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!geometry) {
+      toast.info("Flyover unavailable until course geometry is mapped.");
+      return;
+    }
+    setFlyoverRunning(true);
+    try {
+      const ok = await runFlyover(map, geometry);
+      if (!ok) toast.info("Flyover unavailable until course geometry is mapped.");
+    } finally {
+      setFlyoverRunning(false);
+    }
+  }, [geometry]);
 
   if (!MAPBOX_TOKEN) {
     return (
@@ -215,12 +352,70 @@ function MapboxCourseView({
         </div>
       </div>
 
+      <div className="absolute bottom-3 left-3 flex flex-col gap-1 rounded-md border border-gold/30 bg-black/65 p-1 shadow-xl backdrop-blur-md">
+        <MapCtrlBtn active={showOverlays} onClick={() => setShowOverlays((v) => !v)} title="Toggle overlays">
+          <LayersIcon className="h-4 w-4" />
+        </MapCtrlBtn>
+        <MapCtrlBtn active={showHazards} onClick={() => setShowHazards((v) => !v)} title="Toggle hazards">
+          <Droplets className="h-4 w-4" />
+        </MapCtrlBtn>
+        <MapCtrlBtn active={showLabels} onClick={() => setShowLabels((v) => !v)} title="Toggle yardage labels">
+          <TypeIcon className="h-4 w-4" />
+        </MapCtrlBtn>
+        <MapCtrlBtn onClick={onRecenter} title="Recenter on player">
+          <Crosshair className="h-4 w-4" />
+        </MapCtrlBtn>
+        <MapCtrlBtn onClick={onFitHole} title="Fit hole">
+          <Maximize2 className="h-4 w-4" />
+        </MapCtrlBtn>
+        <MapCtrlBtn
+          onClick={onFlyover}
+          disabled={!geometry || flyoverRunning}
+          title={geometry ? "Hole flyover" : "Flyover unavailable until course geometry is mapped"}
+        >
+          <Plane className="h-4 w-4" />
+        </MapCtrlBtn>
+      </div>
+
       {usePlaceholder && (
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-gold/30 bg-black/60 px-2 py-1 text-[10px] text-gold-soft backdrop-blur-sm">
           Placeholder geometry (Sharjah H1)
         </div>
       )}
     </div>
+  );
+}
+
+function MapCtrlBtn({
+  active,
+  disabled,
+  onClick,
+  title,
+  children,
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const tone =
+    active === false
+      ? "text-white/45 hover:text-white/80"
+      : "text-gold hover:bg-gold/15";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={`flex h-8 w-8 items-center justify-center rounded transition-colors ${tone} ${
+        disabled ? "cursor-not-allowed opacity-40 hover:bg-transparent" : ""
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
