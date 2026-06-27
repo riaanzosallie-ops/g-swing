@@ -365,12 +365,22 @@ function MapboxCourseView({
     }
   }, [geometry]);
 
-  if (!MAPBOX_TOKEN) {
+  if (tokenState.status === "loading") {
+    return (
+      <Card className="gradient-card flex h-[58vh] min-h-[410px] items-center justify-center border-gold/30 p-4 text-xs text-muted-foreground">
+        <div className="text-center">
+          <p className="mb-1 font-serif text-base text-gold">Loading Mapbox…</p>
+          <p>Fetching secure satellite token.</p>
+        </div>
+      </Card>
+    );
+  }
+
+  if (tokenState.status === "error") {
     return (
       <Card className="gradient-card border-gold/30 p-4 text-xs text-muted-foreground">
-        <p className="mb-1 font-serif text-base text-gold">Mapbox not configured</p>
-        Set <code className="text-gold">VITE_MAPBOX_ACCESS_TOKEN</code> with a public{" "}
-        <code>pk.*</code> token and reload to see the live satellite course view.
+        <p className="mb-1 font-serif text-base text-gold">Mapbox token unavailable</p>
+        {tokenState.message}
       </Card>
     );
   }
