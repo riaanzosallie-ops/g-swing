@@ -268,37 +268,18 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
           </div>
         </TabsContent>
 
-        <TabsContent value="broadcast" className="mt-3 space-y-3">
-          <Card className="relative overflow-hidden border-gold/30 bg-gradient-to-br from-background via-background to-gold/10 p-4">
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-red-400">
-              <Radio className="h-3 w-3 animate-pulse" /> Live Broadcast
-            </div>
-            <h3 className="mt-1 font-serif text-2xl text-gradient-gold">{tournament.name}</h3>
-            <p className="text-xs text-muted-foreground">{tournament.course}</p>
+        <TabsContent value="broadcast" className="mt-3">
+          <TournamentLiveTV
+            tournament={tournament}
+            rows={rows}
+            moments={moments}
+            aiSummary={aiSummary}
+            joinUrl={`${window.location.origin}/?t=${tournament.code}`}
+          />
+        </TabsContent>
 
-            {leader ? (
-              <div className="mt-4 rounded-2xl border border-gold/30 bg-background/40 p-3">
-                <p className="text-[10px] uppercase tracking-widest text-gold/80">Leader</p>
-                <p className="font-serif text-2xl text-gold">{leader.player.player_name}</p>
-                <div className="mt-1 grid grid-cols-3 gap-2 text-center text-xs">
-                  <div><p className="text-[10px] text-muted-foreground">To Par</p><p className="font-mono text-gold">{leader.toPar === 0 ? "E" : leader.toPar > 0 ? `+${leader.toPar}` : leader.toPar}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Gross</p><p className="font-mono text-gold">{leader.gross}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Thru</p><p className="font-mono text-gold">{leader.thru}</p></div>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-xs text-muted-foreground">Waiting for first score…</p>
-            )}
-          </Card>
-
-          <Leaderboard tournament={tournament} rows={rows.slice(0, 10)} compact />
-
-          {aiSummary && (
-            <Card className="gradient-card border-gold/20 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-gold/80">AI Commentary</p>
-              <p className="mt-1 text-sm leading-relaxed">{aiSummary}</p>
-            </Card>
-          )}
+        <TabsContent value="awards" className="mt-3">
+          <TournamentAwards tournament={tournament} rows={rows} prevPositions={prevPosRef.current} />
         </TabsContent>
       </Tabs>
 
