@@ -111,6 +111,14 @@ import type { MappedHole } from "@/types/gswing-course-map";
 import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
+import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const MEASURE_SRC = "gs-measure-src";
 const MEASURE_LINE = "gs-measure-line";
@@ -419,6 +427,16 @@ function MapboxCourseView({
     const map = mapRef.current;
     if (!map || !styleLoadedRef.current) return;
     applyPremiumMapStyle(map, mapView);
+    // Mapbox loads symbol/icon layers asynchronously, so reapply the
+    // premium scrub whenever the style emits new data. Cheap & safe —
+    // sets only the layers that already exist.
+    const reapply = () => applyPremiumMapStyle(map, mapView);
+    map.on("styledata", reapply);
+    map.on("idle", reapply);
+    return () => {
+      map.off("styledata", reapply);
+      map.off("idle", reapply);
+    };
   }, [mapView]);
 
   // Load mapped course/hole geometry from Supabase whenever the
@@ -879,12 +897,16 @@ function MapboxCourseView({
   }
 
   return (
+    <>
     <div
       className={`gswing-map relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant ${
         mapView === "satellite" ? "is-satellite" : "is-premium"
       }`}
     >
-      <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
+      <div
+        ref={containerRef}
+        className="h-[48vh] min-h-[320px] w-full md:h-[58vh] md:min-h-[410px]"
+      />
 
       {/* Honest empty-mapping experience — shown only when we have no
           real surveyed geometry AND the user is in Premium mode. No
@@ -936,10 +958,10 @@ function MapboxCourseView({
         flyoverRunning={flyoverRunning}
       />
 
-      {/* Camera mode pill — compact single-row glass dock pinned top-center
-          under the top strip. Never crosses the map center, never overlaps
-          the hero distance card. */}
-      <div className="pointer-events-auto absolute left-1/2 top-[3.4rem] -translate-x-1/2">
+      {/* Camera mode pill — desktop full segmented tabs. On mobile we
+          replace it with a compact dropdown so the full mode rail never
+          stretches across the map. */}
+      <div className="pointer-events-auto absolute left-1/2 top-[3.4rem] hidden -translate-x-1/2 md:block">
         <div
           className="flex max-w-[94vw] items-center gap-0.5 overflow-x-auto rounded-full border border-gold/30 bg-black/55 p-0.5 text-[9px] uppercase tracking-wider shadow-lg backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           role="tablist"
@@ -964,9 +986,10 @@ function MapboxCourseView({
         </div>
       </div>
 
-      {/* Premium / Satellite view toggle — sits just under the camera
-          pill, gold/black glass, never overlaps the distance card. */}
-      <div className="pointer-events-auto absolute left-1/2 top-[5.4rem] -translate-x-1/2">
+      {/* Premium / Satellite view toggle — desktop placement under the
+          camera pill. On mobile we pin a compact version in the top
+          corner alongside the mode dropdown. */}
+      <div className="pointer-events-auto absolute left-1/2 top-[5.4rem] hidden -translate-x-1/2 md:block">
         <div
           className="flex items-center gap-0.5 rounded-full border border-gold/30 bg-black/65 p-0.5 text-[9px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-md"
           role="tablist"
@@ -986,6 +1009,45 @@ function MapboxCourseView({
               }`}
             >
               {mode === "premium" ? "Premium" : "Satellite"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile-only compact mode + view chips. Sit on a single row in
+          the top-right safe area so the map stays uncluttered. */}
+      <div className="pointer-events-auto absolute right-2 top-[3.4rem] flex items-center gap-1 md:hidden">
+        <Select
+          value={cameraMode}
+          onValueChange={(v) => setCameraMode(v as CameraMode)}
+        >
+          <SelectTrigger className="h-7 min-w-[6.5rem] gap-1 rounded-full border-gold/35 bg-black/65 px-2 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur-md">
+            <SelectValue placeholder="Mode" />
+          </SelectTrigger>
+          <SelectContent className="border-gold/30 bg-black/90 text-gold backdrop-blur-xl">
+            {CAMERA_MODES.map((m) => (
+              <SelectItem
+                key={m.id}
+                value={m.id}
+                className="text-[11px] uppercase tracking-wider"
+              >
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-0.5 rounded-full border border-gold/30 bg-black/65 p-0.5 backdrop-blur-md">
+          {(["premium", "satellite"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setMapView(mode)}
+              aria-pressed={mapView === mode}
+              className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider transition-colors ${
+                mapView === mode ? "bg-gold text-black" : "text-gold-soft"
+              }`}
+            >
+              {mode === "premium" ? "Prem" : "Sat"}
             </button>
           ))}
         </div>
@@ -1031,6 +1093,28 @@ function MapboxCourseView({
         </button>
       </div>
     </div>
+
+    {/* Mobile-only bottom sheet — houses Front/Center/Back, ACE, hazards,
+        measure controls and smart yardages. Default expanded section is
+        Green so the most important data is always visible first. */}
+    <GpsBottomSheet
+      unit={unit}
+      readout={effectiveReadout}
+      fallbackCenterYards={effectiveFallbackCenter}
+      caddieInsight={effectiveInsight}
+      measureActive={measureActive}
+      onToggleMeasure={() =>
+        setMeasureActive((v) => {
+          const next = !v;
+          if (!next) setMeasurePoint(null);
+          return next;
+        })
+      }
+      measurePoint={measurePoint}
+      onClearMeasure={() => setMeasurePoint(null)}
+      playerPosition={playerPosition}
+    />
+    </>
   );
 }
 
@@ -2208,6 +2292,7 @@ export const GpsMap = () => {
         fallbackCenterYards={loading ? null : displayCenterDistance}
       />
 
+      <div className="hidden md:block">
       <YardagePanel
         geometry={geometryPayload}
         playerPosition={playerPos}
@@ -2215,8 +2300,9 @@ export const GpsMap = () => {
         unit={unit}
         fallbackCenterYards={loading ? null : displayCenterDistance}
       />
+      </div>
 
-      <Card className="gradient-card border-gold/25 p-3">
+      <Card className="gradient-card hidden md:block border-gold/25 p-3">
         <div className="flex items-start gap-2">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
           <div className="min-w-0 flex-1">
@@ -2244,7 +2330,7 @@ export const GpsMap = () => {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="hidden md:grid grid-cols-2 gap-2">
         <Card className="gradient-card border-gold/20 p-3">
           <div className="flex items-center gap-2">
             <Crosshair className="h-4 w-4 text-gold" />
@@ -2268,7 +2354,7 @@ export const GpsMap = () => {
         </Card>
       </div>
 
-      <Card className="gradient-card border-gold/20 p-3">
+      <Card className="gradient-card hidden md:block border-gold/20 p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Navigation className="h-4 w-4 text-gold" />

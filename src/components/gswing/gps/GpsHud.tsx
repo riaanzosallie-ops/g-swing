@@ -20,6 +20,13 @@ import type { CarryTarget, Unit, YardageReadout } from "@/lib/yardage-engine";
 import type { GswingWeather } from "@/lib/gswing-weather";
 import type { LatLng } from "@/lib/gps-utils";
 import { measureBetween, classifyAccuracy } from "@/lib/gswing-gps";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { MoreHorizontal } from "lucide-react";
 
 export type HudWeatherState =
   | { status: "ready"; data: GswingWeather }
@@ -163,8 +170,12 @@ export function GpsHud(props: GpsHudProps) {
   } = props;
 
   const u = unitLabel(unit);
-  const center = readout.center ?? fallbackCenterYards;
+  // Treat 0 / non-positive center as "no mapping" so the HUD never
+  // shows the dreaded "CENTER 0 YD" placeholder.
+  const rawCenter = readout.center ?? fallbackCenterYards;
+  const center = rawCenter != null && rawCenter > 0 ? rawCenter : null;
   const animatedCenter = useAnimatedNumber(center);
+  const isMobile = useIsMobile();
   const front = readout.front;
   const back = readout.back;
 
@@ -255,8 +266,10 @@ export function GpsHud(props: GpsHudProps) {
 
       {/* HERO DISTANCE CARD — horizontal Front · Center · Back pinned to
           the bottom safe zone, above the ACE caddie panel. Never sits
-          across the map center, never collides with the right-edge. */}
-      <div className="pointer-events-none absolute inset-x-2 bottom-[6.25rem]">
+          across the map center, never collides with the right-edge.
+          On mobile this card moves into the dedicated bottom sheet
+          below the map, so we hide it inside the map overlay. */}
+      <div className="pointer-events-none absolute inset-x-2 bottom-[6.25rem] hidden md:block">
         <div className="pointer-events-auto mx-auto max-w-[420px] overflow-hidden rounded-2xl border border-gold/45 bg-gradient-to-br from-black/80 via-emerald-950/70 to-black/80 shadow-[0_10px_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
           {animatedCenter == null ? (
             <div className="px-4 py-3">
@@ -310,36 +323,103 @@ export function GpsHud(props: GpsHudProps) {
         </div>
       </div>
 
-      {/* LEFT MAP CONTROL DOCK — slim semi-transparent icon column pinned
-          mid-left so it never covers the hero card or the caddie panel. */}
+      {/* LEFT MAP CONTROL DOCK — slim icon column. On mobile we keep
+          only the 3 most-used controls visible (Locate / Measure /
+          Layers) and tuck the rest into a "More" popover so the rail
+          never feels cluttered on a 375px screen. */}
       <div className="pointer-events-auto absolute top-1/2 left-1.5 flex -translate-y-1/2 flex-col gap-0.5 rounded-2xl border border-gold/20 bg-black/35 p-0.5 shadow-md backdrop-blur-md">
-        <HudCtrl active={showOverlays} onClick={onToggleOverlays} label="Overlays">
-          <LayersIcon className="h-3.5 w-3.5" />
-        </HudCtrl>
-        <HudCtrl active={showHazards} onClick={onToggleHazards} label="Hazards">
-          <Droplets className="h-3.5 w-3.5" />
-        </HudCtrl>
-        <HudCtrl active={showLabels} onClick={onToggleLabels} label="Yardages">
-          <Mountain className="h-3.5 w-3.5" />
-        </HudCtrl>
-        <HudCtrl onClick={onRecenter} label="Recenter">
+        <HudCtrl onClick={onRecenter} label="Locate">
           <Crosshair className="h-3.5 w-3.5" />
         </HudCtrl>
-        <HudCtrl onClick={onFitHole} label="Fit hole">
-          <Maximize2 className="h-3.5 w-3.5" />
-        </HudCtrl>
         <HudCtrl
-          onClick={onFlyover}
-          disabled={flyoverDisabled || flyoverRunning}
-          label={flyoverRunning ? "Flyover…" : "Flyover"}
+          active={measureActive}
+          onClick={onToggleMeasure}
+          label="Measure"
         >
-          <Plane className="h-3.5 w-3.5" />
+          <Ruler className="h-3.5 w-3.5" />
         </HudCtrl>
+        <HudCtrl active={showOverlays} onClick={onToggleOverlays} label="Layers">
+          <LayersIcon className="h-3.5 w-3.5" />
+        </HudCtrl>
+        {isMobile ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="More controls"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-gold/20 bg-black/30 text-gold-soft transition-all active:scale-95 hover:text-gold"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="center"
+              className="w-44 border-gold/30 bg-black/85 p-2 text-gold-soft backdrop-blur-xl"
+            >
+              <button
+                type="button"
+                onClick={onFitHole}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-gold/10 hover:text-gold"
+              >
+                <Maximize2 className="h-3.5 w-3.5" /> Fit hole
+              </button>
+              <button
+                type="button"
+                onClick={onFlyover}
+                disabled={flyoverDisabled || flyoverRunning}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-gold/10 hover:text-gold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Plane className="h-3.5 w-3.5" />
+                {flyoverRunning ? "Flyover…" : "Flyover"}
+              </button>
+              <button
+                type="button"
+                onClick={onToggleHazards}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-gold/10 hover:text-gold ${
+                  showHazards ? "text-gold" : ""
+                }`}
+              >
+                <Droplets className="h-3.5 w-3.5" />
+                Hazards {showHazards ? "· on" : "· off"}
+              </button>
+              <button
+                type="button"
+                onClick={onToggleLabels}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-gold/10 hover:text-gold ${
+                  showLabels ? "text-gold" : ""
+                }`}
+              >
+                <Mountain className="h-3.5 w-3.5" />
+                Yardages {showLabels ? "· on" : "· off"}
+              </button>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <>
+            <HudCtrl active={showHazards} onClick={onToggleHazards} label="Hazards">
+              <Droplets className="h-3.5 w-3.5" />
+            </HudCtrl>
+            <HudCtrl active={showLabels} onClick={onToggleLabels} label="Yardages">
+              <Mountain className="h-3.5 w-3.5" />
+            </HudCtrl>
+            <HudCtrl onClick={onFitHole} label="Fit hole">
+              <Maximize2 className="h-3.5 w-3.5" />
+            </HudCtrl>
+            <HudCtrl
+              onClick={onFlyover}
+              disabled={flyoverDisabled || flyoverRunning}
+              label={flyoverRunning ? "Flyover…" : "Flyover"}
+            >
+              <Plane className="h-3.5 w-3.5" />
+            </HudCtrl>
+          </>
+        )}
       </div>
 
-      {/* HAZARD TILES — only when we actually have evidence-backed carries */}
+      {/* HAZARD TILES — desktop-only; mobile uses the bottom sheet. */}
       {readout.carries.length > 0 && (
-        <div className="pointer-events-auto absolute left-2 right-2 bottom-[12.5rem] flex gap-1.5 overflow-x-auto pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="pointer-events-auto absolute left-2 right-2 bottom-[12.5rem] hidden gap-1.5 overflow-x-auto pr-2 md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {readout.carries.slice(0, 6).map((c) => {
             const chip = hazardChip(c.kind);
             const risk = hazardRisk(c.carry);
@@ -382,8 +462,9 @@ export function GpsHud(props: GpsHudProps) {
         </div>
       )}
 
-      {/* ACE CADDIE — bottom floating panel */}
-      <div className="pointer-events-auto absolute inset-x-2 bottom-11">
+      {/* ACE CADDIE — bottom floating panel. Hidden on mobile (moved
+          into the bottom sheet) so the map breathes on small screens. */}
+      <div className="pointer-events-auto absolute inset-x-2 bottom-11 hidden md:block">
         <div className="overflow-hidden rounded-2xl border border-gold/40 bg-gradient-to-r from-black/85 via-emerald-950/75 to-black/85 shadow-[0_10px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl">
           <div className="flex items-start gap-2 px-3 py-2">
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-gold/10">
@@ -414,8 +495,9 @@ export function GpsHud(props: GpsHudProps) {
         </div>
       </div>
 
-      {/* QUICK ACTION DOCK — measure / clear */}
-      <div className="pointer-events-auto absolute inset-x-2 bottom-2 flex items-center justify-center gap-1.5">
+      {/* QUICK ACTION DOCK — measure / clear. Mobile shows measure
+          inside the bottom-sheet card instead. */}
+      <div className="pointer-events-auto absolute inset-x-2 bottom-2 hidden items-center justify-center gap-1.5 md:flex">
         <button
           type="button"
           onClick={onToggleMeasure}
