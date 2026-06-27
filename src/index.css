@@ -265,3 +265,46 @@ All colors MUST be HSL.
     linear-gradient(180deg, hsl(150 40% 4%) 0%, hsl(150 50% 6%) 45%, hsl(150 35% 3%) 100%);
 }
 
+/* ===== Hero V2 — Living Environment ===== */
+@keyframes amb-cloud { 0% { transform: translateX(-15%); } 100% { transform: translateX(115%); } }
+@keyframes amb-bird { 0% { transform: translate(-10%, 0) scale(1); opacity: 0; } 10% { opacity: 0.55; } 90% { opacity: 0.55; } 100% { transform: translate(110%, -20px) scale(0.9); opacity: 0; } }
+@keyframes amb-grass { 0%,100% { transform: skewX(-2deg); } 50% { transform: skewX(2deg); } }
+@keyframes amb-pollen { 0% { transform: translate(0,0); opacity: 0; } 15% { opacity: 0.7; } 100% { transform: translate(40px,-180px); opacity: 0; } }
+@keyframes amb-sun { 0%,100% { transform: translate(0,0) scale(1); opacity: 0.55; } 50% { transform: translate(10px,-6px) scale(1.06); opacity: 0.8; } }
+@keyframes ribbon-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+@keyframes intro-logo { 0% { opacity: 0; transform: scale(0.85); letter-spacing: 0.6em; }
+  35% { opacity: 1; transform: scale(1); letter-spacing: 0.35em; }
+  85% { opacity: 1; transform: scale(1); letter-spacing: 0.35em; }
+  100% { opacity: 0; transform: scale(0.6) translateY(-30px); letter-spacing: 0.2em; } }
+@keyframes intro-ball { 0% { transform: translateX(-30vw) rotate(0); } 100% { transform: translateX(130vw) rotate(720deg); } }
+@keyframes intro-tag { 0%,40% { opacity: 0; transform: translateY(8px); } 55%,85% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
+@keyframes intro-sheen { 0% { transform: translateX(-120%) skewX(-20deg); } 100% { transform: translateX(220%) skewX(-20deg); } }
+@keyframes intro-fade-out { 0% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+@keyframes glow-pulse { 0%,100% { box-shadow: 0 0 0 0 hsl(45 80% 55% / 0.45), 0 20px 50px -10px hsl(45 80% 50% / 0.35); }
+  50% { box-shadow: 0 0 0 12px hsl(45 80% 55% / 0), 0 25px 55px -10px hsl(45 80% 50% / 0.55); } }
+
+.amb-cloud { animation: amb-cloud 90s linear infinite; }
+.amb-cloud-2 { animation: amb-cloud 140s linear infinite; }
+.amb-bird { animation: amb-bird 22s linear infinite; }
+.amb-grass { transform-origin: bottom center; animation: amb-grass 7s ease-in-out infinite; }
+.amb-sun { animation: amb-sun 12s ease-in-out infinite; }
+
+.ribbon-track { animation: ribbon-scroll 40s linear infinite; }
+
+.cta-glow { animation: glow-pulse 3.2s ease-in-out infinite; }
+
+.tactile-card {
+  transition: transform 280ms cubic-bezier(.2,.8,.2,1), box-shadow 280ms ease, border-color 280ms ease;
+  will-change: transform;
+}
+.tactile-card:hover { transform: translateY(-3px); border-color: hsl(45 70% 55% / 0.5); }
+.tactile-card:active { transform: translateY(0) scale(0.99); }
+
+/* Intro */
+.intro-root { animation: intro-fade-out 0.6s ease 3.4s forwards; }
+.intro-logo { animation: intro-logo 3.4s cubic-bezier(.2,.8,.2,1) forwards; }
+.intro-ball { animation: intro-ball 2.8s cubic-bezier(.4,0,.4,1) 0.4s forwards; }
+.intro-tag { animation: intro-tag 3.4s ease forwards; }
+.intro-sheen { animation: intro-sheen 1.6s ease-in-out 1s forwards; }
+
+
