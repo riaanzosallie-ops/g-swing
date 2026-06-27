@@ -378,7 +378,7 @@ function MapboxCourseView({
       </div>
 
       {usePlaceholder && (
-        <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-gold/30 bg-black/60 px-2 py-1 text-[10px] text-gold-soft backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-3 left-[3.25rem] rounded-md border border-gold/30 bg-black/60 px-2 py-1 text-[10px] text-gold-soft backdrop-blur-sm">
           Placeholder geometry (Sharjah H1)
         </div>
       )}
