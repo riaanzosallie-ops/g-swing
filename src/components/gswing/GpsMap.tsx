@@ -1205,6 +1205,73 @@ function PremiumEmptyMappingCard({
 }
 
 const MAIN_COURSE_ID = "00000000-0000-0000-0000-000000000101";
+
+/**
+ * Honest GPS lock banner. Never claims a course is "locked" until the
+ * player has a real GPS fix AND a mapped course was actually detected
+ * nearby. Surfaces the exact honest message the field tester needs:
+ * permission missing, low accuracy, or no nearby mapped course.
+ */
+function GpsLockBanner({
+  playerPosition,
+  playerAccuracy,
+  nearestCourseFound,
+  mappingStatus,
+  courseName,
+}: {
+  playerPosition: LatLng | null;
+  playerAccuracy: number | null;
+  nearestCourseFound: boolean | null;
+  mappingStatus: "idle" | "loading" | "mapped" | "missing";
+  courseName: string;
+}): JSX.Element | null {
+  let tone: "warn" | "ok" | "info" = "info";
+  let label = "";
+
+  if (!playerPosition) {
+    tone = "warn";
+    label = "Enable GPS to detect nearby courses.";
+  } else if (typeof playerAccuracy === "number" && playerAccuracy > 35) {
+    tone = "warn";
+    label = "Low accuracy — move outdoors for better course lock.";
+  } else if (nearestCourseFound === false) {
+    tone = "warn";
+    label = "No mapped course detected nearby.";
+  } else if (nearestCourseFound === true) {
+    tone = "ok";
+    label =
+      mappingStatus === "mapped"
+        ? `GPS LIVE · ${courseName}`
+        : `GPS LIVE · ${courseName} · mapping pending`;
+  } else {
+    return null;
+  }
+
+  const toneClasses =
+    tone === "ok"
+      ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+      : tone === "warn"
+        ? "border-gold/40 bg-black/65 text-gold-soft"
+        : "border-white/15 bg-black/55 text-white/75";
+
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 top-[7.4rem] z-[6] -translate-x-1/2 px-3"
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className={`pointer-events-auto max-w-[92vw] truncate rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-wider shadow-lg backdrop-blur-md ${toneClasses}`}
+      >
+        {label}
+        {tone === "ok" && typeof playerAccuracy === "number" && (
+          <span className="ml-2 text-emerald-200/80">±{Math.round(playerAccuracy)}m</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const DEFAULT_POSITION: LatLng = { lat: 25.3536, lng: 55.4881 };
 const DEMO_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 5, 4, 3, 4, 4];
 
