@@ -85,19 +85,23 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return errorJson("Unauthorized: missing caller token", 401);
-
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const token = authHeader.replace("Bearer ", "");
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-  if (claimsError || !claimsData?.claims) return errorJson("Unauthorized: invalid caller token", 401);
-
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { return errorJson("Invalid JSON body", 400); }
   const action = String(body.action ?? "");
+
+  // "health" is an unauthenticated diagnostic so owners can verify
+  // provider connectivity without a session. Every other action requires
+  // a valid caller token.
+  if (action !== "health") {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) return errorJson("Unauthorized: missing caller token", 401);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) return errorJson("Unauthorized: invalid caller token", 401);
+  }
 
   try {
     if (action === "search") {
