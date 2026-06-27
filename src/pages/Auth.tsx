@@ -8,11 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
 import { PlanPicker, type PlanChoice } from "@/components/gswing/membership/PlanPicker";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { OWNER_EMAIL } from "@/hooks/useGswingMembership";
 
 const PLAN_STORAGE_KEY = "gswing.signup.plan";
 
-type Phase = "select" | "auth" | "verify-email" | "pay" | "polling";
+type Phase = "select" | "auth" | "verify-email" | "pay" | "polling" | "blocked";
+
+const isOwner = (e?: string | null) =>
+  !!e && e.trim().toLowerCase() === OWNER_EMAIL;
+
+function devLog(label: string, data: unknown) {
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.info(`[gswing.pay] ${label}`, data);
+  }
+}
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -24,6 +35,29 @@ export default function Auth() {
   const [busy, setBusy] = useState(false);
   const [paySession, setPaySession] = useState<{ id: string; url: string } | null>(null);
   const [polling, setPolling] = useState(false);
+
+  function clearPaymentState() {
+    localStorage.removeItem(PLAN_STORAGE_KEY);
+    try {
+      sessionStorage.removeItem("gswing.pay.session");
+    } catch {
+      /* ignore */
+    }
+    setPaySession(null);
+    setPolling(false);
+  }
+
+  async function routeIfOwner(): Promise<boolean> {
+    const { data } = await supabase.auth.getUser();
+    const em = data?.user?.email ?? null;
+    if (isOwner(em)) {
+      devLog("owner-detected → bypass payment", { email: em });
+      clearPaymentState();
+      navigate("/", { replace: true });
+      return true;
+    }
+    return false;
+  }
 
   // Restore selected plan on OAuth return + resume flow.
   useEffect(() => {
@@ -38,6 +72,11 @@ export default function Auth() {
     void (async () => {
       const { data } = await supabase.auth.getUser();
       if (data?.user) {
+        if (isOwner(data.user.email)) {
+          clearPaymentState();
+          navigate("/", { replace: true });
+          return;
+        }
         // Already signed in: continue based on stored plan.
         const choice: PlanChoice = stored ? JSON.parse(stored) : { code: "free", cycle: "monthly" };
         if (choice.code === "free") {
@@ -49,7 +88,8 @@ export default function Auth() {
       }
     })();
     if (params.get("verified")) setPhase("verify-email");
-  }, [navigate, params]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function persistPlan(next: PlanChoice) {
     setPlan(next);
@@ -98,6 +138,7 @@ export default function Auth() {
       toast({ title: "Login failed", description: error.message });
       return;
     }
+    if (await routeIfOwner()) return;
     const stored = localStorage.getItem(PLAN_STORAGE_KEY);
     const choice: PlanChoice = stored ? JSON.parse(stored) : { code: "free", cycle: "monthly" };
     if (choice.code === "free") {
@@ -108,8 +149,27 @@ export default function Auth() {
     }
   }
 
+  async function launchCheckout(url: string): Promise<boolean> {
+    const isMobile =
+      typeof navigator !== "undefined" &&
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = url;
+      return true;
+    }
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win || win.closed || typeof win.closed === "undefined") {
+      devLog("popup blocked", { url });
+      return false;
+    }
+    return true;
+  }
+
   async function startPayment() {
+    // Owner safety net.
+    if (await routeIfOwner()) return;
     setBusy(true);
+    devLog("create-intent", { plan });
     const { data, error } = await supabase.functions.invoke("create-gswing-ziina-checkout", {
       body: {
         plan_code: plan.code,
@@ -118,14 +178,36 @@ export default function Auth() {
       },
     });
     setBusy(false);
-    if (error || !data?.checkout_url) {
-      toast({ title: "Payment unavailable. Please try again." });
+    devLog("create-intent:response", { error, data });
+    const checkoutUrl: string | undefined = data?.checkout_url;
+    const sessionId: string | undefined = data?.session_id;
+    if (error || !checkoutUrl || !sessionId || !/^https?:\/\//.test(checkoutUrl)) {
+      toast({
+        title: "Payment unavailable",
+        description: "Please try again in a moment.",
+      });
       return;
     }
-    setPaySession({ id: data.session_id, url: data.checkout_url });
-    window.open(data.checkout_url, "_blank", "noopener");
+    const session = { id: sessionId, url: checkoutUrl };
+    setPaySession(session);
+    const opened = await launchCheckout(checkoutUrl);
+    devLog("checkout-opened", { opened, url: checkoutUrl });
+    if (!opened) {
+      setPhase("blocked");
+      return;
+    }
     setPhase("polling");
     setPolling(true);
+    devLog("polling-started", { sessionId });
+  }
+
+  async function reopenCheckout() {
+    if (!paySession) return;
+    const opened = await launchCheckout(paySession.url);
+    if (opened) {
+      setPhase("polling");
+      setPolling(true);
+    }
   }
 
   // Polling loop: every 5s, max 15 minutes.
@@ -135,8 +217,16 @@ export default function Auth() {
     const started = Date.now();
     const tick = async () => {
       if (cancelled) return;
+      // Owner can sign in mid-flow → bypass immediately.
+      const { data: u } = await supabase.auth.getUser();
+      if (isOwner(u?.user?.email)) {
+        clearPaymentState();
+        navigate("/", { replace: true });
+        return;
+      }
       if (Date.now() - started > 15 * 60 * 1000) {
         setPolling(false);
+        devLog("polling-timeout", { sessionId: paySession.id });
         toast({ title: "Payment timed out", description: "Please try again." });
         return;
       }
@@ -144,11 +234,20 @@ export default function Auth() {
         body: { session_id: paySession.id },
       });
       if (cancelled) return;
+      devLog("poll", { status: data?.status, error });
       if (error) {
         // keep polling on transient errors
       } else if (data?.status === "paid") {
         setPolling(false);
-        localStorage.removeItem(PLAN_STORAGE_KEY);
+        clearPaymentState();
+        // Refresh membership across the app without forcing a logout/reload.
+        window.dispatchEvent(new Event("gswing-membership-refresh"));
+        try {
+          await supabase.auth.refreshSession();
+        } catch {
+          /* ignore */
+        }
+        devLog("membership-activated", { plan });
         toast({ title: "Welcome to G-Swing", description: "Membership activated." });
         navigate("/", { replace: true });
         return;
@@ -162,6 +261,7 @@ export default function Auth() {
     void tick();
     return () => {
       cancelled = true;
+      devLog("polling-stopped", { sessionId: paySession.id });
     };
   }, [polling, paySession, navigate]);
 
@@ -262,15 +362,49 @@ export default function Auth() {
               Complete the checkout in the new tab. We poll Ziina every 5 seconds.
             </p>
             {paySession && (
-              <a
-                href={paySession.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-block text-[11px] text-gold-soft underline"
+              <Button
+                onClick={reopenCheckout}
+                className="mt-3 bg-gold text-black hover:bg-gold/90"
               >
                 Reopen checkout
-              </a>
+              </Button>
             )}
+            <button
+              onClick={() => {
+                clearPaymentState();
+                setPhase("pay");
+              }}
+              className="mt-3 block w-full text-[11px] text-white/50 hover:text-white"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {phase === "blocked" && paySession && (
+          <div className="rounded-2xl border border-amber-400/40 bg-black/70 p-5 text-center backdrop-blur-md">
+            <AlertTriangle className="mx-auto h-6 w-6 text-amber-300" />
+            <p className="mt-2 font-serif text-base text-amber-200">
+              We couldn't automatically open Ziina Checkout.
+            </p>
+            <p className="mt-1 text-[11px] text-white/60">
+              Your browser may have blocked the popup. Tap below to open it manually.
+            </p>
+            <Button
+              onClick={reopenCheckout}
+              className="mt-4 w-full bg-gold text-black hover:bg-gold/90"
+            >
+              Open Checkout Again
+            </Button>
+            <button
+              onClick={() => {
+                clearPaymentState();
+                setPhase("pay");
+              }}
+              className="mt-2 block w-full text-[11px] text-white/60 hover:text-white"
+            >
+              Cancel
+            </button>
           </div>
         )}
       </div>
