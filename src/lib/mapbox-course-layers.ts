@@ -424,6 +424,37 @@ export function ensureCourseLayers(map: mapboxgl.Map): void {
       "line-blur": 0.4,
     },
   });
+
+  // Kick off the water-shimmer marching animation (idempotent per map).
+  startWaterShimmer(map);
+}
+
+// ---- Water shimmer animation -------------------------------------------------
+const SHIMMER_KEY = "__gsWaterShimmerTimer";
+function startWaterShimmer(map: mapboxgl.Map): void {
+  const anyMap = map as unknown as Record<string, unknown>;
+  if (anyMap[SHIMMER_KEY]) return;
+  let phase = 0;
+  const timer = window.setInterval(() => {
+    if (!map.getLayer(LAYERS.waterShimmer)) return;
+    phase = (phase + 0.18) % (Math.PI * 2);
+    try {
+      map.setPaintProperty(
+        LAYERS.waterShimmer,
+        "line-translate",
+        [Math.sin(phase) * 0.8, Math.cos(phase) * 0.8],
+      );
+      const op = 0.4 + 0.25 * (0.5 + 0.5 * Math.sin(phase * 2));
+      map.setPaintProperty(LAYERS.waterShimmer, "line-opacity", op);
+    } catch {
+      /* style swap mid-frame — ignore */
+    }
+  }, 160);
+  anyMap[SHIMMER_KEY] = timer;
+  map.once("remove", () => {
+    window.clearInterval(timer);
+    delete anyMap[SHIMMER_KEY];
+  });
 }
 
 /** Push the latest player breadcrumb trail into the trail source. */
