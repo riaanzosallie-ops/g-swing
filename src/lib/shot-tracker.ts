@@ -7,6 +7,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { haversineYards, type LatLng } from "@/lib/gps-utils";
 import type { HoleGeometryPayload } from "@/lib/course-geometry";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface StoredShot {
   id: string;
@@ -18,6 +19,31 @@ export interface StoredShot {
   end: LatLng | null;
   distance_yards: number | null;
   taken_at: string;
+  direction: ShotDirection | null;
+  results: ShotResult[];
+  notes: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export type ShotDirection = "straight" | "left" | "right";
+export type ShotResult = "FIR" | "GIR" | "Penalty" | "Recovery" | "Putt";
+export const SHOT_DIRECTIONS: { id: ShotDirection; label: string }[] = [
+  { id: "straight", label: "Straight" },
+  { id: "left", label: "Left" },
+  { id: "right", label: "Right" },
+];
+export const SHOT_RESULTS: { id: ShotResult; label: string }[] = [
+  { id: "FIR", label: "FIR" },
+  { id: "GIR", label: "GIR" },
+  { id: "Penalty", label: "Penalty" },
+  { id: "Recovery", label: "Recovery" },
+  { id: "Putt", label: "Putt" },
+];
+
+export interface ShotTagInput {
+  direction?: ShotDirection | null;
+  results?: ShotResult[];
+  notes?: string | null;
 }
 
 interface RawShotRow {
@@ -28,10 +54,10 @@ interface RawShotRow {
   club: string | null;
   distance_yards: number | string | null;
   taken_at: string;
-  // PostGIS geography columns are returned as WKB hex strings via the
-  // Data API. We parse them lazily below.
   start_location: string | null;
   end_location: string | null;
+  metadata: Record<string, unknown> | null;
+  notes: string | null;
 }
 
 // ---- WKB hex → LatLng (Point, 4326) -----------------------------------------
@@ -69,6 +95,15 @@ function rowToShot(row: RawShotRow): StoredShot {
       : typeof row.distance_yards === "string"
         ? Number(row.distance_yards)
         : row.distance_yards;
+  const meta = (row.metadata ?? {}) as Record<string, unknown>;
+  const rawDir = typeof meta.direction === "string" ? meta.direction : null;
+  const direction: ShotDirection | null =
+    rawDir === "straight" || rawDir === "left" || rawDir === "right" ? rawDir : null;
+  const rawResults = Array.isArray(meta.results) ? meta.results : [];
+  const results = rawResults.filter(
+    (r): r is ShotResult =>
+      r === "FIR" || r === "GIR" || r === "Penalty" || r === "Recovery" || r === "Putt",
+  );
   return {
     id: row.id,
     round_id: row.round_id,
@@ -79,11 +114,15 @@ function rowToShot(row: RawShotRow): StoredShot {
     end: parseWkbPoint(row.end_location),
     distance_yards: distance != null && Number.isFinite(distance) ? distance : null,
     taken_at: row.taken_at,
+    direction,
+    results,
+    notes: row.notes ?? null,
+    metadata: meta,
   };
 }
 
 const SHOT_COLS =
-  "id, round_id, hole_number, shot_number, club, distance_yards, taken_at, start_location, end_location";
+  "id, round_id, hole_number, shot_number, club, distance_yards, taken_at, start_location, end_location, metadata, notes";
 
 /** Persist a completed shot into the existing golf_shots table. */
 export async function persistShot(input: {
@@ -96,9 +135,13 @@ export async function persistShot(input: {
   start: LatLng;
   end: LatLng;
   distanceYards: number;
+  tags?: ShotTagInput;
 }): Promise<StoredShot | null> {
   const startWkt = `SRID=4326;POINT(${input.start.lng} ${input.start.lat})`;
   const endWkt = `SRID=4326;POINT(${input.end.lng} ${input.end.lat})`;
+  const metadata: Record<string, unknown> = {};
+  if (input.tags?.direction) metadata.direction = input.tags.direction;
+  if (input.tags?.results?.length) metadata.results = input.tags.results;
   const { data, error } = await supabase
     .from("golf_shots")
     .insert({
@@ -111,7 +154,27 @@ export async function persistShot(input: {
       distance_yards: input.distanceYards,
       start_location: startWkt,
       end_location: endWkt,
+      metadata: metadata as Json,
+      notes: input.tags?.notes ?? null,
     })
+    .select(SHOT_COLS)
+    .single();
+  if (error || !data) return null;
+  return rowToShot(data as RawShotRow);
+}
+
+/** Update tags/notes on an existing shot (used by the post-shot prompt). */
+export async function updateShotTags(
+  shotId: string,
+  tags: ShotTagInput,
+): Promise<StoredShot | null> {
+  const metadata: Record<string, unknown> = {};
+  if (tags.direction) metadata.direction = tags.direction;
+  if (tags.results?.length) metadata.results = tags.results;
+  const { data, error } = await supabase
+    .from("golf_shots")
+    .update({ metadata: metadata as Json, notes: tags.notes ?? null })
+    .eq("id", shotId)
     .select(SHOT_COLS)
     .single();
   if (error || !data) return null;

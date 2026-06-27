@@ -68,10 +68,15 @@ import {
   persistShot,
   shotsForHole,
   computeRoundStats,
+  updateShotTags,
   type StoredShot,
   type RoundStats,
+  type ShotTagInput,
 } from "@/lib/shot-tracker";
 import { RoundIntelligence } from "@/components/gswing/RoundIntelligence";
+import { ShotTagPrompt } from "@/components/gswing/ShotTagPrompt";
+import { RoundShotReview } from "@/components/gswing/RoundShotReview";
+import { BookOpen, Film } from "lucide-react";
 import {
   applyMode as applyCameraMode,
   followPlayer,
@@ -87,7 +92,7 @@ type TokenState =
   | { status: "error"; message: string };
 
 let cachedTokenPromise: Promise<string> | null = null;
-function loadMapboxToken(): Promise<string> {
+export function loadMapboxToken(): Promise<string> {
   if (!cachedTokenPromise) {
     cachedTokenPromise = (async () => {
       const { data, error } = await supabase.functions.invoke<{ token?: string; error?: string }>(
@@ -1002,6 +1007,10 @@ export const GpsMap = () => {
   const [lastShotEnd, setLastShotEnd] = useState<LatLng | null>(null);
   const [roundShots, setRoundShots] = useState<StoredShot[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [pendingTagShot, setPendingTagShot] = useState<StoredShot | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [replayAll, setReplayAll] = useState(false);
+  const [mapboxToken, setMapboxToken] = useState<string | null>(null);
   const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -1011,6 +1020,22 @@ export const GpsMap = () => {
   );
   const watchIdRef = useRef<number | null>(null);
   const [bag] = useBag();
+
+  // Lazy-load the publishable Mapbox token at the parent level too —
+  // used for static shot preview images in the Round Shot Review.
+  useEffect(() => {
+    let cancelled = false;
+    loadMapboxToken()
+      .then((t) => {
+        if (!cancelled) setMapboxToken(t);
+      })
+      .catch(() => {
+        if (!cancelled) setMapboxToken(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === courseId) ?? courses[0] ?? UAE_COURSES[0],
@@ -1350,6 +1375,7 @@ export const GpsMap = () => {
           distanceYards: yards,
         });
         if (saved) setRoundShots((prev) => [...prev, saved]);
+        if (saved) setPendingTagShot(saved);
         return;
       }
       if (!activeShot) {
@@ -1366,7 +1392,7 @@ export const GpsMap = () => {
         // Persist to the golf_shots table so hole replay + round
         // intelligence stats reflect real shot data only.
         const start: LatLng = { lat: activeShot.start_lat, lng: activeShot.start_lng };
-        await persistShot({
+        const saved = await persistShot({
           roundId: activeRound.id,
           courseId: activeRound.course_id ?? courseId,
           holeNumber: activeShot.hole_number ?? hole,
@@ -1379,6 +1405,7 @@ export const GpsMap = () => {
           distanceYards: result.distance_yards,
         });
         await refreshRoundShots();
+        if (saved) setPendingTagShot(saved);
       }
     } catch (error) {
       setGpsError(error instanceof Error ? error.message : "Could not update shot tracking.");
@@ -1390,6 +1417,28 @@ export const GpsMap = () => {
   const courseCenter = { lat: selectedCourse.lat, lng: selectedCourse.lng };
   const fallbackDistance = playerPos ? toDisplayUnit(haversineYards(playerPos, courseCenter), unit) : null;
   const displayCenterDistance = centerDistance ?? fallbackDistance;
+
+  const savePendingTags = async (tags: ShotTagInput) => {
+    if (!pendingTagShot) return;
+    const updated = await updateShotTags(pendingTagShot.id, tags);
+    if (updated) {
+      setRoundShots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      toast.success("Shot tagged");
+    } else {
+      toast.error("Could not save tags");
+    }
+    setPendingTagShot(null);
+  };
+
+  const tagSummary = pendingTagShot
+    ? `Hole ${pendingTagShot.hole_number ?? "?"} · #${pendingTagShot.shot_number ?? "?"}${
+        pendingTagShot.club ? ` · ${pendingTagShot.club}` : ""
+      }${
+        pendingTagShot.distance_yards != null
+          ? ` · ${Math.round(pendingTagShot.distance_yards)}y`
+          : ""
+      }`
+    : undefined;
 
   return (
     <div className="space-y-3 pb-28">
@@ -1448,7 +1497,7 @@ export const GpsMap = () => {
         centerDistance={loading ? null : displayCenterDistance}
         displayUnit={displayUnit}
         geometry={geometryPayload}
-        holeShots={shotsForHole(roundShots, hole)}
+        holeShots={replayAll ? roundShots : shotsForHole(roundShots, hole)}
       />
 
       <YardagePanel
@@ -1561,6 +1610,40 @@ export const GpsMap = () => {
       )}
 
       <RoundIntelligence stats={roundStats} loading={statsLoading} />
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          className="border-gold/40"
+          onClick={() => setReviewOpen(true)}
+        >
+          <BookOpen className="mr-2 h-4 w-4 text-gold" />
+          View Round Shots
+        </Button>
+        <Button
+          variant={replayAll ? "default" : "outline"}
+          className={replayAll ? "gradient-gold text-primary-foreground" : "border-gold/40"}
+          onClick={() => setReplayAll((v) => !v)}
+          disabled={roundShots.length === 0}
+        >
+          <Film className="mr-2 h-4 w-4" />
+          {replayAll ? "Replay: All Holes" : "Full Round Replay"}
+        </Button>
+      </div>
+
+      <ShotTagPrompt
+        open={!!pendingTagShot}
+        shotSummary={tagSummary}
+        onClose={() => setPendingTagShot(null)}
+        onSave={savePendingTags}
+      />
+
+      <RoundShotReview
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        shots={roundShots}
+        mapboxToken={mapboxToken}
+      />
 
       <div className="flex gap-2 overflow-x-auto pb-2">
         {Array.from({ length: selectableHoleCount }, (_, index) => index + 1).map((holeNumber) => (
