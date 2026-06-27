@@ -1762,6 +1762,34 @@ export const GpsMap = () => {
         fallbackCenterYards={loading ? null : displayCenterDistance}
       />
 
+      <Card className="gradient-card border-gold/25 p-3">
+        <div className="flex items-start gap-2">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wide text-gold-soft">ACE Caddie Insight</p>
+            <p className="mt-0.5 text-sm text-foreground">{caddieInsight}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+              {weatherState.status === "ready" ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-gold/20 bg-black/30 px-2 py-0.5">
+                  <Wind className="h-3 w-3 text-emerald-300" />
+                  {Math.round(weatherState.data.windSpeedKmh)} km/h {weatherState.data.windDirectionLabel}
+                  <span className="text-white/60">· {Math.round(weatherState.data.temperatureC)}°C</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Weather unavailable.</span>
+              )}
+              {!caddieReadout.front || !caddieReadout.back ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-gold/20 bg-black/30 px-2 py-0.5 text-gold-soft">
+                  Mapping required for {!caddieReadout.front ? "front" : null}
+                  {!caddieReadout.front && !caddieReadout.back ? " & " : null}
+                  {!caddieReadout.back ? "back" : null}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-2 gap-2">
         <Card className="gradient-card border-gold/20 p-3">
           <div className="flex items-center gap-2">
