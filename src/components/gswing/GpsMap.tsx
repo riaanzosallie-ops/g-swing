@@ -966,6 +966,311 @@ function MapboxCourseView({
 }
 
 /**
+ * PremiumGpsChrome — minimal, luxury HUD that overlays the live GPS map.
+ * Matches the G-Swing Live GPS Premium reference: clean top bar with
+ * hole/par/hcp pill + hole counter, Premium/Satellite pill, elegant
+ * left rail of 4 round buttons, and a flag focus button. Every
+ * existing capability remains reachable via the More menu.
+ */
+function PremiumGpsChrome(props: {
+  hole: number;
+  par: number | null;
+  handicap: number | null;
+  totalHoles: number;
+  mapView: "premium" | "satellite";
+  onSetMapView: (m: "premium" | "satellite") => void;
+  measureActive: boolean;
+  onToggleMeasure: () => void;
+  showOverlays: boolean;
+  onToggleOverlays: () => void;
+  showHazards: boolean;
+  onToggleHazards: () => void;
+  showLabels: boolean;
+  onToggleLabels: () => void;
+  onRecenter: () => void;
+  onFitHole: () => void;
+  onFlyover: () => void;
+  flyoverDisabled: boolean;
+  flyoverRunning: boolean;
+  cameraMode: CameraMode;
+  onSetCameraMode: (m: CameraMode) => void;
+  onRefreshMapping: () => void;
+  mappingStatus: "idle" | "loading" | "mapped" | "missing";
+  playerPosition: LatLng | null;
+  playerAccuracy: number | null;
+  weather: { status: string; data?: GswingWeather };
+  caddieInsight: string;
+}): JSX.Element {
+  const {
+    hole,
+    par,
+    handicap,
+    totalHoles,
+    mapView,
+    onSetMapView,
+    measureActive,
+    onToggleMeasure,
+    showOverlays,
+    onToggleOverlays,
+    showHazards,
+    onToggleHazards,
+    showLabels,
+    onToggleLabels,
+    onRecenter,
+    onFitHole,
+    onFlyover,
+    flyoverDisabled,
+    flyoverRunning,
+    cameraMode,
+    onSetCameraMode,
+    onRefreshMapping,
+    mappingStatus,
+    playerPosition,
+    playerAccuracy,
+    weather,
+  } = props;
+
+  const wx = weather.status === "ready" && weather.data ? weather.data : null;
+  const accClass = playerPosition
+    ? classifyAccuracy(playerAccuracy) === "low"
+      ? "text-amber-300"
+      : "text-emerald-300"
+    : "text-amber-300";
+
+  return (
+    <>
+      {/* TOP BAR — minimal: back · hole/par/hcp · hole counter */}
+      <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+        <div className="pointer-events-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("gswing-exit-gps"))}
+            aria-label="Back"
+            className="grid h-10 w-10 place-items-center rounded-full border border-gold/35 bg-black/55 text-gold-soft backdrop-blur-md transition-colors hover:text-gold active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="flex h-10 items-center gap-2 rounded-full border border-gold/35 bg-black/55 pl-2 pr-3 backdrop-blur-md">
+            <span className="font-serif text-2xl leading-none text-gold">{hole}</span>
+            <div className="flex flex-col text-[9px] uppercase tracking-[0.18em] leading-tight text-white/70">
+              <span>
+                Par <span className="text-gold">{par ?? "—"}</span>
+              </span>
+              {handicap != null && (
+                <span>
+                  HCP <span className="text-gold">{handicap}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pointer-events-auto">
+          <div className="grid h-10 min-w-[3.25rem] place-items-center rounded-full border border-gold/35 bg-black/55 px-2 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur-md">
+            H{hole}/{totalHoles}
+          </div>
+        </div>
+      </div>
+
+      {/* PREMIUM / SATELLITE PILL — sits just under the top bar, right side */}
+      <div className="pointer-events-auto absolute right-3 top-[3.65rem]">
+        <div className="flex items-center rounded-full border border-gold/35 bg-black/55 p-0.5 backdrop-blur-md">
+          {(["premium", "satellite"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onSetMapView(mode)}
+              aria-pressed={mapView === mode}
+              className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] transition-all ${
+                mapView === mode
+                  ? "bg-gold text-black shadow-[0_0_14px_rgba(245,200,75,0.35)]"
+                  : "text-gold-soft hover:text-gold"
+              }`}
+            >
+              {mode === "premium" ? "Premium" : "Satellite"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* LEFT RAIL — 4 elegant round buttons (Locate · Measure · Layers · More) */}
+      <div className="pointer-events-auto absolute left-3 top-1/2 flex -translate-y-1/2 flex-col gap-2.5">
+        <ChromeBtn label="Locate" onClick={onRecenter}>
+          <Crosshair className="h-4 w-4" />
+        </ChromeBtn>
+        <ChromeBtn label="Measure" active={measureActive} onClick={onToggleMeasure}>
+          <Ruler className="h-4 w-4" />
+        </ChromeBtn>
+        <ChromeBtn
+          label="Layers"
+          active={showOverlays}
+          onClick={onToggleOverlays}
+        >
+          <LayersIcon className="h-4 w-4" />
+        </ChromeBtn>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="More"
+              className="grid h-10 w-10 place-items-center rounded-full border border-gold/30 bg-black/55 text-gold-soft backdrop-blur-md transition-all hover:text-gold active:scale-95"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="center"
+            className="w-56 border-gold/30 bg-black/90 p-2 text-gold-soft backdrop-blur-xl"
+          >
+            <MoreItem onClick={onFitHole} icon={<Maximize2 className="h-3.5 w-3.5" />}>
+              Fit hole
+            </MoreItem>
+            <MoreItem
+              onClick={onFlyover}
+              disabled={flyoverDisabled || flyoverRunning}
+              icon={<Plane className="h-3.5 w-3.5" />}
+            >
+              {flyoverRunning ? "Flyover…" : "Flyover"}
+            </MoreItem>
+            <MoreItem
+              onClick={onToggleHazards}
+              active={showHazards}
+              icon={<Droplets className="h-3.5 w-3.5" />}
+            >
+              Hazards · {showHazards ? "on" : "off"}
+            </MoreItem>
+            <MoreItem
+              onClick={onToggleLabels}
+              active={showLabels}
+              icon={<Mountain className="h-3.5 w-3.5" />}
+            >
+              Yardages · {showLabels ? "on" : "off"}
+            </MoreItem>
+            <div className="my-1 h-px bg-gold/15" />
+            <div className="px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-gold-soft/70">
+              Camera
+            </div>
+            {CAMERA_MODES.map((m) => (
+              <MoreItem
+                key={m.id}
+                onClick={() => onSetCameraMode(m.id)}
+                active={cameraMode === m.id}
+              >
+                {m.label}
+              </MoreItem>
+            ))}
+            <div className="my-1 h-px bg-gold/15" />
+            <MoreItem onClick={onRefreshMapping} icon={<RefreshCw className="h-3.5 w-3.5" />}>
+              Refresh mapping
+            </MoreItem>
+            <div className="px-2 py-1.5 text-[10px] leading-snug text-white/70">
+              <div className="flex items-center gap-1.5">
+                {playerPosition ? (
+                  <Wifi className={`h-3 w-3 ${accClass}`} />
+                ) : (
+                  <WifiOff className="h-3 w-3 text-amber-300" />
+                )}
+                <span>
+                  {playerPosition ? "GPS live" : "GPS waiting"}
+                  {playerAccuracy != null && playerPosition && (
+                    <span className={`${accClass} ml-1`}>±{Math.round(playerAccuracy)}m</span>
+                  )}
+                </span>
+              </div>
+              {wx && (
+                <div className="mt-1 flex items-center gap-1.5">
+                  <Wind className="h-3 w-3 text-emerald-300" />
+                  <span>
+                    {Math.round(wx.windSpeedKmh)} km/h {wx.windDirectionLabel} · {Math.round(wx.temperatureC)}°
+                  </span>
+                </div>
+              )}
+              <div className="mt-1 text-[9px] uppercase tracking-wider text-gold-soft/70">
+                Mapping ·{" "}
+                {mappingStatus === "mapped"
+                  ? "ready"
+                  : mappingStatus === "loading"
+                    ? "loading…"
+                    : "required"}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* FLAG focus button — bottom-right, above bottom sheet */}
+      <div className="pointer-events-auto absolute bottom-[16rem] right-3 md:bottom-[14rem]">
+        <button
+          type="button"
+          onClick={onFitHole}
+          aria-label="Focus on green"
+          className="grid h-11 w-11 place-items-center rounded-full border border-gold/35 bg-black/55 text-gold backdrop-blur-md transition-all hover:bg-black/70 active:scale-95"
+        >
+          <Flag className="h-4 w-4" />
+        </button>
+      </div>
+    </>
+  );
+}
+
+function ChromeBtn({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`grid h-10 w-10 place-items-center rounded-full border backdrop-blur-md transition-all active:scale-95 ${
+        active
+          ? "border-gold bg-gold text-black shadow-[0_0_16px_rgba(245,200,75,0.4)]"
+          : "border-gold/30 bg-black/55 text-gold-soft hover:text-gold"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MoreItem({
+  onClick,
+  disabled,
+  active,
+  icon,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? "text-gold" : ""
+      }`}
+    >
+      {icon}
+      <span className="flex-1">{children}</span>
+    </button>
+  );
+}
+
+/**
  * Premium Golf GPS treatment of the Mapbox satellite-streets style.
  * - Hides every symbol (label/POI) layer when in `premium` mode so the
  *   map stops looking like Google Earth.
