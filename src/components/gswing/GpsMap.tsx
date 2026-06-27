@@ -427,6 +427,16 @@ function MapboxCourseView({
     const map = mapRef.current;
     if (!map || !styleLoadedRef.current) return;
     applyPremiumMapStyle(map, mapView);
+    // Mapbox loads symbol/icon layers asynchronously, so reapply the
+    // premium scrub whenever the style emits new data. Cheap & safe —
+    // sets only the layers that already exist.
+    const reapply = () => applyPremiumMapStyle(map, mapView);
+    map.on("styledata", reapply);
+    map.on("idle", reapply);
+    return () => {
+      map.off("styledata", reapply);
+      map.off("idle", reapply);
+    };
   }, [mapView]);
 
   // Load mapped course/hole geometry from Supabase whenever the
