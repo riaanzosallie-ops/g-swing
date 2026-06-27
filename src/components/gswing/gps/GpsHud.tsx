@@ -179,7 +179,7 @@ export function GpsHud(props: GpsHudProps) {
       : "text-emerald-300"
     : "text-amber-300";
 
-  const wx = weather.status === "ready" ? weather.data : null;
+  const wx = weather.status === "ready" && "data" in weather ? weather.data : null;
 
   return (
     <>
