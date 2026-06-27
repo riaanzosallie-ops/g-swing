@@ -265,6 +265,7 @@ function MapboxCourseView({
   const [cameraMode, setCameraMode] = useState<CameraMode>("playing");
   const [measureActive, setMeasureActive] = useState(false);
   const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
+  const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
 
   // Live weather for the in-map HUD (real Open-Meteo via existing hook).
   const hudWeather = useGswingWeather(
@@ -357,12 +358,14 @@ function MapboxCourseView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenState.status]);
 
-  // After map style is ready: install layers and push current data.
+  // After map style is ready: install layers, hide POI/road labels for
+  // Premium GPS view, darken raw satellite, push current data.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const onLoad = () => {
       styleLoadedRef.current = true;
+      applyPremiumMapStyle(map, mapView);
       ensureCourseLayers(map);
       if (geometry) applyCourseGeometry(map, geometry);
       updateYardageLabels(
@@ -383,6 +386,13 @@ function MapboxCourseView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live toggle between Premium GPS view and raw Satellite.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    applyPremiumMapStyle(map, mapView);
+  }, [mapView]);
 
   // Course geometry — re-apply when the hole/payload changes.
   useEffect(() => {
@@ -716,13 +726,82 @@ function MapboxCourseView({
         </div>
       </div>
 
+      {/* Premium / Satellite view toggle — sits just under the camera
+          pill, gold/black glass, never overlaps the distance card. */}
+      <div className="pointer-events-auto absolute left-1/2 top-[5.4rem] -translate-x-1/2">
+        <div
+          className="flex items-center gap-0.5 rounded-full border border-gold/30 bg-black/65 p-0.5 text-[9px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-md"
+          role="tablist"
+          aria-label="Map view"
+        >
+          {(["premium", "satellite"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              onClick={() => setMapView(mode)}
+              aria-selected={mapView === mode}
+              className={`rounded-full px-2.5 py-0.5 transition-colors ${
+                mapView === mode
+                  ? "bg-gold text-black"
+                  : "text-gold-soft hover:text-gold"
+              }`}
+            >
+              {mode === "premium" ? "Premium" : "Satellite"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {usePlaceholder && (
         <div className="pointer-events-none absolute bottom-1 left-2 rounded-md border border-gold/25 bg-black/55 px-1.5 py-0.5 text-[8px] uppercase tracking-wider text-gold-soft/80 backdrop-blur-sm">
-          Mapping preview
+          Professional mapping required
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * Premium Golf GPS treatment of the Mapbox satellite-streets style.
+ * - Hides every symbol (label/POI) layer when in `premium` mode so the
+ *   map stops looking like Google Earth.
+ * - Darkens the raw satellite raster and tints it emerald.
+ * - In `satellite` mode, restores label visibility and full brightness.
+ */
+function applyPremiumMapStyle(map: mapboxgl.Map, mode: "premium" | "satellite"): void {
+  try {
+    const style = map.getStyle();
+    const layers = style?.layers ?? [];
+    for (const layer of layers) {
+      // Restore everything first so toggling back to Satellite is clean.
+      if (layer.type === "symbol") {
+        map.setLayoutProperty(layer.id, "visibility", mode === "premium" ? "none" : "visible");
+      }
+      if (
+        layer.type === "line" &&
+        (layer.id.includes("road") || layer.id.includes("street") || layer.id.includes("path"))
+      ) {
+        try {
+          map.setPaintProperty(layer.id, "line-opacity", mode === "premium" ? 0.18 : 1);
+        } catch {
+          /* not every line layer has line-opacity */
+        }
+      }
+      if (layer.id === "mapbox-satellite" || layer.id === "satellite") {
+        try {
+          map.setPaintProperty(layer.id, "raster-brightness-max", mode === "premium" ? 0.65 : 1);
+          map.setPaintProperty(layer.id, "raster-brightness-min", mode === "premium" ? 0.08 : 0);
+          map.setPaintProperty(layer.id, "raster-saturation", mode === "premium" ? -0.45 : 0);
+          map.setPaintProperty(layer.id, "raster-contrast", mode === "premium" ? 0.18 : 0);
+        } catch {
+          /* property unsupported on some mapbox versions */
+        }
+      }
+    }
+  } catch {
+    /* style not fully loaded yet — caller will re-apply on next load */
+  }
 }
 
 function MapCtrlBtn({
