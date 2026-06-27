@@ -114,6 +114,9 @@ import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
+import { MappingDebugPanel } from "@/components/gswing/gps/MappingDebugPanel";
+import type { MappingDebugPanelProps } from "@/components/gswing/gps/MappingDebugPanel";
+import { useGswingMembership } from "@/hooks/useGswingMembership";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { GswingWeather } from "@/lib/gswing-weather";
 import {
@@ -453,8 +456,11 @@ function MapboxCourseView({
   // "Professional mapping required" state.
   useEffect(() => {
     let cancelled = false;
+    // Clear stale mapped data immediately so the previous hole's
+    // numbers can never flash for the new hole during the async load.
+    setMappedHole(null);
+    setMappingStatus("loading");
     (async () => {
-      setMappingStatus("loading");
       try {
         // Prefer the nearest mapped course to the player's real GPS
         // location; fall back to the selected course centre so the
@@ -468,6 +474,13 @@ function MapboxCourseView({
           setMappedHole(null);
           setMappingStatus("missing");
           setNearestCourseFound(false);
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line no-console
+            console.info("[gswing.gps] mapping: no course found near anchor", {
+              hole,
+              anchor,
+            });
+          }
           return;
         }
         setMappedCourseId(courseMap.id);
@@ -476,6 +489,19 @@ function MapboxCourseView({
         if (cancelled) return;
         setMappedHole(hp);
         setMappingStatus(hp ? "mapped" : "missing");
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.info("[gswing.gps] mapping loaded", {
+            course: courseMap.courseName,
+            course_map_id: courseMap.id,
+            hole_number: hole,
+            mapped_hole_id: hp?.id ?? null,
+            green_front: hp?.green?.front ?? null,
+            green_center: hp?.green?.center ?? null,
+            green_back: hp?.green?.back ?? null,
+            source: hp ? "mapped" : "missing",
+          });
+        }
       } catch {
         if (!cancelled) {
           setMappedHole(null);
@@ -871,13 +897,52 @@ function MapboxCourseView({
     return { readout, insight: parts.join(" ") };
   }, [mappedHole, playerPosition, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
 
-  const effectiveReadout: YardageReadout = mappedOverride?.readout ?? yardageReadout;
+  // Strict source-of-truth rules:
+  //   - When mapped data exists for the selected hole, ONLY mapped data
+  //     feeds the distance UI. Legacy gps.distances.* + computeYardages
+  //     are suppressed, and the player→course-centroid fallback is
+  //     never shown as a green distance.
+  //   - When mapping is missing for the selected hole, render an empty
+  //     readout so the bottom sheet shows "Mapping required". No
+  //     fabricated numbers.
+  const emptyReadout: YardageReadout = {
+    pin: null,
+    front: null,
+    center: null,
+    back: null,
+    carries: [],
+    layups: [],
+    doglegs: [],
+    fromLastShot: yardageReadout.fromLastShot,
+    inGreenMode: false,
+    dailyPin: yardageReadout.dailyPin,
+    missSide: null,
+    missReason: null,
+  };
+  const effectiveReadout: YardageReadout =
+    mappingStatus === "mapped" && mappedOverride
+      ? mappedOverride.readout
+      : mappingStatus === "missing"
+        ? emptyReadout
+        : yardageReadout;
   const effectiveInsight: string =
     mappingStatus === "missing"
       ? "Professional mapping required for this hole."
-      : (mappedOverride?.insight ?? caddieInsight);
+      : mappingStatus === "mapped" && mappedOverride
+        ? mappedOverride.insight
+        : caddieInsight;
+  // The bottom sheet only falls back to fallbackCenterYards when
+  // readout.center is null. Suppress the centroid-based fallback
+  // whenever we have an authoritative mapping answer (either real
+  // mapped data, or an explicit "missing" state).
   const effectiveFallbackCenter =
-    mappedOverride ? null : fallbackCenterYards;
+    mappingStatus === "mapped" || mappingStatus === "missing"
+      ? null
+      : fallbackCenterYards;
+
+  // Owner-only mapping debug snapshot — feeds the More menu panel.
+  const membership = useGswingMembership();
+  const unitShort: "y" | "m" = unit === "meters" ? "m" : "y";
 
   const onRefreshMapping = useCallback(() => {
     setMappingRefreshTick((t) => t + 1);
@@ -919,13 +984,23 @@ function MapboxCourseView({
     >
       <div
         ref={containerRef}
-        className="h-[80vh] min-h-[560px] w-full md:h-[78vh] md:min-h-[600px]"
+        className={`h-[80vh] min-h-[560px] w-full md:h-[78vh] md:min-h-[600px] ${
+          mapView === "premium"
+            ? "bg-[radial-gradient(140%_120%_at_50%_55%,#0a3a26_0%,#062418_55%,#020c08_100%)]"
+            : "bg-black"
+        }`}
       />
 
-      {/* Premium ambience — soft vignette + emerald wash; no clutter. */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_50%,transparent_55%,rgba(0,0,0,0.55)_100%)]" />
-      {mapView === "premium" && (
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(160%_120%_at_50%_60%,rgba(8,52,32,0.18)_0%,rgba(2,16,10,0.55)_100%)]" />
+      {/* Mode-specific ambience. Premium = saturated emerald wash so the
+          stylized geometry pops. Satellite = subtle neutral vignette so
+          real Mapbox imagery stays legible. They MUST look different. */}
+      {mapView === "satellite" ? (
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_50%,transparent_60%,rgba(0,0,0,0.55)_100%)]" />
+      ) : (
+        <>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(140%_110%_at_50%_55%,rgba(16,90,55,0.22)_0%,rgba(2,14,9,0.78)_100%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_55%,rgba(0,0,0,0.45)_100%)]" />
+        </>
       )}
 
       <PremiumGpsChrome
@@ -964,6 +1039,21 @@ function MapboxCourseView({
         playerAccuracy={playerAccuracy}
         weather={hudWeather}
         caddieInsight={effectiveInsight}
+        debug={
+          membership.isOwner
+            ? {
+                courseName: selectedCourse.name,
+                courseMapId: mappedCourseId,
+                selectedHole: hole,
+                mappedHole,
+                mappingStatus,
+                front: effectiveReadout.front,
+                center: effectiveReadout.center,
+                back: effectiveReadout.back,
+                unitShort,
+              }
+            : undefined
+        }
       />
 
       <GpsBottomSheet
@@ -1017,6 +1107,7 @@ function PremiumGpsChrome(props: {
   weather: { status: string; data?: GswingWeather };
   caddieInsight: string;
   onNextHole?: () => void;
+  debug?: Omit<MappingDebugPanelProps, "playerPosition" | "playerAccuracy">;
 }): JSX.Element {
   const {
     hole,
@@ -1046,6 +1137,7 @@ function PremiumGpsChrome(props: {
     playerAccuracy,
     weather,
     onNextHole,
+    debug,
   } = props;
 
   const wx = weather.status === "ready" && weather.data ? weather.data : null;
@@ -1220,6 +1312,18 @@ function PremiumGpsChrome(props: {
                     : "required"}
               </div>
             </div>
+            {debug && (
+              <>
+                <div className="my-1 h-px bg-gold/15" />
+                <div className="px-1 pb-1">
+                  <MappingDebugPanel
+                    {...debug}
+                    playerPosition={playerPosition}
+                    playerAccuracy={playerAccuracy}
+                  />
+                </div>
+              </>
+            )}
           </PopoverContent>
         </Popover>
       </div>
@@ -2377,9 +2481,10 @@ export const GpsMap = () => {
     }
   };
 
-  const courseCenter = { lat: selectedCourse.lat, lng: selectedCourse.lng };
-  const fallbackDistance = playerPos ? toDisplayUnit(haversineYards(playerPos, courseCenter), unit) : null;
-  const displayCenterDistance = centerDistance ?? fallbackDistance;
+  // No player→course-centroid fallback. If real green geometry (mapped
+  // or PostGIS) is not available we render an empty value rather than
+  // an invented distance to the course centre.
+  const displayCenterDistance = centerDistance ?? null;
 
   const savePendingTags = async (tags: ShotTagInput) => {
     if (!pendingTagShot) return;
