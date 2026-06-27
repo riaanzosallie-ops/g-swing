@@ -122,6 +122,34 @@ export function ensureCourseLayers(map: mapboxgl.Map): void {
     if (!map.getSource(id)) map.addSource(id, { type: "geojson", data: EMPTY_FC });
   }
 
+  // ---- Underlay hazards (drawn before fairway so fairway/green sit on top).
+  const underFill = (id: string, cat: HazardCategory, color: string, opacity: number) =>
+    map.addLayer({
+      id,
+      type: "fill",
+      source: SRC.hazards,
+      filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], cat]],
+      paint: { "fill-color": color, "fill-opacity": opacity },
+    });
+  const underLine = (id: string, cat: HazardCategory, color: string, opacity: number, width = 1) =>
+    map.addLayer({
+      id,
+      type: "line",
+      source: SRC.hazards,
+      filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], cat]],
+      paint: { "line-color": color, "line-width": width, "line-opacity": opacity },
+    });
+
+  // Rough — muted olive halo around fairway.
+  underFill(LAYERS.roughFill, "rough", "#3a4a22", 0.38);
+  underLine(LAYERS.roughLine, "rough", "#6c7a3e", 0.5);
+  // Tee box — premium dark emerald pad with gold edge.
+  underFill(LAYERS.teeBoxFill, "tee_box", "#0c2f1f", 0.7);
+  underLine(LAYERS.teeBoxLine, "tee_box", "#F5C84B", 0.75, 1.2);
+  // Waste area — warm sand-mauve.
+  underFill(LAYERS.wasteFill, "waste", "#b89968", 0.5);
+  underLine(LAYERS.wasteLine, "waste", "#e7c896", 0.65);
+
   // Fairway — dark emerald translucent + subtle gold outline.
   map.addLayer({
     id: LAYERS.fairwayFill,
