@@ -304,28 +304,6 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
           More from Your Club
         </p>
 
-        <Card className="glass-panel tactile-card mb-3 border-gold/30 p-4 shadow-gold">
-          <div className="flex items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl gradient-gold">
-              <Coins className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div className="flex-1">
-              <p className="text-[10px] uppercase tracking-widest text-gold/80">Earn from your clubs</p>
-              <h3 className="font-serif text-lg leading-tight">Become a Linker on Club-Link</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                List your bag for rental when you're not playing. Verified Linkers earn AED 200–800/week.
-              </p>
-              <Button
-                onClick={() => go("clublink")}
-                className="mt-3 gradient-gold text-primary-foreground"
-                size="sm"
-              >
-                Open Club-Link →
-              </Button>
-            </div>
-          </div>
-        </Card>
-
         <div className="grid grid-cols-2 gap-3">
           {moreTiles.map((t, i) => (
             <button
@@ -342,20 +320,48 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
             </button>
           ))}
         </div>
+      </section>
 
-        <Card className="glass-chip tactile-card mt-3 p-4">
-          <div className="flex items-center gap-3">
-            <Shirt className="h-8 w-8 text-gold" />
-            <div className="flex-1">
-              <p className="font-serif text-base">Dress Your Game with Golf Fit</p>
-              <p className="text-xs text-muted-foreground">
-                Premium golf apparel from the LinkMe ecosystem.
+      {/* ===== CLUB-LINK (COMING SOON) — moved to bottom, compact ===== */}
+      <section aria-label="Club-Link coming soon">
+        <Card className="glass-chip tactile-card border-gold/20 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gold/30 bg-gold/5">
+              <Coins className="h-5 w-5 text-gold/80" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-gold/70">Club-Link</p>
+                <span className="rounded-full border border-gold/40 px-2 py-[1px] text-[9px] uppercase tracking-[0.25em] text-gold/90">
+                  Coming Soon
+                </span>
+              </div>
+              <h3 className="mt-1 font-serif text-sm leading-tight text-foreground/90">
+                Become a Linker on Club-Link
+              </h3>
+              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                List your bag for rental when you're not playing.
               </p>
             </div>
-            <Button size="sm" variant="outline" className="border-gold/40">Open</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled
+              className="shrink-0 border-gold/30 text-[11px] text-gold/80"
+            >
+              Coming Soon
+            </Button>
           </div>
         </Card>
       </section>
+
+      {/* ===== CREATOR CREDIT ===== */}
+      <footer className="pb-2 pt-1 text-center">
+        <div className="gold-hairline mx-auto mb-3 w-16 opacity-60" />
+        <p className="text-[10px] uppercase tracking-[0.5em] text-gradient-gold">
+          Owner · Creator · Riaanzo
+        </p>
+      </footer>
     </div>
   );
 };
