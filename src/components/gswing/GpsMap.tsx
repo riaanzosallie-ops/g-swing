@@ -264,6 +264,15 @@ function MapboxCourseView({
     else clearCourseGeometry(map);
   }, [geometry]);
 
+  // Shot replay overlay — additive layers, no impact on Slice A/B/C.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    ensureShotOverlayLayers(map);
+    if (holeShots.length) setShotReplay(map, holeShots);
+    else clearShotReplay(map);
+  }, [holeShots]);
+
   // Throttled live yardage label refresh (player movement / unit changes).
   useEffect(() => {
     const map = mapRef.current;
