@@ -403,6 +403,30 @@ function MapboxCourseView({
     };
   }, [playerPosition?.lat, playerPosition?.lng, geometry, displayUnit]);
 
+  // Tap-to-measure: install click handler while measure mode is active.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    if (!measureActive) return;
+    const onClick = (e: mapboxgl.MapMouseEvent) => {
+      setMeasurePoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+    };
+    map.getCanvas().style.cursor = "crosshair";
+    map.on("click", onClick);
+    return () => {
+      map.off("click", onClick);
+      map.getCanvas().style.cursor = "";
+    };
+  }, [measureActive]);
+
+  // Tap-to-measure: sync the GeoJSON source whenever endpoints change.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    ensureMeasureLayers(map);
+    setMeasureGeo(map, playerPosition, measurePoint);
+  }, [playerPosition?.lat, playerPosition?.lng, measurePoint?.lat, measurePoint?.lng]);
+
   // Visibility toggles.
   useEffect(() => {
     const map = mapRef.current;
