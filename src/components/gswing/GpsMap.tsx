@@ -6,16 +6,21 @@ import {
   ChevronLeft,
   ChevronRight,
   Crosshair,
+  Droplets,
   Flag,
   Footprints,
   Home,
+  Layers as LayersIcon,
   Locate,
   LocateOff,
+  Maximize2,
   MapPin,
   Navigation,
+  Plane,
   Play,
   Radio,
   Target,
+  Type as TypeIcon,
 } from "lucide-react";
 import { useBag } from "@/lib/gswing-store";
 import {
@@ -40,6 +45,16 @@ import courseBg from "@/assets/course-bg.jpg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { fetchHoleGeometry, geometryToHoleGpsResponse } from "@/lib/course-geometry";
+import type { HoleGeometryPayload } from "@/lib/course-geometry";
+import {
+  applyCourseGeometry,
+  clearCourseGeometry,
+  ensureCourseLayers,
+  fitHole,
+  runFlyover,
+  setLayerGroupVisibility,
+  updateYardageLabels,
+} from "@/lib/mapbox-course-layers";
 
 // Public Mapbox token (publishable pk.*). Loaded from Vite env — never hardcoded.
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
