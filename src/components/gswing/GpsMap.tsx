@@ -965,6 +965,9 @@ export const GpsMap = () => {
   const [hole, setHole] = useState(1);
   const [unit, setUnit] = useState<"yards" | "meters">("yards");
   const [playerPos, setPlayerPos] = useState<LatLng | null>(DEFAULT_POSITION);
+  const [playerHeading, setPlayerHeading] = useState<number | null>(null);
+  const [playerAccuracy, setPlayerAccuracy] = useState<number | null>(null);
+  const lastPosRef = useRef<LatLng | null>(null);
   const [gps, setGps] = useState<HoleGpsResponse | null>(null);
   const [geometryPayload, setGeometryPayload] = useState<HoleGeometryPayload | null>(null);
   const [activeRound, setActiveRound] = useState<ActiveRound | null>(null);
@@ -1157,6 +1160,21 @@ export const GpsMap = () => {
     watchIdRef.current = navigator.geolocation.watchPosition(
       async (position) => {
         const next = { lat: position.coords.latitude, lng: position.coords.longitude };
+        // Heading: prefer device-reported, else derive from last delta.
+        let heading: number | null =
+          position.coords.heading != null && !Number.isNaN(position.coords.heading)
+            ? position.coords.heading
+            : null;
+        if (heading == null && lastPosRef.current) {
+          const dLat = next.lat - lastPosRef.current.lat;
+          const dLng = next.lng - lastPosRef.current.lng;
+          if (Math.abs(dLat) + Math.abs(dLng) > 1e-6) {
+            heading = ((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+          }
+        }
+        if (heading != null) setPlayerHeading(heading);
+        if (typeof position.coords.accuracy === "number") setPlayerAccuracy(position.coords.accuracy);
+        lastPosRef.current = next;
         setPlayerPos(next);
         try {
           const detection = await detectCourseArrival(next, { country: "AE", radiusMeters: 1200 });
@@ -1324,6 +1342,8 @@ export const GpsMap = () => {
       <MapboxCourseView
         gps={gps}
         playerPosition={playerPos}
+        playerHeading={playerHeading}
+        playerAccuracy={playerAccuracy}
         selectedCourse={selectedCourse}
         hole={hole}
         centerDistance={loading ? null : displayCenterDistance}
