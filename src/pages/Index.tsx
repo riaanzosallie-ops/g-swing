@@ -77,9 +77,18 @@ const Index = () => {
   }
 
   const showBack = !NAV.some((n) => n.id === view);
+  const isGps = view === "gps";
+
+  // Listen for the in-map "back" button dispatched by the GPS chrome.
+  useEffect(() => {
+    const handler = () => setView("home");
+    window.addEventListener("gswing-exit-gps", handler);
+    return () => window.removeEventListener("gswing-exit-gps", handler);
+  }, []);
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background">
+      {!isGps && (
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-gold/15 bg-background/85 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center gap-2">
           {showBack && (
@@ -91,8 +100,9 @@ const Index = () => {
         </div>
         <span className="text-[10px] uppercase tracking-widest text-muted-foreground">LinkMe</span>
       </header>
+      )}
 
-      <main className="px-4 py-4">
+      <main className={isGps ? "px-0 py-0" : "px-4 py-4"}>
         {view === "home" && <Dashboard go={setView} />}
         {view === "gps" && (
           <MembershipGate featureKey="gps.full"><GpsMap /></MembershipGate>
