@@ -59,6 +59,20 @@ import {
   updatePlayerTrail,
 } from "@/lib/mapbox-course-layers";
 import {
+  ensureShotOverlayLayers,
+  setShotReplay,
+  clearShotReplay,
+} from "@/lib/mapbox-shot-overlay";
+import {
+  fetchRoundShots,
+  persistShot,
+  shotsForHole,
+  computeRoundStats,
+  type StoredShot,
+  type RoundStats,
+} from "@/lib/shot-tracker";
+import { RoundIntelligence } from "@/components/gswing/RoundIntelligence";
+import {
   applyMode as applyCameraMode,
   followPlayer,
   CAMERA_MODES,
