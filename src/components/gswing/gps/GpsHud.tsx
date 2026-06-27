@@ -22,8 +22,8 @@ import type { LatLng } from "@/lib/gps-utils";
 import { measureBetween, classifyAccuracy } from "@/lib/gswing-gps";
 
 export type HudWeatherState =
-  | { status: "loading" | "idle" | "error" }
-  | { status: "ready"; data: GswingWeather };
+  | { status: "ready"; data: GswingWeather }
+  | { status: string };
 
 export interface HudTournamentInfo {
   name: string;
