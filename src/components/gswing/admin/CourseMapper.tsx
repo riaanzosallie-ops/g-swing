@@ -19,6 +19,14 @@ import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { ensureMappedLayers, setMappedHoleData } from "@/lib/mapbox-mapped-layers";
 import { buildMappedHoleFromRows, loadMappedHole } from "@/lib/gswing-course-map-loader";
 
+// Sharjah Golf and Shooting Club — seeded with the verified front-9 par
+// layout. Used by the Sharjah quick-select to jump straight into mapping
+// without hunting through the course list.
+const SHARJAH_QUICK = {
+  name: "Sharjah Golf and Shooting Club",
+  pars: { 1: 4, 2: 4, 3: 3, 4: 5, 5: 4, 6: 5, 7: 4, 8: 3, 9: 4 } as Record<number, number>,
+};
+
 type Tool =
   | "select"
   | "tee"
