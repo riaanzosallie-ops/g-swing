@@ -457,8 +457,27 @@ export function setMappedHoleData(map: mapboxgl.Map, hole: MappedHole | null) {
 
   const hazardFeatures: GeoJSON.Feature[] = [];
   const obFeatures: GeoJSON.Feature[] = [];
+  const hazardLabelFeatures: GeoJSON.Feature[] = [];
+  const labelFromType: Record<string, string> = {
+    water: "Water",
+    bunker: "Bunker",
+    waste_area: "Waste",
+    penalty_area: "Penalty",
+    out_of_bounds: "OB",
+    trees: "Trees",
+    rough: "Rough",
+    custom: "Hazard",
+  };
   if (hole) {
     for (const h of hole.hazards) {
+      const label = (h.name && h.name.trim()) || labelFromType[h.type] || null;
+      if (label && h.center) {
+        hazardLabelFeatures.push({
+          type: "Feature",
+          properties: { id: h.id, label, kind: h.type },
+          geometry: { type: "Point", coordinates: [h.center.lng, h.center.lat] },
+        });
+      }
       if (h.type === "out_of_bounds" && h.polygon) {
         obFeatures.push({
           type: "Feature",
@@ -483,6 +502,24 @@ export function setMappedHoleData(map: mapboxgl.Map, hole: MappedHole | null) {
   (map.getSource(SRC.obLines) as mapboxgl.GeoJSONSource | undefined)?.setData({
     type: "FeatureCollection",
     features: obFeatures,
+  });
+  (map.getSource(SRC.hazardLabels) as mapboxgl.GeoJSONSource | undefined)?.setData({
+    type: "FeatureCollection",
+    features: hazardLabelFeatures,
+  });
+
+  // Green polygon — only render when real geometry is mapped.
+  const greenPolyFeatures: GeoJSON.Feature[] = [];
+  if (hole?.green.polygon && hole.green.polygon.length >= 3) {
+    greenPolyFeatures.push({
+      type: "Feature",
+      properties: {},
+      geometry: { type: "Polygon", coordinates: [hole.green.polygon] },
+    });
+  }
+  (map.getSource(SRC.greenPoly) as mapboxgl.GeoJSONSource | undefined)?.setData({
+    type: "FeatureCollection",
+    features: greenPolyFeatures,
   });
 
   const greenPts: GeoJSON.Feature[] = [];
