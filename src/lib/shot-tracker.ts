@@ -249,7 +249,9 @@ export function computeRoundStats(
     const par4plus = par != null && par >= 4;
 
     // FAIRWAY: requires a fairway polygon AND a tee shot with an end location.
-    const fairwayPoly = geom?.fairway?.coordinates?.[0];
+    const fairwayPoly = geom?.fairway?.polygon?.coordinates?.[0] as
+      | [number, number][]
+      | undefined;
     if (fairwayPoly && par4plus) {
       anyFairway = true;
       const tee = holeShots.find((s) => s.shot_number === 1);
@@ -260,7 +262,9 @@ export function computeRoundStats(
     }
 
     // GIR: green polygon + par + shot whose end is on the green in <= par-2.
-    const greenPoly = geom?.green?.coordinates?.[0];
+    const greenPoly = geom?.green?.polygon?.coordinates?.[0] as
+      | [number, number][]
+      | undefined;
     if (greenPoly && par != null) {
       anyGreen = true;
       anyPar = true;
@@ -290,10 +294,17 @@ export function computeRoundStats(
   const miss: MissPattern = { left: 0, right: 0, short: 0, long: 0 };
   for (const hole of holeNumbers) {
     const geom = holeGeometries[hole];
-    const pin = geom?.pin ? { lat: geom.pin.coordinates[1], lng: geom.pin.coordinates[0] } : null;
-    const teePt = geom?.tee_points?.[0]
-      ? { lat: geom.tee_points[0].lat, lng: geom.tee_points[0].lng }
-      : null;
+    const pinPt = geom?.points.find((p) => p.point_type === "pin_position");
+    const pin: LatLng | null = pinPt
+      ? { lat: pinPt.lat, lng: pinPt.lng }
+      : geom?.green
+        ? { lat: geom.green.center_lat, lng: geom.green.center_lng }
+        : null;
+    const teeRow =
+      geom?.points.find((p) => p.point_type === "tee_back") ??
+      geom?.points.find((p) => p.point_type === "tee_middle") ??
+      geom?.points.find((p) => p.point_type === "tee_front");
+    const teePt: LatLng | null = teeRow ? { lat: teeRow.lat, lng: teeRow.lng } : null;
     if (!pin || !teePt) continue;
     const aim = bearingDegrees(teePt, pin);
     const totalDist = haversineYards(teePt, pin);
