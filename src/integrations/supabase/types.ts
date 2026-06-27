@@ -549,6 +549,257 @@ export type Database = {
           },
         ]
       }
+      gswing_membership_audit: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          payment_session_id: string | null
+          plan_code: string | null
+          user_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json | null
+          event_type: string
+          id?: string
+          payment_session_id?: string | null
+          plan_code?: string | null
+          user_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          payment_session_id?: string | null
+          plan_code?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gswing_membership_audit_payment_session_id_fkey"
+            columns: ["payment_session_id"]
+            isOneToOne: false
+            referencedRelation: "gswing_payment_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gswing_membership_overrides: {
+        Row: {
+          active: boolean
+          created_at: string
+          expires_at: string | null
+          granted_by: string | null
+          id: string
+          override_type: string
+          plan_code: string | null
+          reason: string | null
+          starts_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          expires_at?: string | null
+          granted_by?: string | null
+          id?: string
+          override_type: string
+          plan_code?: string | null
+          reason?: string | null
+          starts_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          expires_at?: string | null
+          granted_by?: string | null
+          id?: string
+          override_type?: string
+          plan_code?: string | null
+          reason?: string | null
+          starts_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gswing_membership_overrides_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "gswing_membership_plans"
+            referencedColumns: ["plan_code"]
+          },
+        ]
+      }
+      gswing_membership_plans: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          feature_keys: string[]
+          features: Json
+          id: string
+          is_internal: boolean
+          is_paid: boolean
+          plan_code: string
+          price_monthly_aed: number | null
+          price_yearly_aed: number | null
+          tagline: string | null
+          tier_rank: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          feature_keys?: string[]
+          features?: Json
+          id?: string
+          is_internal?: boolean
+          is_paid?: boolean
+          plan_code: string
+          price_monthly_aed?: number | null
+          price_yearly_aed?: number | null
+          tagline?: string | null
+          tier_rank?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          feature_keys?: string[]
+          features?: Json
+          id?: string
+          is_internal?: boolean
+          is_paid?: boolean
+          plan_code?: string
+          price_monthly_aed?: number | null
+          price_yearly_aed?: number | null
+          tagline?: string | null
+          tier_rank?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gswing_payment_sessions: {
+        Row: {
+          amount_aed: number
+          billing_cycle: string
+          checkout_url: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          paid_at: string | null
+          plan_code: string
+          provider: string
+          provider_session_id: string | null
+          raw_response: Json | null
+          status: string
+          status_message: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_aed: number
+          billing_cycle: string
+          checkout_url?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          paid_at?: string | null
+          plan_code: string
+          provider?: string
+          provider_session_id?: string | null
+          raw_response?: Json | null
+          status?: string
+          status_message?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_aed?: number
+          billing_cycle?: string
+          checkout_url?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          paid_at?: string | null
+          plan_code?: string
+          provider?: string
+          provider_session_id?: string | null
+          raw_response?: Json | null
+          status?: string
+          status_message?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gswing_payment_sessions_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "gswing_membership_plans"
+            referencedColumns: ["plan_code"]
+          },
+        ]
+      }
+      gswing_user_memberships: {
+        Row: {
+          activated_at: string | null
+          billing_cycle: string
+          created_at: string
+          current_period_end: string | null
+          id: string
+          last_payment_session_id: string | null
+          plan_code: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          billing_cycle?: string
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          last_payment_session_id?: string | null
+          plan_code: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          billing_cycle?: string
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          last_payment_session_id?: string | null
+          plan_code?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gswing_user_memberships_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "gswing_membership_plans"
+            referencedColumns: ["plan_code"]
+          },
+        ]
+      }
       spatial_ref_sys: {
         Row: {
           auth_name: string | null
@@ -1044,6 +1295,18 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_effective_gswing_membership: {
+        Args: { _user_id: string }
+        Returns: {
+          billing_cycle: string
+          current_period_end: string
+          is_owner: boolean
+          plan_code: string
+          source: string
+          status: string
+          user_id: string
+        }[]
+      }
       get_hole_geometry: {
         Args: { p_course_id: string; p_hole_number: number }
         Returns: Json
