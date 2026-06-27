@@ -191,27 +191,27 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => {
           </button>
         </div>
 
-        {/* Stats row */}
+        {/* Honest trust row — no fabricated counts */}
         <div className="mt-7 grid w-full grid-cols-3 gap-3 text-center">
           <div className="flex items-center justify-center gap-2">
             <ShieldCheck className="h-5 w-5 text-gold" />
             <div>
-              <div className="text-[18px] font-bold text-gold leading-none">100K+</div>
-              <div className="mt-1 text-[10px] text-white/70">Golfers</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold leading-none">Secure</div>
+              <div className="mt-1 text-[10px] text-white/70">Your data</div>
             </div>
           </div>
           <div className="flex items-center justify-center gap-2">
             <Globe className="h-5 w-5 text-emerald-300" />
             <div>
-              <div className="text-[18px] font-bold text-emerald-200 leading-none">50+</div>
-              <div className="mt-1 text-[10px] text-white/70">Countries</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200 leading-none">Live GPS</div>
+              <div className="mt-1 text-[10px] text-white/70">Mapbox</div>
             </div>
           </div>
           <div className="flex items-center justify-center gap-2">
             <ShieldCheck className="h-5 w-5 text-gold" />
             <div>
-              <div className="text-[14px] font-bold text-gold leading-none">PREMIUM</div>
-              <div className="mt-1 text-[10px] text-white/70">Golf Experience</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold leading-none">Private</div>
+              <div className="mt-1 text-[10px] text-white/70">Your game</div>
             </div>
           </div>
         </div>
