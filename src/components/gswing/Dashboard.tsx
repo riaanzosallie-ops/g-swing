@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins, Shirt,
+  Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins,
   BarChart3, Swords, MessagesSquare, Film, Radio, Flag, Sparkles,
   CloudSun, Bot, Award, CircleDot, Dumbbell, Check, Circle,
 } from "lucide-react";
