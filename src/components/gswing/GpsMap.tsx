@@ -539,10 +539,10 @@ function MapboxCourseView({
       el.style.cssText =
         "position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;pointer-events:none;";
       el.innerHTML = `
-        <div class="gs-player-accuracy" style="position:absolute;border-radius:50%;border:1px solid rgba(52,211,153,0.55);background:rgba(52,211,153,0.10);width:34px;height:34px;"></div>
-        <div class="gs-player-pulse" style="position:absolute;width:34px;height:34px;border-radius:50%;background:rgba(52,211,153,0.35);animation:gs-pulse 1.8s ease-out infinite;"></div>
-        <div class="gs-player-dot" style="position:relative;width:14px;height:14px;border-radius:50%;background:#ffffff;border:3px solid #34d399;box-shadow:0 0 10px rgba(52,211,153,0.85);"></div>
-        <div class="gs-player-heading" style="position:absolute;top:-6px;left:50%;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #34d399;transform-origin:50% 22px;transform:translateX(-50%) rotate(0deg);transition:transform 220ms ease-out;filter:drop-shadow(0 0 4px rgba(52,211,153,0.6));"></div>
+        <div class="gs-player-accuracy" style="position:absolute;border-radius:50%;border:1px solid rgba(245,200,75,0.55);background:rgba(245,200,75,0.08);width:34px;height:34px;box-shadow:inset 0 0 12px rgba(245,200,75,0.18);"></div>
+        <div class="gs-player-pulse" style="position:absolute;width:34px;height:34px;border-radius:50%;background:rgba(245,200,75,0.35);animation:gs-pulse 1.8s ease-out infinite;"></div>
+        <div class="gs-player-dot" style="position:relative;width:14px;height:14px;border-radius:50%;background:#ffffff;border:3px solid #F5C84B;box-shadow:0 0 0 2px rgba(0,0,0,0.45),0 0 12px rgba(245,200,75,0.85);"></div>
+        <div class="gs-player-heading" style="position:absolute;top:-6px;left:50%;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #F5C84B;transform-origin:50% 22px;transform:translateX(-50%) rotate(0deg);transition:transform 220ms ease-out;filter:drop-shadow(0 0 4px rgba(245,200,75,0.7));"></div>
       `;
       playerElRef.current = el;
       playerMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
