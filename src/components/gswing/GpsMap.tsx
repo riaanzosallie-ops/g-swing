@@ -652,73 +652,52 @@ function MapboxCourseView({
     <div className="relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
       <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
 
-      <div className="pointer-events-none absolute left-4 top-4 rounded-md border border-black/30 bg-black/55 px-3 py-1.5 text-sm backdrop-blur-sm">
-        <span className="font-semibold text-gold">Hole {gps?.hole_number ?? hole}</span>
-        <span className="text-white/75"> - Par {gps?.par ?? "-"}</span>
-      </div>
+      <GpsHud
+        holeNumber={gps?.hole_number ?? hole}
+        par={gps?.par ?? null}
+        holeLengthYards={holeLengthYards}
+        playerHandicap={playerHandicap}
+        courseName={selectedCourse.name}
+        holeName={gps?.notes ?? null}
+        liveTournament={null}
+        unit={unit}
+        readout={yardageReadout}
+        fallbackCenterYards={fallbackCenterYards}
+        playerPosition={playerPosition}
+        playerAccuracy={playerAccuracy}
+        weather={hudWeather}
+        caddieInsight={caddieInsight}
+        measureActive={measureActive}
+        onToggleMeasure={() =>
+          setMeasureActive((v) => {
+            const next = !v;
+            if (!next) setMeasurePoint(null);
+            return next;
+          })
+        }
+        measurePoint={measurePoint}
+        onClearMeasure={() => setMeasurePoint(null)}
+        showHazards={showHazards}
+        onToggleHazards={() => setShowHazards((v) => !v)}
+        showOverlays={showOverlays}
+        onToggleOverlays={() => setShowOverlays((v) => !v)}
+        showLabels={showLabels}
+        onToggleLabels={() => setShowLabels((v) => !v)}
+        onRecenter={onRecenter}
+        onFitHole={onFitHole}
+        onFlyover={onFlyover}
+        flyoverDisabled={!geometry}
+        flyoverRunning={flyoverRunning}
+      />
 
-      <div className="pointer-events-none absolute right-4 top-4 w-[178px] overflow-hidden rounded-lg border border-gold/40 bg-background/88 text-gold shadow-xl backdrop-blur-md sm:w-[218px]">
-        <div className="p-3 text-right">
-          <div className="text-[10px] uppercase tracking-wide text-gold-soft">Center of Green</div>
-          <div className="font-serif text-5xl font-bold leading-none text-gold sm:text-6xl">
-            {formatDistance(centerDistance)}
-          </div>
-          <div className="text-xl font-semibold leading-none text-gold-soft">
-            {displayUnit === "m" ? "Meters" : "Yards"}
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute bottom-3 left-3 flex flex-col gap-1 rounded-md border border-gold/30 bg-black/65 p-1 shadow-xl backdrop-blur-md">
-        <MapCtrlBtn active={showOverlays} onClick={() => setShowOverlays((v) => !v)} title="Toggle overlays">
-          <LayersIcon className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn active={showHazards} onClick={() => setShowHazards((v) => !v)} title="Toggle hazards">
-          <Droplets className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn active={showLabels} onClick={() => setShowLabels((v) => !v)} title="Toggle yardage labels">
-          <TypeIcon className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn onClick={onRecenter} title="Recenter on player">
-          <Crosshair className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn onClick={onFitHole} title="Fit hole">
-          <Maximize2 className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn
-          onClick={onFlyover}
-          disabled={!geometry || flyoverRunning}
-          title={geometry ? "Hole flyover" : "Flyover unavailable until course geometry is mapped"}
-        >
-          <Plane className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn
-          active={measureActive}
-          onClick={() => {
-            setMeasureActive((v) => {
-              const next = !v;
-              if (!next) setMeasurePoint(null);
-              return next;
-            });
-          }}
-          title={measureActive ? "Exit measure mode" : "Tap-to-measure"}
-        >
-          <Ruler className="h-4 w-4" />
-        </MapCtrlBtn>
-        {measurePoint && (
-          <MapCtrlBtn onClick={() => setMeasurePoint(null)} title="Clear measurement">
-            <XIcon className="h-4 w-4" />
-          </MapCtrlBtn>
-        )}
-      </div>
-
-      <div className="absolute left-4 top-14 flex flex-wrap gap-1 rounded-md border border-gold/30 bg-black/60 p-1 text-[10px] uppercase tracking-wide backdrop-blur-md">
+      {/* Camera mode strip — kept for power users; lifted above quick-action dock. */}
+      <div className="pointer-events-auto absolute right-2 bottom-2 flex flex-wrap justify-end gap-1 rounded-full border border-gold/30 bg-black/60 p-1 text-[9px] uppercase tracking-wider backdrop-blur-md">
         {CAMERA_MODES.map((m) => (
           <button
             key={m.id}
             type="button"
             onClick={() => setCameraMode(m.id)}
-            className={`rounded px-2 py-1 font-semibold transition-colors ${
+            className={`rounded-full px-2 py-0.5 font-semibold transition-colors ${
               cameraMode === m.id
                 ? "bg-gold/25 text-gold"
                 : "text-white/65 hover:text-white"
@@ -731,64 +710,10 @@ function MapboxCourseView({
       </div>
 
       {usePlaceholder && (
-        <div className="pointer-events-none absolute bottom-3 left-[3.25rem] rounded-md border border-gold/30 bg-black/60 px-2 py-1 text-[10px] text-gold-soft backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-2 top-[5.5rem] rounded-md border border-gold/30 bg-black/55 px-2 py-0.5 text-[9px] text-gold-soft backdrop-blur-sm">
           Placeholder geometry (Sharjah H1)
         </div>
       )}
-
-      {/* GPS Live + accuracy badge */}
-      <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-gold/30 bg-black/65 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-md">
-        {playerPosition ? (
-          <>
-            <span className="relative flex h-2 w-2">
-              <span
-                className={`absolute inline-flex h-full w-full animate-ping rounded-full ${
-                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
-                } opacity-70`}
-              />
-              <span
-                className={`relative inline-flex h-2 w-2 rounded-full ${
-                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
-                }`}
-              />
-            </span>
-            <Wifi className="h-3 w-3 text-emerald-300" />
-            <span className="text-white/90">GPS LIVE</span>
-            {playerAccuracy != null && (
-              <span className="text-white/60">± {Math.round(playerAccuracy)} m</span>
-            )}
-          </>
-        ) : (
-          <>
-            <WifiOff className="h-3 w-3 text-amber-300" />
-            <span className="text-amber-200">GPS waiting</span>
-          </>
-        )}
-      </div>
-
-      {/* Tap-to-measure overlay */}
-      {measureActive && !measurePoint && (
-        <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[11px] font-semibold text-gold backdrop-blur-md">
-          {playerPosition ? "Tap any point on the map to measure" : "GPS location required to measure."}
-        </div>
-      )}
-      {measurePoint && playerPosition && (() => {
-        const m = measureBetween(
-          playerPosition,
-          measurePoint,
-          displayUnit === "m" ? "meters" : "yards",
-        );
-        return (
-          <div className="pointer-events-none absolute left-1/2 top-16 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-gold/40 bg-black/75 px-3 py-1.5 backdrop-blur-md">
-            <Ruler className="h-3.5 w-3.5 text-gold" />
-            <span className="font-serif text-base text-gold">
-              {m.distance}
-              <span className="ml-0.5 text-[10px] text-gold-soft">{m.unit}</span>
-            </span>
-            <span className="text-[10px] text-white/65">brg {Math.round(m.bearing)}°</span>
-          </div>
-        );
-      })()}
     </div>
   );
 }
