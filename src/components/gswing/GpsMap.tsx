@@ -1000,6 +1000,8 @@ export const GpsMap = () => {
   const [activeShot, setActiveShot] = useState<Shot | null>(null);
   const [lastShotYards, setLastShotYards] = useState<number | null>(null);
   const [lastShotEnd, setLastShotEnd] = useState<LatLng | null>(null);
+  const [roundShots, setRoundShots] = useState<StoredShot[]>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
