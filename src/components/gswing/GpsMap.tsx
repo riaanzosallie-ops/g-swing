@@ -114,6 +114,8 @@ import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
+import { MappingDebugPanel } from "@/components/gswing/gps/MappingDebugPanel";
+import { useGswingMembership } from "@/hooks/useGswingMembership";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { GswingWeather } from "@/lib/gswing-weather";
 import {
