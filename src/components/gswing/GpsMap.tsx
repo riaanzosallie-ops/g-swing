@@ -114,6 +114,7 @@ function MapboxCourseView({
   centerDistance,
   displayUnit,
   geometry,
+  holeShots,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -124,6 +125,7 @@ function MapboxCourseView({
   centerDistance: number | null;
   displayUnit: "y" | "m";
   geometry: HoleGeometryPayload | null;
+  holeShots: StoredShot[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
