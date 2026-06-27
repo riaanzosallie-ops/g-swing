@@ -1302,6 +1302,18 @@ function PremiumGpsChrome(props: {
                     : "required"}
               </div>
             </div>
+            {debug && (
+              <>
+                <div className="my-1 h-px bg-gold/15" />
+                <div className="px-1 pb-1">
+                  <MappingDebugPanel
+                    {...debug}
+                    playerPosition={playerPosition}
+                    playerAccuracy={playerAccuracy}
+                  />
+                </div>
+              </>
+            )}
           </PopoverContent>
         </Popover>
       </div>
