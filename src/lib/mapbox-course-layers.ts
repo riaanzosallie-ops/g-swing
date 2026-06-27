@@ -17,6 +17,7 @@ const SRC = {
   points: "gs-points",
   pin: "gs-pin",
   yardage: "gs-yardage",
+  playerTrail: "gs-player-trail",
 } as const;
 
 const LAYERS = {
@@ -43,6 +44,7 @@ const LAYERS = {
   pinOuter: "gs-pin-outer",
   pinInner: "gs-pin-inner",
   yardage: "gs-yardage-labels",
+  playerTrail: "gs-player-trail-line",
 } as const;
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -304,6 +306,41 @@ export function ensureCourseLayers(map: mapboxgl.Map): void {
       "text-halo-width": 1.4,
     },
   });
+
+  // Player trail — soft emerald breadcrumb of recent GPS positions.
+  map.addLayer({
+    id: LAYERS.playerTrail,
+    type: "line",
+    source: SRC.playerTrail,
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": "#34d399",
+      "line-width": 3,
+      "line-opacity": 0.7,
+      "line-blur": 0.4,
+    },
+  });
+}
+
+/** Push the latest player breadcrumb trail into the trail source. */
+export function updatePlayerTrail(map: mapboxgl.Map, trail: LatLng[]): void {
+  if (!map.getSource(SRC.playerTrail)) return;
+  const fc: GeoJSON.FeatureCollection = trail.length >= 2
+    ? {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: trail.map((p) => [p.lng, p.lat] as [number, number]),
+            },
+            properties: {},
+          },
+        ],
+      }
+    : EMPTY_FC;
+  setSourceData(map, SRC.playerTrail, fc);
 }
 
 /** Reset every G Swing source to an empty feature collection. */
