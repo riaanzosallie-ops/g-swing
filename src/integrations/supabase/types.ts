@@ -386,6 +386,169 @@ export type Database = {
           },
         ]
       }
+      gswing_course_maps: {
+        Row: {
+          course_name: string
+          created_at: string
+          id: string
+          latitude: number
+          location_label: string | null
+          longitude: number
+          updated_at: string
+        }
+        Insert: {
+          course_name: string
+          created_at?: string
+          id?: string
+          latitude: number
+          location_label?: string | null
+          longitude: number
+          updated_at?: string
+        }
+        Update: {
+          course_name?: string
+          created_at?: string
+          id?: string
+          latitude?: number
+          location_label?: string | null
+          longitude?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gswing_hole_features: {
+        Row: {
+          carry_lat: number | null
+          carry_lng: number | null
+          center_lat: number | null
+          center_lng: number | null
+          created_at: string
+          feature_type: string
+          front_lat: number | null
+          front_lng: number | null
+          id: string
+          mapped_hole_id: string
+          name: string | null
+          notes: string | null
+          polygon_json: Json | null
+          side_label: string | null
+          updated_at: string
+        }
+        Insert: {
+          carry_lat?: number | null
+          carry_lng?: number | null
+          center_lat?: number | null
+          center_lng?: number | null
+          created_at?: string
+          feature_type: string
+          front_lat?: number | null
+          front_lng?: number | null
+          id?: string
+          mapped_hole_id: string
+          name?: string | null
+          notes?: string | null
+          polygon_json?: Json | null
+          side_label?: string | null
+          updated_at?: string
+        }
+        Update: {
+          carry_lat?: number | null
+          carry_lng?: number | null
+          center_lat?: number | null
+          center_lng?: number | null
+          created_at?: string
+          feature_type?: string
+          front_lat?: number | null
+          front_lng?: number | null
+          id?: string
+          mapped_hole_id?: string
+          name?: string | null
+          notes?: string | null
+          polygon_json?: Json | null
+          side_label?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gswing_hole_features_mapped_hole_id_fkey"
+            columns: ["mapped_hole_id"]
+            isOneToOne: false
+            referencedRelation: "gswing_mapped_holes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gswing_mapped_holes: {
+        Row: {
+          course_map_id: string
+          created_at: string
+          green_back_lat: number | null
+          green_back_lng: number | null
+          green_center_lat: number | null
+          green_center_lng: number | null
+          green_front_lat: number | null
+          green_front_lng: number | null
+          hole_number: number
+          id: string
+          length_meters: number | null
+          length_yards: number | null
+          par: number | null
+          pin_lat: number | null
+          pin_lng: number | null
+          tee_lat: number | null
+          tee_lng: number | null
+          updated_at: string
+        }
+        Insert: {
+          course_map_id: string
+          created_at?: string
+          green_back_lat?: number | null
+          green_back_lng?: number | null
+          green_center_lat?: number | null
+          green_center_lng?: number | null
+          green_front_lat?: number | null
+          green_front_lng?: number | null
+          hole_number: number
+          id?: string
+          length_meters?: number | null
+          length_yards?: number | null
+          par?: number | null
+          pin_lat?: number | null
+          pin_lng?: number | null
+          tee_lat?: number | null
+          tee_lng?: number | null
+          updated_at?: string
+        }
+        Update: {
+          course_map_id?: string
+          created_at?: string
+          green_back_lat?: number | null
+          green_back_lng?: number | null
+          green_center_lat?: number | null
+          green_center_lng?: number | null
+          green_front_lat?: number | null
+          green_front_lng?: number | null
+          hole_number?: number
+          id?: string
+          length_meters?: number | null
+          length_yards?: number | null
+          par?: number | null
+          pin_lat?: number | null
+          pin_lng?: number | null
+          tee_lat?: number | null
+          tee_lng?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gswing_mapped_holes_course_map_id_fkey"
+            columns: ["course_map_id"]
+            isOneToOne: false
+            referencedRelation: "gswing_course_maps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spatial_ref_sys: {
         Row: {
           auth_name: string | null
