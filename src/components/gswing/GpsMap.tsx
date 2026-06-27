@@ -290,6 +290,11 @@ function MapboxCourseView({
     "idle" | "loading" | "mapped" | "missing"
   >("idle");
   const [mappingRefreshTick, setMappingRefreshTick] = useState(0);
+  // Tracks whether the nearest-course lookup actually found a mapped
+  // course near the player. Used by the honest GPS lock banner to
+  // distinguish "no mapped course nearby" from "course found but the
+  // current hole has no surveyed geometry yet".
+  const [nearestCourseFound, setNearestCourseFound] = useState<boolean | null>(null);
 
   // Live weather for the in-map HUD (real Open-Meteo via existing hook).
   const hudWeather = useGswingWeather(
@@ -436,9 +441,11 @@ function MapboxCourseView({
           setMappedCourseId(null);
           setMappedHole(null);
           setMappingStatus("missing");
+          setNearestCourseFound(false);
           return;
         }
         setMappedCourseId(courseMap.id);
+        setNearestCourseFound(true);
         const hp = await loadMappedHole(courseMap.id, hole);
         if (cancelled) return;
         setMappedHole(hp);
