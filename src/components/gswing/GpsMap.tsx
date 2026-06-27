@@ -1190,26 +1190,8 @@ const MAIN_COURSE_ID = "00000000-0000-0000-0000-000000000101";
 const DEFAULT_POSITION: LatLng = { lat: 25.3536, lng: 55.4881 };
 const DEMO_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 5, 4, 3, 4, 4];
 
-// =====================================================================
-// PLACEHOLDER COURSE GEOMETRY
-// ---------------------------------------------------------------------
-// Real per-hole geometry (tee boxes, green polygon, hazards) for UAE
-// courses is NOT yet wired in. The values below are hand-picked
-// approximations for Sharjah Golf and Shooting Club, Hole 1 only,
-// purely so the Mapbox view has something to render until real course
-// mapping data is ingested.
-// Replace with surveyed geometry from a course-data provider
-// (e.g. GolfBert, USGA course rating files, manual GeoJSON survey).
-// =====================================================================
-const SHARJAH_HOLE_1_PLACEHOLDER = {
-  courseId: MAIN_COURSE_ID,
-  hole: 1,
-  tee: { lat: 25.3533, lng: 55.4876 },
-  greenCenter: { lat: 25.3547, lng: 55.48905 },
-  pin: { lat: 25.35472, lng: 55.48908 },
-  front: { lat: 25.35458, lng: 55.48895 },
-  back: { lat: 25.35482, lng: 55.48918 },
-} as const;
+// All previous Sharjah Hole 1 placeholder geometry has been removed.
+// Real surveyed geometry is loaded from the gswing_* mapping tables.
 
 function makeCourse(
   id: string,
