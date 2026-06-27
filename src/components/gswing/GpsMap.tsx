@@ -59,6 +59,20 @@ import {
   updatePlayerTrail,
 } from "@/lib/mapbox-course-layers";
 import {
+  ensureShotOverlayLayers,
+  setShotReplay,
+  clearShotReplay,
+} from "@/lib/mapbox-shot-overlay";
+import {
+  fetchRoundShots,
+  persistShot,
+  shotsForHole,
+  computeRoundStats,
+  type StoredShot,
+  type RoundStats,
+} from "@/lib/shot-tracker";
+import { RoundIntelligence } from "@/components/gswing/RoundIntelligence";
+import {
   applyMode as applyCameraMode,
   followPlayer,
   CAMERA_MODES,
@@ -100,6 +114,7 @@ function MapboxCourseView({
   centerDistance,
   displayUnit,
   geometry,
+  holeShots,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -110,6 +125,7 @@ function MapboxCourseView({
   centerDistance: number | null;
   displayUnit: "y" | "m";
   geometry: HoleGeometryPayload | null;
+  holeShots: StoredShot[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -247,6 +263,15 @@ function MapboxCourseView({
     if (geometry) applyCourseGeometry(map, geometry);
     else clearCourseGeometry(map);
   }, [geometry]);
+
+  // Shot replay overlay — additive layers, no impact on Slice A/B/C.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    ensureShotOverlayLayers(map);
+    if (holeShots.length) setShotReplay(map, holeShots);
+    else clearShotReplay(map);
+  }, [holeShots]);
 
   // Throttled live yardage label refresh (player movement / unit changes).
   useEffect(() => {
@@ -975,6 +1000,8 @@ export const GpsMap = () => {
   const [activeShot, setActiveShot] = useState<Shot | null>(null);
   const [lastShotYards, setLastShotYards] = useState<number | null>(null);
   const [lastShotEnd, setLastShotEnd] = useState<LatLng | null>(null);
+  const [roundShots, setRoundShots] = useState<StoredShot[]>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -1070,6 +1097,40 @@ export const GpsMap = () => {
   useEffect(() => {
     loadHole();
   }, [loadHole]);
+
+  // Load all stored shots for the active round (for replay + stats).
+  const refreshRoundShots = useCallback(async () => {
+    if (!activeRound) {
+      setRoundShots([]);
+      return;
+    }
+    if (activeRound.id.startsWith("offline-")) return; // offline shots stay local
+    setStatsLoading(true);
+    try {
+      const rows = await fetchRoundShots(activeRound.id);
+      setRoundShots(rows);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [activeRound?.id]);
+
+  useEffect(() => {
+    refreshRoundShots();
+  }, [refreshRoundShots]);
+
+  // Per-hole geometry cache for round-intelligence computation.
+  const [holeGeomCache, setHoleGeomCache] = useState<Record<number, HoleGeometryPayload | null>>({});
+  useEffect(() => {
+    if (!geometryPayload) return;
+    setHoleGeomCache((prev) => (prev[hole] === geometryPayload ? prev : { ...prev, [hole]: geometryPayload }));
+  }, [geometryPayload, hole]);
+
+  const roundStats: RoundStats | null = useMemo(() => {
+    if (!roundShots.length) return null;
+    const holePars: Record<number, number> = {};
+    if (gps?.hole_number && gps?.par) holePars[gps.hole_number] = gps.par;
+    return computeRoundStats(roundShots, { holePars, holeGeometries: holeGeomCache });
+  }, [roundShots, holeGeomCache, gps?.hole_number, gps?.par]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1267,10 +1328,28 @@ export const GpsMap = () => {
           return;
         }
         const yards = haversineYards({ lat: activeShot.start_lat, lng: activeShot.start_lng }, playerPos);
+        const offlineStart: LatLng = { lat: activeShot.start_lat, lng: activeShot.start_lng };
+        const offlineEnd: LatLng = { lat: playerPos.lat, lng: playerPos.lng };
         setActiveShot(null);
         setLastShotYards(yards);
-        setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
+        setLastShotEnd(offlineEnd);
         toast.success(`Shot saved: ${yards} yards`);
+        // Persist offline shots too — round_id is a text column, so an
+        // offline session id is a valid value. This lets the stats panel
+        // and replay overlay work even without an authenticated round.
+        const saved = await persistShot({
+          roundId: activeRound.id,
+          courseId: activeRound.course_id ?? courseId,
+          holeNumber: activeShot.hole_number ?? hole,
+          shotNumber: roundShots.filter(
+            (s) => s.hole_number === (activeShot.hole_number ?? hole),
+          ).length + 1,
+          club: activeShot.club_used ?? recommendedClub?.name ?? null,
+          start: offlineStart,
+          end: offlineEnd,
+          distanceYards: yards,
+        });
+        if (saved) setRoundShots((prev) => [...prev, saved]);
         return;
       }
       if (!activeShot) {
@@ -1284,6 +1363,22 @@ export const GpsMap = () => {
         setLastShotYards(result.distance_yards);
         setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
         toast.success(`Shot saved: ${result.distance_yards} yards`);
+        // Persist to the golf_shots table so hole replay + round
+        // intelligence stats reflect real shot data only.
+        const start: LatLng = { lat: activeShot.start_lat, lng: activeShot.start_lng };
+        await persistShot({
+          roundId: activeRound.id,
+          courseId: activeRound.course_id ?? courseId,
+          holeNumber: activeShot.hole_number ?? hole,
+          shotNumber: activeShot.shot_number ?? roundShots.filter(
+            (s) => s.hole_number === (activeShot.hole_number ?? hole),
+          ).length + 1,
+          club: activeShot.club_used ?? recommendedClub?.name ?? null,
+          start,
+          end: { lat: playerPos.lat, lng: playerPos.lng },
+          distanceYards: result.distance_yards,
+        });
+        await refreshRoundShots();
       }
     } catch (error) {
       setGpsError(error instanceof Error ? error.message : "Could not update shot tracking.");
@@ -1353,6 +1448,7 @@ export const GpsMap = () => {
         centerDistance={loading ? null : displayCenterDistance}
         displayUnit={displayUnit}
         geometry={geometryPayload}
+        holeShots={shotsForHole(roundShots, hole)}
       />
 
       <YardagePanel
@@ -1463,6 +1559,8 @@ export const GpsMap = () => {
           Last shot: <span className="font-serif text-gold">{toDisplayUnit(lastShotYards, unit)}{displayUnit}</span>
         </Card>
       )}
+
+      <RoundIntelligence stats={roundStats} loading={statsLoading} />
 
       <div className="flex gap-2 overflow-x-auto pb-2">
         {Array.from({ length: selectableHoleCount }, (_, index) => index + 1).map((holeNumber) => (
