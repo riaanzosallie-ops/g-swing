@@ -20,6 +20,7 @@ import { ensureMappedLayers, setMappedHoleData } from "@/lib/mapbox-mapped-layer
 import { buildMappedHoleFromRows, loadMappedHole } from "@/lib/gswing-course-map-loader";
 import { OsmScanPanel } from "@/components/gswing/admin/OsmScanPanel";
 import type { OsmImportPreviewItem } from "@/lib/gswing-osm-overpass";
+import { GolfCourseApiSyncPanel } from "@/components/gswing/admin/GolfCourseApiSyncPanel";
 
 // Sharjah Golf and Shooting Club — seeded with the verified front-9 par
 // layout. Used by the Sharjah quick-select to jump straight into mapping
@@ -124,6 +125,8 @@ export default function CourseMapper() {
 
   // OSM (Overpass) assist — preview only, never auto-saved.
   const [osmOpen, setOsmOpen] = useState(false);
+  // GolfCourseAPI sync (owner only, comparison + import).
+  const [gcaOpen, setGcaOpen] = useState(false);
 
   // Token
   useEffect(() => {
@@ -664,6 +667,16 @@ export default function CourseMapper() {
           >
             <Globe2 className="h-3 w-3" /> OSM
           </Button>
+          <Button
+            type="button"
+            onClick={() => setGcaOpen(true)}
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 border-gold/40 bg-black/40 px-2 text-[10px] uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
+            title="Sync GolfCourseAPI (metadata only, owner-reviewed)"
+          >
+            Sync GolfCourseAPI
+          </Button>
           <select
             value={courseMapId ?? ""}
             onChange={(e) => (e.target.value ? onSelectCourse(e.target.value) : setCourseMapId(null))}
@@ -866,6 +879,12 @@ export default function CourseMapper() {
         holeNumber={holeNumber}
         gswingSnapshot={gswingSnapshot}
         onImport={importOsmFeatures}
+      />
+      <GolfCourseApiSyncPanel
+        isOpen={gcaOpen}
+        onClose={() => setGcaOpen(false)}
+        courseMapId={courseMapId}
+        courseName={courseName}
       />
     </div>
   );
