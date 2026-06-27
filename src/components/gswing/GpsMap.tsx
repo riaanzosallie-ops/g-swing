@@ -879,11 +879,16 @@ function MapboxCourseView({
     >
       <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
 
-      {/* Stylized "mapping preview" placeholder — shown only when we
-          have no real surveyed geometry AND the user is in Premium
-          mode. Honest: no fake distances, no fake hazards. */}
+      {/* Honest empty-mapping experience — shown only when we have no
+          real surveyed geometry AND the user is in Premium mode. No
+          fake fairways, no fake hazards, no fake distances. Player GPS,
+          measure mode, weather, and accuracy continue to function. */}
       {mapView === "premium" && mappingStatus !== "mapped" && mappingStatus !== "loading" && (
-        <PremiumPlaceholderHole />
+        <PremiumEmptyMappingCard
+          courseName={selectedCourse.name}
+          onRefresh={onRefreshMapping}
+          onSwitchToSatellite={() => setMapView("satellite")}
+        />
       )}
 
       <GpsHud
