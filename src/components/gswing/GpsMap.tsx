@@ -714,6 +714,60 @@ function MapboxCourseView({
           Placeholder geometry (Sharjah H1)
         </div>
       )}
+
+      {/* GPS Live + accuracy badge */}
+      <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-gold/30 bg-black/65 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-md">
+        {playerPosition ? (
+          <>
+            <span className="relative flex h-2 w-2">
+              <span
+                className={`absolute inline-flex h-full w-full animate-ping rounded-full ${
+                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
+                } opacity-70`}
+              />
+              <span
+                className={`relative inline-flex h-2 w-2 rounded-full ${
+                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
+                }`}
+              />
+            </span>
+            <Wifi className="h-3 w-3 text-emerald-300" />
+            <span className="text-white/90">GPS LIVE</span>
+            {playerAccuracy != null && (
+              <span className="text-white/60">± {Math.round(playerAccuracy)} m</span>
+            )}
+          </>
+        ) : (
+          <>
+            <WifiOff className="h-3 w-3 text-amber-300" />
+            <span className="text-amber-200">GPS waiting</span>
+          </>
+        )}
+      </div>
+
+      {/* Tap-to-measure overlay */}
+      {measureActive && !measurePoint && (
+        <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[11px] font-semibold text-gold backdrop-blur-md">
+          {playerPosition ? "Tap any point on the map to measure" : "GPS location required to measure."}
+        </div>
+      )}
+      {measurePoint && playerPosition && (() => {
+        const m = measureBetween(
+          playerPosition,
+          measurePoint,
+          displayUnit === "m" ? "meters" : "yards",
+        );
+        return (
+          <div className="pointer-events-none absolute left-1/2 top-16 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-gold/40 bg-black/75 px-3 py-1.5 backdrop-blur-md">
+            <Ruler className="h-3.5 w-3.5 text-gold" />
+            <span className="font-serif text-base text-gold">
+              {m.distance}
+              <span className="ml-0.5 text-[10px] text-gold-soft">{m.unit}</span>
+            </span>
+            <span className="text-[10px] text-white/65">brg {Math.round(m.bearing)}°</span>
+          </div>
+        );
+      })()}
     </div>
   );
 }
