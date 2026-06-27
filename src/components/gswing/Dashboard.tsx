@@ -187,7 +187,7 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
           </div>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2"><Bot className="h-3.5 w-3.5 text-gold" /> AI Caddie</span>
-            <span className="text-emerald-300/90">AI Caddie ready</span>
+            <span className="text-foreground/80">{roundsPlayed > 0 ? "Ready · evidence-based" : "Not enough data available"}</span>
           </div>
         </div>
       </section>
