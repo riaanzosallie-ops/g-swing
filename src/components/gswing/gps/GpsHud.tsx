@@ -259,12 +259,27 @@ export function GpsHud(props: GpsHudProps) {
       <div className="pointer-events-none absolute inset-x-2 bottom-[6.25rem]">
         <div className="pointer-events-auto mx-auto max-w-[420px] overflow-hidden rounded-2xl border border-gold/45 bg-gradient-to-br from-black/80 via-emerald-950/70 to-black/80 shadow-[0_10px_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
           {animatedCenter == null ? (
-            <div className="flex flex-col items-center px-4 py-3 text-center">
-              <span className="text-[9px] uppercase tracking-[0.25em] text-gold-soft">Yardages</span>
-              <span className="mt-1 font-serif text-lg text-gold">Mapping required</span>
-              <span className="mt-0.5 text-[10px] text-white/55">
-                Professional course mapping needed for live distances.
-              </span>
+            <div className="px-4 py-3">
+              <div className="text-center">
+                <span className="text-[9px] uppercase tracking-[0.25em] text-gold-soft">Yardages</span>
+                <div className="mt-0.5 font-serif text-base text-gold">Green mapping required</div>
+              </div>
+              <div className="mt-2 flex items-stretch">
+                {(["Front", "Center", "Back"] as const).map((label, i) => (
+                  <div
+                    key={label}
+                    className={`flex flex-1 flex-col items-center py-1 ${
+                      i === 1 ? "border-x border-gold/15" : ""
+                    }`}
+                  >
+                    <span className="text-[8px] uppercase tracking-widest text-white/55">{label}</span>
+                    <span className="font-serif text-lg text-gold/60 tabular-nums">— —</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-center text-[9px] text-white/55">
+                Professional green mapping is required for front, center and back distances.
+              </p>
             </div>
           ) : (
             <div className="flex items-stretch">
