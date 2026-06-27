@@ -96,6 +96,95 @@ import { computeYardages } from "@/lib/yardage-engine";
 import { useGswingWeather } from "@/lib/use-gswing-weather";
 import { Ruler, X as XIcon, Wifi, WifiOff, Wind } from "lucide-react";
 
+const MEASURE_SRC = "gs-measure-src";
+const MEASURE_LINE = "gs-measure-line";
+const MEASURE_END = "gs-measure-end";
+const MEASURE_PULSE = "gs-measure-pulse";
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+function ensureMeasureLayers(map: mapboxgl.Map) {
+  if (!map.getSource(MEASURE_SRC)) {
+    map.addSource(MEASURE_SRC, { type: "geojson", data: EMPTY_FC });
+  }
+  if (!map.getLayer(MEASURE_PULSE)) {
+    map.addLayer({
+      id: MEASURE_PULSE,
+      type: "circle",
+      source: MEASURE_SRC,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 18,
+        "circle-color": "#F5C84B",
+        "circle-opacity": 0.18,
+        "circle-blur": 0.4,
+      },
+    });
+  }
+  if (!map.getLayer(MEASURE_LINE)) {
+    map.addLayer({
+      id: MEASURE_LINE,
+      type: "line",
+      source: MEASURE_SRC,
+      filter: ["==", ["geometry-type"], "LineString"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#F5C84B",
+        "line-width": 3,
+        "line-opacity": 0.95,
+        "line-dasharray": [1.5, 1.2],
+      },
+    });
+  }
+  if (!map.getLayer(MEASURE_END)) {
+    map.addLayer({
+      id: MEASURE_END,
+      type: "circle",
+      source: MEASURE_SRC,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 6,
+        "circle-color": "#F5C84B",
+        "circle-stroke-color": "#1a1300",
+        "circle-stroke-width": 2,
+      },
+    });
+  }
+}
+
+function setMeasureGeo(
+  map: mapboxgl.Map,
+  player: LatLng | null,
+  target: LatLng | null,
+) {
+  const src = map.getSource(MEASURE_SRC) as mapboxgl.GeoJSONSource | undefined;
+  if (!src) return;
+  if (!player || !target) {
+    src.setData(EMPTY_FC);
+    return;
+  }
+  src.setData({
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [player.lng, player.lat],
+            [target.lng, target.lat],
+          ],
+        },
+      },
+      {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: [target.lng, target.lat] },
+      },
+    ],
+  });
+}
+
 // Public Mapbox token (publishable pk.*) is loaded at runtime from the
 // `mapbox-token` edge function — never hardcoded, never baked into the bundle.
 type TokenState =
