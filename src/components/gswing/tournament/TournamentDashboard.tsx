@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Radio, Share2, ChevronLeft, Trophy, Target, Sparkles, Tv2, Users,
-  Copy, Play, Lock, CheckCircle2, RefreshCw,
+  Copy, Play, Lock, CheckCircle2, RefreshCw, Award,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayer } from "@/lib/gswing-store";
@@ -17,6 +17,9 @@ import {
 } from "@/lib/tournament-engine";
 import { Leaderboard } from "./Leaderboard";
 import { LiveScoringSheet } from "./LiveScoringSheet";
+import { TournamentLiveTV } from "./TournamentLiveTV";
+import { TournamentAwards } from "./TournamentAwards";
+import { buildLiveMoments } from "@/lib/tournament-moments";
 
 type Props = { tournamentId: string; spectator?: boolean; onExit: () => void };
 
@@ -26,7 +29,8 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
   const [players, setPlayers] = useState<TournamentPlayer[]>([]);
   const [scores, setScores] = useState<TournamentScore[]>([]);
   const prevPosRef = useRef<Record<string, number>>({});
-  const [tab, setTab] = useState<"board" | "score" | "director" | "broadcast">("board");
+  const [tab, setTab] = useState<"board" | "score" | "director" | "broadcast" | "awards">("board");
+  const prevPosForMomentsRef = useRef<Record<string, number>>({});
   const [scoring, setScoring] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
@@ -51,6 +55,13 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
     prevPosRef.current = Object.fromEntries(out.map((r) => [r.player.id, r.position]));
     return out;
   }, [tournament, players, scores]);
+
+  const moments = useMemo(() => {
+    if (!tournament) return [];
+    const list = buildLiveMoments(tournament, players, scores, rows, prevPosForMomentsRef.current);
+    prevPosForMomentsRef.current = Object.fromEntries(rows.map((r) => [r.player.id, r.position]));
+    return list;
+  }, [tournament, players, scores, rows]);
 
   const myPlayer = useMemo(
     () => players.find((p) => p.player_name.toLowerCase() === me.name.toLowerCase()) ?? null,
@@ -168,11 +179,12 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList className="grid w-full grid-cols-4 gap-1 bg-secondary">
+        <TabsList className="grid w-full grid-cols-5 gap-1 bg-secondary">
           <TabsTrigger value="board" className="text-[11px]"><Trophy className="mr-1 h-3 w-3" />Board</TabsTrigger>
           <TabsTrigger value="score" className="text-[11px]" disabled={spectator}><Target className="mr-1 h-3 w-3" />Score</TabsTrigger>
           <TabsTrigger value="director" className="text-[11px]"><Sparkles className="mr-1 h-3 w-3" />Director</TabsTrigger>
           <TabsTrigger value="broadcast" className="text-[11px]"><Tv2 className="mr-1 h-3 w-3" />Live TV</TabsTrigger>
+          <TabsTrigger value="awards" className="text-[11px]"><Award className="mr-1 h-3 w-3" />Awards</TabsTrigger>
         </TabsList>
 
         <TabsContent value="board" className="mt-3 space-y-3">
