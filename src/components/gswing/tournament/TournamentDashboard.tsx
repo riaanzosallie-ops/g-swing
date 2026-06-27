@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Radio, Share2, ChevronLeft, Trophy, Target, Sparkles, Tv2, Users,
-  Copy, Play, Lock, CheckCircle2, RefreshCw,
+  Copy, Play, Lock, CheckCircle2, RefreshCw, Award,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayer } from "@/lib/gswing-store";
@@ -17,6 +17,9 @@ import {
 } from "@/lib/tournament-engine";
 import { Leaderboard } from "./Leaderboard";
 import { LiveScoringSheet } from "./LiveScoringSheet";
+import { TournamentLiveTV } from "./TournamentLiveTV";
+import { TournamentAwards } from "./TournamentAwards";
+import { buildLiveMoments } from "@/lib/tournament-moments";
 
 type Props = { tournamentId: string; spectator?: boolean; onExit: () => void };
 
@@ -26,7 +29,8 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
   const [players, setPlayers] = useState<TournamentPlayer[]>([]);
   const [scores, setScores] = useState<TournamentScore[]>([]);
   const prevPosRef = useRef<Record<string, number>>({});
-  const [tab, setTab] = useState<"board" | "score" | "director" | "broadcast">("board");
+  const [tab, setTab] = useState<"board" | "score" | "director" | "broadcast" | "awards">("board");
+  const prevPosForMomentsRef = useRef<Record<string, number>>({});
   const [scoring, setScoring] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
@@ -51,6 +55,13 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
     prevPosRef.current = Object.fromEntries(out.map((r) => [r.player.id, r.position]));
     return out;
   }, [tournament, players, scores]);
+
+  const moments = useMemo(() => {
+    if (!tournament) return [];
+    const list = buildLiveMoments(tournament, players, scores, rows, prevPosForMomentsRef.current);
+    prevPosForMomentsRef.current = Object.fromEntries(rows.map((r) => [r.player.id, r.position]));
+    return list;
+  }, [tournament, players, scores, rows]);
 
   const myPlayer = useMemo(
     () => players.find((p) => p.player_name.toLowerCase() === me.name.toLowerCase()) ?? null,
@@ -168,11 +179,12 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList className="grid w-full grid-cols-4 gap-1 bg-secondary">
+        <TabsList className="grid w-full grid-cols-5 gap-1 bg-secondary">
           <TabsTrigger value="board" className="text-[11px]"><Trophy className="mr-1 h-3 w-3" />Board</TabsTrigger>
           <TabsTrigger value="score" className="text-[11px]" disabled={spectator}><Target className="mr-1 h-3 w-3" />Score</TabsTrigger>
           <TabsTrigger value="director" className="text-[11px]"><Sparkles className="mr-1 h-3 w-3" />Director</TabsTrigger>
           <TabsTrigger value="broadcast" className="text-[11px]"><Tv2 className="mr-1 h-3 w-3" />Live TV</TabsTrigger>
+          <TabsTrigger value="awards" className="text-[11px]"><Award className="mr-1 h-3 w-3" />Awards</TabsTrigger>
         </TabsList>
 
         <TabsContent value="board" className="mt-3 space-y-3">
@@ -256,37 +268,18 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
           </div>
         </TabsContent>
 
-        <TabsContent value="broadcast" className="mt-3 space-y-3">
-          <Card className="relative overflow-hidden border-gold/30 bg-gradient-to-br from-background via-background to-gold/10 p-4">
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-red-400">
-              <Radio className="h-3 w-3 animate-pulse" /> Live Broadcast
-            </div>
-            <h3 className="mt-1 font-serif text-2xl text-gradient-gold">{tournament.name}</h3>
-            <p className="text-xs text-muted-foreground">{tournament.course}</p>
+        <TabsContent value="broadcast" className="mt-3">
+          <TournamentLiveTV
+            tournament={tournament}
+            rows={rows}
+            moments={moments}
+            aiSummary={aiSummary}
+            joinUrl={`${window.location.origin}/?t=${tournament.code}`}
+          />
+        </TabsContent>
 
-            {leader ? (
-              <div className="mt-4 rounded-2xl border border-gold/30 bg-background/40 p-3">
-                <p className="text-[10px] uppercase tracking-widest text-gold/80">Leader</p>
-                <p className="font-serif text-2xl text-gold">{leader.player.player_name}</p>
-                <div className="mt-1 grid grid-cols-3 gap-2 text-center text-xs">
-                  <div><p className="text-[10px] text-muted-foreground">To Par</p><p className="font-mono text-gold">{leader.toPar === 0 ? "E" : leader.toPar > 0 ? `+${leader.toPar}` : leader.toPar}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Gross</p><p className="font-mono text-gold">{leader.gross}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground">Thru</p><p className="font-mono text-gold">{leader.thru}</p></div>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-xs text-muted-foreground">Waiting for first score…</p>
-            )}
-          </Card>
-
-          <Leaderboard tournament={tournament} rows={rows.slice(0, 10)} compact />
-
-          {aiSummary && (
-            <Card className="gradient-card border-gold/20 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-gold/80">AI Commentary</p>
-              <p className="mt-1 text-sm leading-relaxed">{aiSummary}</p>
-            </Card>
-          )}
+        <TabsContent value="awards" className="mt-3">
+          <TournamentAwards tournament={tournament} rows={rows} prevPositions={prevPosRef.current} />
         </TabsContent>
       </Tabs>
 
