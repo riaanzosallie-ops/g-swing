@@ -55,7 +55,14 @@ import {
   runFlyover,
   setLayerGroupVisibility,
   updateYardageLabels,
+  updatePlayerTrail,
 } from "@/lib/mapbox-course-layers";
+import {
+  applyMode as applyCameraMode,
+  followPlayer,
+  CAMERA_MODES,
+  type CameraMode,
+} from "@/lib/camera-engine";
 
 // Public Mapbox token (publishable pk.*) is loaded at runtime from the
 // `mapbox-token` edge function — never hardcoded, never baked into the bundle.
@@ -85,6 +92,8 @@ function loadMapboxToken(): Promise<string> {
 function MapboxCourseView({
   gps,
   playerPosition,
+  playerHeading,
+  playerAccuracy,
   selectedCourse,
   hole,
   centerDistance,
@@ -93,6 +102,8 @@ function MapboxCourseView({
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
+  playerHeading: number | null;
+  playerAccuracy: number | null;
   selectedCourse: GolfCourse;
   hole: number;
   centerDistance: number | null;
@@ -102,6 +113,8 @@ function MapboxCourseView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const playerMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const playerElRef = useRef<HTMLDivElement | null>(null);
+  const trailRef = useRef<LatLng[]>([]);
   const teeMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const pinMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const styleLoadedRef = useRef(false);
@@ -112,6 +125,7 @@ function MapboxCourseView({
   const [showLabels, setShowLabels] = useState(true);
   const [flyoverRunning, setFlyoverRunning] = useState(false);
   const [tokenState, setTokenState] = useState<TokenState>({ status: "loading" });
+  const [cameraMode, setCameraMode] = useState<CameraMode>("playing");
 
   // Fetch the public Mapbox token from the edge function once per mount.
   useEffect(() => {
@@ -151,6 +165,18 @@ function MapboxCourseView({
     tee ??
     pin ??
     { lat: selectedCourse.lat, lng: selectedCourse.lng };
+
+  const cameraCtx = useMemo(
+    () => ({
+      playerPos: playerPosition,
+      tee,
+      pin,
+      courseCenter: { lat: selectedCourse.lat, lng: selectedCourse.lng },
+      heading: playerHeading,
+      geometry,
+    }),
+    [playerPosition, tee, pin, selectedCourse.lat, selectedCourse.lng, playerHeading, geometry],
+  );
 
   // Initialise map once token is ready.
   useEffect(() => {
@@ -259,12 +285,22 @@ function MapboxCourseView({
     setLayerGroupVisibility(map, "labels", showLabels);
   }, [showLabels]);
 
-  // Recenter on hole / course change.
+  // Recenter on hole / course change — only when not in a follow mode
+  // (Playing/Broadcast handle their own tracking below).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    if (cameraMode === "playing" || cameraMode === "broadcast") return;
     map.easeTo({ center: [focus.lng, focus.lat], zoom: 17.5, duration: 700 });
-  }, [focus.lat, focus.lng]);
+  }, [focus.lat, focus.lng, cameraMode]);
+
+  // Apply camera mode whenever the mode itself changes (instant switch).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    applyCameraMode(map, cameraMode, cameraCtx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraMode]);
 
   // Tee marker — placeholder fallback only. When real DB geometry exists,
   // the gold tee circle is rendered by the Mapbox symbol layer.
@@ -310,21 +346,68 @@ function MapboxCourseView({
     }
   }, [pin?.lat, pin?.lng, geometry]);
 
-  // Player marker — updates live as GPS watch fires.
+  // Premium animated player marker — golfer dot with heading arrow,
+  // breathing pulse and (best-effort) accuracy ring. Trail line is
+  // managed by the dedicated gs-player-trail Mapbox source.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !playerPosition) return;
+
     if (!playerMarkerRef.current) {
       const el = document.createElement("div");
+      el.className = "gs-player-marker";
       el.style.cssText =
-        "width:18px;height:18px;border-radius:50%;background:#fff;border:4px solid #34d399;box-shadow:0 0 14px rgba(52,211,153,0.7);";
-      playerMarkerRef.current = new mapboxgl.Marker({ element: el })
+        "position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;pointer-events:none;";
+      el.innerHTML = `
+        <div class="gs-player-accuracy" style="position:absolute;border-radius:50%;border:1px solid rgba(52,211,153,0.55);background:rgba(52,211,153,0.10);width:34px;height:34px;"></div>
+        <div class="gs-player-pulse" style="position:absolute;width:34px;height:34px;border-radius:50%;background:rgba(52,211,153,0.35);animation:gs-pulse 1.8s ease-out infinite;"></div>
+        <div class="gs-player-dot" style="position:relative;width:14px;height:14px;border-radius:50%;background:#ffffff;border:3px solid #34d399;box-shadow:0 0 10px rgba(52,211,153,0.85);"></div>
+        <div class="gs-player-heading" style="position:absolute;top:-6px;left:50%;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #34d399;transform-origin:50% 22px;transform:translateX(-50%) rotate(0deg);transition:transform 220ms ease-out;filter:drop-shadow(0 0 4px rgba(52,211,153,0.6));"></div>
+      `;
+      playerElRef.current = el;
+      playerMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
         .setLngLat([playerPosition.lng, playerPosition.lat])
         .addTo(map);
     } else {
       playerMarkerRef.current.setLngLat([playerPosition.lng, playerPosition.lat]);
     }
-  }, [playerPosition?.lat, playerPosition?.lng]);
+
+    // Update heading arrow rotation.
+    const el = playerElRef.current;
+    if (el) {
+      const arrow = el.querySelector<HTMLElement>(".gs-player-heading");
+      if (arrow && typeof playerHeading === "number" && Number.isFinite(playerHeading)) {
+        arrow.style.transform = `translateX(-50%) rotate(${playerHeading}deg)`;
+        arrow.style.opacity = "1";
+      } else if (arrow) {
+        arrow.style.opacity = "0.35";
+      }
+      // Approximate the accuracy ring size in pixels at the current zoom.
+      const ring = el.querySelector<HTMLElement>(".gs-player-accuracy");
+      if (ring && typeof playerAccuracy === "number" && playerAccuracy > 0) {
+        const metersPerPx =
+          (40075016.686 * Math.cos((playerPosition.lat * Math.PI) / 180)) /
+          Math.pow(2, map.getZoom() + 8);
+        const px = Math.min(120, Math.max(18, playerAccuracy / Math.max(metersPerPx, 0.0001)));
+        ring.style.width = `${px}px`;
+        ring.style.height = `${px}px`;
+      }
+    }
+
+    // Maintain a short trail of recent positions (last 60).
+    const trail = trailRef.current;
+    const last = trail[trail.length - 1];
+    if (!last || last.lat !== playerPosition.lat || last.lng !== playerPosition.lng) {
+      trail.push({ lat: playerPosition.lat, lng: playerPosition.lng });
+      if (trail.length > 60) trail.splice(0, trail.length - 60);
+      if (styleLoadedRef.current) updatePlayerTrail(map, trail);
+    }
+
+    // In follow modes, glide the camera to the new position.
+    if (cameraMode === "playing" || cameraMode === "broadcast") {
+      followPlayer(map, cameraMode, cameraCtx);
+    }
+  }, [playerPosition?.lat, playerPosition?.lng, playerHeading, playerAccuracy, cameraMode, cameraCtx]);
 
   // Control handlers.
   const onRecenter = useCallback(() => {
@@ -429,6 +512,24 @@ function MapboxCourseView({
         >
           <Plane className="h-4 w-4" />
         </MapCtrlBtn>
+      </div>
+
+      <div className="absolute left-4 top-14 flex flex-wrap gap-1 rounded-md border border-gold/30 bg-black/60 p-1 text-[10px] uppercase tracking-wide backdrop-blur-md">
+        {CAMERA_MODES.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => setCameraMode(m.id)}
+            className={`rounded px-2 py-1 font-semibold transition-colors ${
+              cameraMode === m.id
+                ? "bg-gold/25 text-gold"
+                : "text-white/65 hover:text-white"
+            }`}
+            aria-pressed={cameraMode === m.id}
+          >
+            {m.label}
+          </button>
+        ))}
       </div>
 
       {usePlaceholder && (
