@@ -37,6 +37,197 @@ import {
 import { haversineYards, toDisplayUnit, unitLabel, type LatLng } from "@/lib/gps-utils";
 import { toast } from "sonner";
 import courseBg from "@/assets/course-bg.jpg";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
+
+// Public Mapbox token (publishable pk.*). Loaded from Vite env — never hardcoded.
+const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
+
+// =====================================================================
+// PLACEHOLDER COURSE GEOMETRY
+// ---------------------------------------------------------------------
+// Real per-hole geometry (tee boxes, green polygon, hazards) for UAE
+// courses is NOT yet wired in. The values below are hand-picked
+// approximations for Sharjah Golf and Shooting Club, Hole 1 only,
+// purely so the Mapbox view has something to render until real course
+// mapping data is ingested.
+// Replace with surveyed geometry from a course-data provider
+// (e.g. GolfBert, USGA course rating files, manual GeoJSON survey).
+// =====================================================================
+const SHARJAH_HOLE_1_PLACEHOLDER = {
+  courseId: MAIN_COURSE_ID,
+  hole: 1,
+  tee: { lat: 25.35330, lng: 55.48760 },
+  greenCenter: { lat: 25.35470, lng: 55.48905 },
+  pin: { lat: 25.35472, lng: 55.48908 },
+  front: { lat: 25.35458, lng: 55.48895 },
+  back: { lat: 25.35482, lng: 55.48918 },
+} as const;
+
+function MapboxCourseView({
+  gps,
+  playerPosition,
+  selectedCourse,
+  hole,
+  centerDistance,
+  displayUnit,
+}: {
+  gps: HoleGpsResponse | null;
+  playerPosition: LatLng | null;
+  selectedCourse: GolfCourse;
+  hole: number;
+  centerDistance: number | null;
+  displayUnit: "y" | "m";
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const playerMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const teeMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const pinMarkerRef = useRef<mapboxgl.Marker | null>(null);
+
+  // Resolve geometry: prefer live gps payload, otherwise fall back to
+  // the Sharjah Hole 1 placeholder (only valid for that specific hole).
+  const primaryTee = getPrimaryTee(gps?.tee_boxes ?? []);
+  const teeFromGps = teeToPoint(primaryTee);
+  const pinFromGps = pointFromLatLng(gps?.green?.pin) ?? pointFromLatLng(gps?.green?.center);
+
+  const usePlaceholder =
+    !teeFromGps &&
+    !pinFromGps &&
+    selectedCourse.id === SHARJAH_HOLE_1_PLACEHOLDER.courseId &&
+    hole === SHARJAH_HOLE_1_PLACEHOLDER.hole;
+
+  const tee: LatLng | null = teeFromGps ?? (usePlaceholder ? SHARJAH_HOLE_1_PLACEHOLDER.tee : null);
+  const pin: LatLng | null = pinFromGps ?? (usePlaceholder ? SHARJAH_HOLE_1_PLACEHOLDER.pin : null);
+  const focus: LatLng =
+    playerPosition ??
+    tee ??
+    pin ??
+    { lat: selectedCourse.lat, lng: selectedCourse.lng };
+
+  // Initialise map once.
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current || !MAPBOX_TOKEN) return;
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+    const map = new mapboxgl.Map({
+      container: containerRef.current,
+      style: "mapbox://styles/mapbox/satellite-streets-v12",
+      center: [focus.lng, focus.lat],
+      zoom: 17.5,
+      pitch: 55,
+      bearing: 0,
+      attributionControl: false,
+    });
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(
+      new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+        showUserHeading: true,
+      }),
+      "top-right",
+    );
+    mapRef.current = map;
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      playerMarkerRef.current = null;
+      teeMarkerRef.current = null;
+      pinMarkerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Recenter on hole / course change.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({ center: [focus.lng, focus.lat], zoom: 17.5, duration: 700 });
+  }, [focus.lat, focus.lng]);
+
+  // Tee marker.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !tee) return;
+    if (!teeMarkerRef.current) {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "width:14px;height:14px;border-radius:50%;background:#F5C84B;border:2px solid #1a1300;box-shadow:0 0 6px rgba(245,200,75,0.7);";
+      teeMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([tee.lng, tee.lat]).addTo(map);
+    } else {
+      teeMarkerRef.current.setLngLat([tee.lng, tee.lat]);
+    }
+  }, [tee?.lat, tee?.lng]);
+
+  // Pin marker.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !pin) return;
+    if (!pinMarkerRef.current) {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #0a0a0a;box-shadow:0 0 8px rgba(255,255,255,0.6);";
+      pinMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([pin.lng, pin.lat]).addTo(map);
+    } else {
+      pinMarkerRef.current.setLngLat([pin.lng, pin.lat]);
+    }
+  }, [pin?.lat, pin?.lng]);
+
+  // Player marker — updates live as GPS watch fires.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !playerPosition) return;
+    if (!playerMarkerRef.current) {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "width:18px;height:18px;border-radius:50%;background:#fff;border:4px solid #34d399;box-shadow:0 0 14px rgba(52,211,153,0.7);";
+      playerMarkerRef.current = new mapboxgl.Marker({ element: el })
+        .setLngLat([playerPosition.lng, playerPosition.lat])
+        .addTo(map);
+    } else {
+      playerMarkerRef.current.setLngLat([playerPosition.lng, playerPosition.lat]);
+    }
+  }, [playerPosition?.lat, playerPosition?.lng]);
+
+  if (!MAPBOX_TOKEN) {
+    return (
+      <Card className="gradient-card border-gold/30 p-4 text-xs text-muted-foreground">
+        <p className="mb-1 font-serif text-base text-gold">Mapbox not configured</p>
+        Set <code className="text-gold">VITE_MAPBOX_ACCESS_TOKEN</code> with a public{" "}
+        <code>pk.*</code> token and reload to see the live satellite course view.
+      </Card>
+    );
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
+      <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
+
+      <div className="pointer-events-none absolute left-4 top-4 rounded-md border border-black/30 bg-black/55 px-3 py-1.5 text-sm backdrop-blur-sm">
+        <span className="font-semibold text-gold">Hole {gps?.hole_number ?? hole}</span>
+        <span className="text-white/75"> - Par {gps?.par ?? "-"}</span>
+      </div>
+
+      <div className="pointer-events-none absolute right-4 top-4 w-[178px] overflow-hidden rounded-lg border border-gold/40 bg-background/88 text-gold shadow-xl backdrop-blur-md sm:w-[218px]">
+        <div className="p-3 text-right">
+          <div className="text-[10px] uppercase tracking-wide text-gold-soft">Center of Green</div>
+          <div className="font-serif text-5xl font-bold leading-none text-gold sm:text-6xl">
+            {formatDistance(centerDistance)}
+          </div>
+          <div className="text-xl font-semibold leading-none text-gold-soft">
+            {displayUnit === "m" ? "Meters" : "Yards"}
+          </div>
+        </div>
+      </div>
+
+      {usePlaceholder && (
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-gold/30 bg-black/60 px-2 py-1 text-[10px] text-gold-soft backdrop-blur-sm">
+          Placeholder geometry (Sharjah H1)
+        </div>
+      )}
+    </div>
+  );
+}
 
 const MAIN_COURSE_ID = "00000000-0000-0000-0000-000000000101";
 const DEFAULT_POSITION: LatLng = { lat: 25.3536, lng: 55.4881 };
@@ -746,14 +937,13 @@ export const GpsMap = () => {
         </Card>
       )}
 
-      <CartGpsView
+      <MapboxCourseView
         gps={gps}
         playerPosition={playerPos}
-        displayUnit={displayUnit}
+        selectedCourse={selectedCourse}
+        hole={hole}
         centerDistance={loading ? null : displayCenterDistance}
-        frontDistance={loading ? null : frontDistance}
-        backDistance={loading ? null : backDistance}
-        currentTime={currentTime}
+        displayUnit={displayUnit}
       />
 
       <div className="grid grid-cols-2 gap-2">
