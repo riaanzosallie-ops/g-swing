@@ -20,6 +20,12 @@ export interface GswingMembership {
   is_owner: boolean;
 }
 
+export const OWNER_EMAIL = "riaanzosallie@gmail.com";
+
+function isOwnerEmail(email: string | null | undefined) {
+  return !!email && email.trim().toLowerCase() === OWNER_EMAIL;
+}
+
 const TIER_RANK: Record<GswingPlanCode, number> = {
   free: 10,
   premium: 50,
@@ -59,9 +65,27 @@ export function useGswingMembership() {
     try {
       const { data: u } = await supabase.auth.getUser();
       const uid = u?.user?.id ?? null;
+      const uemail = u?.user?.email ?? null;
       setUserId(uid);
       if (!uid) {
         setMembership(null);
+        return;
+      }
+      // OWNER OVERRIDE — never go through payment flow.
+      if (isOwnerEmail(uemail)) {
+        setMembership({
+          user_id: uid,
+          plan_code: "platform_owner",
+          status: "active",
+          billing_cycle: "lifetime",
+          source: "owner_email_override",
+          current_period_end: null,
+          is_owner: true,
+        });
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.info("[gswing.owner]", { email: uemail, plan: "platform_owner" });
+        }
         return;
       }
       const { data, error } = await supabase.rpc("get_effective_gswing_membership", {
@@ -83,10 +107,13 @@ export function useGswingMembership() {
       void refreshMembership();
     });
     const onFocus = () => void refreshMembership();
+    const onRefresh = () => void refreshMembership();
     window.addEventListener("focus", onFocus);
+    window.addEventListener("gswing-membership-refresh", onRefresh);
     return () => {
       sub.subscription.unsubscribe();
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("gswing-membership-refresh", onRefresh);
     };
   }, [refreshMembership]);
 
