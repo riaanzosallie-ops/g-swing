@@ -647,7 +647,7 @@ function MapboxCourseView({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
+    <div className="gswing-map relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
       <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
 
       <GpsHud
