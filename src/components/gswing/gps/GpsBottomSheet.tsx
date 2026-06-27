@@ -1,15 +1,18 @@
 import { useState } from "react";
-import { ChevronDown, Flag, Droplets, Sparkles, Ruler, Mountain, X as XIcon } from "lucide-react";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  ChevronUp,
+  Crosshair,
+  Droplets,
+  Ruler,
+  Sparkles,
+  Mountain,
+  X as XIcon,
+} from "lucide-react";
 import type { CarryTarget, Unit, YardageReadout } from "@/lib/yardage-engine";
 import type { LatLng } from "@/lib/gps-utils";
 import { measureBetween } from "@/lib/gswing-gps";
 
-type SectionKey = "green" | "hazards" | "ace" | "measure" | "yardages";
+type SectionKey = "hazards" | "ace" | "yardages";
 
 const fmt = (v: number | null | undefined) =>
   v == null || !Number.isFinite(v) ? "—" : Math.round(v).toString();
@@ -45,7 +48,8 @@ export function GpsBottomSheet({
   onClearMeasure,
   playerPosition,
 }: GpsBottomSheetProps) {
-  const [open, setOpen] = useState<SectionKey>("green");
+  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState<SectionKey>("hazards");
   const u = unitShort(unit);
 
   const rawCenter = readout.center ?? fallbackCenterYards;
@@ -59,54 +63,117 @@ export function GpsBottomSheet({
       : null;
 
   return (
-    <div className="md:hidden">
-      <div className="rounded-2xl border border-gold/30 bg-gradient-to-b from-black/80 via-emerald-950/60 to-black/85 shadow-elegant backdrop-blur-xl">
-        {/* GREEN */}
-        <Section
-          label="Green"
-          icon={<Flag className="h-3.5 w-3.5" />}
-          open={open === "green"}
-          onToggle={() => setOpen(open === "green" ? ("" as SectionKey) : "green")}
+    <div className="pointer-events-auto absolute inset-x-2 bottom-2 z-30">
+      <div className="rounded-2xl border border-gold/30 bg-black/85 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        {/* Grab handle */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? "Collapse" : "Expand"}
+          className="mx-auto mt-1.5 flex h-3 w-full items-center justify-center"
         >
-          {center == null ? (
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <DistanceCell label="Front" value="—" muted />
-              <DistanceCell label="Center" value="Mapping required" muted small />
-              <DistanceCell label="Back" value="—" muted />
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 items-end gap-2 text-center">
-              <DistanceCell label="Front" value={fmt(front)} unit={u} />
-              <div className="flex flex-col items-center">
-                <span className="text-[9px] uppercase tracking-[0.25em] text-gold-soft">
-                  Center
-                </span>
-                <span className="font-serif text-4xl leading-none font-bold text-gold tabular-nums">
-                  {fmt(center)}
-                </span>
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-gold-soft">
-                  {u}
-                </span>
-              </div>
-              <DistanceCell label="Back" value={fmt(back)} unit={u} />
-            </div>
-          )}
-          {readout.pin != null && (
-            <p className="mt-2 text-center text-[10px] uppercase tracking-wider text-gold-soft">
-              Pin <span className="font-serif text-sm text-gold">{fmt(readout.pin)}</span>{" "}
-              {u}
+          <span className="block h-1 w-10 rounded-full bg-gold/40" />
+        </button>
+
+        {/* GREEN — always visible, reference layout */}
+        <div className="px-4 pb-3 pt-1">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-full border border-gold/40 text-gold">
+              <Crosshair className="h-3.5 w-3.5" />
+            </span>
+            <span className="flex-1 font-serif text-base text-gold">Green</span>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="grid h-7 w-7 place-items-center rounded-full text-gold-soft transition-transform hover:text-gold"
+              aria-label={expanded ? "Collapse" : "Expand"}
+            >
+              <ChevronUp
+                className={`h-4 w-4 transition-transform ${
+                  expanded ? "rotate-0" : "rotate-180"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <DistanceCell label="Front" value={center != null ? fmt(front) : "—"} unit={center != null && front != null ? u : undefined} />
+            <DistanceCell label="Center" value={center != null ? fmt(center) : "—"} unit={center != null ? u : undefined} large />
+            <DistanceCell label="Back" value={center != null ? fmt(back) : "—"} unit={center != null && back != null ? u : undefined} />
+          </div>
+
+          {center == null && (
+            <p className="mt-2 text-center text-[11px] font-medium tracking-wide text-gold-soft">
+              Mapping required
             </p>
           )}
-        </Section>
+          {center != null && readout.pin != null && (
+            <p className="mt-2 text-center text-[10px] uppercase tracking-wider text-gold-soft">
+              Pin <span className="font-serif text-sm text-gold">{fmt(readout.pin)}</span> {u}
+            </p>
+          )}
 
-        {/* HAZARDS */}
-        <Section
-          label={`Hazards${readout.carries.length > 0 ? ` · ${readout.carries.length}` : ""}`}
-          icon={<Droplets className="h-3.5 w-3.5" />}
-          open={open === "hazards"}
-          onToggle={() => setOpen(open === "hazards" ? ("" as SectionKey) : "hazards")}
-        >
-          {readout.carries.length === 0 ? (
+          <div className="my-3 h-px w-full bg-gold/15" />
+
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={onToggleMeasure}
+              className={`flex h-10 items-center gap-2 rounded-full border px-6 text-[11px] font-semibold uppercase tracking-[0.2em] transition-all active:scale-95 ${
+                measureActive
+                  ? "border-gold bg-gold text-black shadow-[0_0_18px_rgba(245,200,75,0.35)]"
+                  : "border-gold/45 bg-transparent text-gold hover:bg-gold/10"
+              }`}
+            >
+              <Ruler className="h-3.5 w-3.5" />
+              {measureActive ? "Measuring" : "Measure"}
+            </button>
+          </div>
+
+          {measureActive && (
+            <div className="mt-2 text-center">
+              {!measurePoint && (
+                <p className="text-[10px] uppercase tracking-wider text-gold-soft">
+                  {playerPosition ? "Tap the map to mark a target" : "GPS required"}
+                </p>
+              )}
+              {measurement && (
+                <div className="mt-1 inline-flex items-baseline gap-2">
+                  <span className="font-serif text-2xl text-gold tabular-nums">
+                    {measurement.distance}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-gold-soft">
+                    {measurement.unit}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onClearMeasure}
+                    className="ml-2 grid h-5 w-5 place-items-center rounded-full border border-gold/35 text-gold-soft hover:text-gold"
+                    aria-label="Clear measurement"
+                  >
+                    <XIcon className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Expandable sections — only when user opens the sheet */}
+        {expanded && (
+          <div className="border-t border-gold/15">
+            <SectionTabs
+              tabs={[
+                { id: "hazards", label: `Hazards${readout.carries.length ? ` · ${readout.carries.length}` : ""}`, icon: <Droplets className="h-3.5 w-3.5" /> },
+                { id: "ace", label: "ACE", icon: <Sparkles className="h-3.5 w-3.5" /> },
+                { id: "yardages", label: "Yardages", icon: <Mountain className="h-3.5 w-3.5" /> },
+              ]}
+              active={open}
+              onChange={(id) => setOpen(id as SectionKey)}
+            />
+            <div className="max-h-[28vh] overflow-y-auto px-4 pb-3">
+              {open === "hazards" && (
+                readout.carries.length === 0 ? (
             <p className="text-[11px] text-white/70">
               No mapped hazards in play from your current position.
             </p>
@@ -116,79 +183,13 @@ export function GpsBottomSheet({
                 <HazardRow key={c.id} c={c} unit={u} />
               ))}
             </ul>
-          )}
-        </Section>
-
-        {/* ACE */}
-        <Section
-          label="ACE Caddie"
-          icon={<Sparkles className="h-3.5 w-3.5" />}
-          open={open === "ace"}
-          onToggle={() => setOpen(open === "ace" ? ("" as SectionKey) : "ace")}
-        >
-          <p className="text-[12px] leading-snug text-foreground">{caddieInsight}</p>
-        </Section>
-
-        {/* MEASURE */}
-        <Section
-          label="Measure"
-          icon={<Ruler className="h-3.5 w-3.5" />}
-          open={open === "measure"}
-          onToggle={() => setOpen(open === "measure" ? ("" as SectionKey) : "measure")}
-        >
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onToggleMeasure}
-              className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold uppercase tracking-wider transition-all active:scale-95 ${
-                measureActive
-                  ? "border-gold bg-gold text-black shadow-[0_0_18px_rgba(245,200,75,0.35)]"
-                  : "border-gold/35 bg-black/60 text-gold"
-              }`}
-            >
-              <Ruler className="h-3.5 w-3.5" />
-              {measureActive ? "Measuring" : "Start Measure"}
-            </button>
-            {measurement && (
-              <button
-                type="button"
-                onClick={onClearMeasure}
-                className="flex h-11 items-center justify-center rounded-xl border border-gold/40 bg-black/60 px-3 text-gold-soft hover:text-gold"
-                aria-label="Clear measurement"
-              >
-                <XIcon className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          {measureActive && !measurePoint && (
-            <p className="mt-2 text-[10px] uppercase tracking-wider text-gold-soft">
-              {playerPosition ? "Tap the map to mark a target" : "GPS required"}
-            </p>
-          )}
-          {measurement && (
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="font-serif text-2xl text-gold tabular-nums">
-                {measurement.distance}
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-gold-soft">
-                {measurement.unit}
-              </span>
-              <span className="ml-auto text-[10px] text-white/55">
-                Bearing {Math.round(measurement.bearing)}°
-              </span>
-            </div>
-          )}
-        </Section>
-
-        {/* SMART YARDAGES */}
-        <Section
-          label="Smart Yardages"
-          icon={<Mountain className="h-3.5 w-3.5" />}
-          open={open === "yardages"}
-          onToggle={() => setOpen(open === "yardages" ? ("" as SectionKey) : "yardages")}
-          last
-        >
-          {readout.layups.length === 0 && readout.doglegs.length === 0 ? (
+                )
+              )}
+              {open === "ace" && (
+                <p className="text-[12px] leading-snug text-foreground">{caddieInsight}</p>
+              )}
+              {open === "yardages" && (
+                readout.layups.length === 0 && readout.doglegs.length === 0 ? (
             <p className="text-[11px] text-white/70">
               Layup and dogleg distances appear here once the hole has been mapped.
             </p>
@@ -221,50 +222,43 @@ export function GpsBottomSheet({
                 </li>
               ))}
             </ul>
-          )}
-        </Section>
+                )
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function Section({
-  label,
-  icon,
-  open,
-  onToggle,
-  last,
-  children,
+function SectionTabs({
+  tabs,
+  active,
+  onChange,
 }: {
-  label: string;
-  icon: React.ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  last?: boolean;
-  children: React.ReactNode;
+  tabs: { id: string; label: string; icon: React.ReactNode }[];
+  active: string;
+  onChange: (id: string) => void;
 }) {
   return (
-    <Collapsible open={open} onOpenChange={onToggle}>
-      <CollapsibleTrigger asChild>
+    <div className="flex items-center gap-1 px-3 pt-2">
+      {tabs.map((t) => (
         <button
+          key={t.id}
           type="button"
-          className={`flex w-full items-center gap-2 px-4 py-3 text-left ${
-            last ? "" : "border-b border-gold/15"
+          onClick={() => onChange(t.id)}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-all ${
+            active === t.id
+              ? "bg-gold/15 text-gold"
+              : "text-gold-soft/70 hover:text-gold"
           }`}
         >
-          <span className="text-gold">{icon}</span>
-          <span className="flex-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-soft">
-            {label}
-          </span>
-          <ChevronDown
-            className={`h-4 w-4 text-gold-soft transition-transform ${
-              open ? "rotate-180" : ""
-            }`}
-          />
+          {t.icon}
+          {t.label}
         </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="px-4 pb-3">{children}</CollapsibleContent>
-    </Collapsible>
+      ))}
+    </div>
   );
 }
 
@@ -272,27 +266,25 @@ function DistanceCell({
   label,
   value,
   unit,
-  muted,
-  small,
+  large,
 }: {
   label: string;
   value: string;
   unit?: string;
-  muted?: boolean;
-  small?: boolean;
+  large?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center">
-      <span className="text-[9px] uppercase tracking-widest text-white/55">{label}</span>
+      <span className="text-[10px] uppercase tracking-[0.2em] text-white/65">{label}</span>
       <span
-        className={`font-serif tabular-nums ${
-          small ? "text-[11px]" : "text-xl"
-        } ${muted ? "text-gold/60" : "text-gold"}`}
+        className={`mt-1 font-serif tabular-nums leading-none ${
+          large ? "text-3xl text-gold" : "text-2xl text-gold"
+        }`}
       >
-        {value}
+        {value === "—" ? <span className="text-gold/55">—</span> : value}
       </span>
-      {unit && !muted && (
-        <span className="text-[9px] uppercase tracking-wider text-gold-soft">{unit}</span>
+      {unit && (
+        <span className="mt-1 text-[9px] uppercase tracking-wider text-gold-soft">{unit}</span>
       )}
     </div>
   );

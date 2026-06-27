@@ -15,6 +15,8 @@ import {
   LocateOff,
   Maximize2,
   MapPin,
+  MoreHorizontal,
+  Mountain,
   Navigation,
   Plane,
   Play,
@@ -112,6 +114,8 @@ import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { GswingWeather } from "@/lib/gswing-weather";
 import {
   Select,
   SelectContent,
@@ -251,6 +255,8 @@ function MapboxCourseView({
   caddieInsight,
   unit,
   fallbackCenterYards,
+  onChangeHole,
+  holeCount,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -268,6 +274,8 @@ function MapboxCourseView({
   caddieInsight: string;
   unit: "yards" | "meters";
   fallbackCenterYards: number | null;
+  onChangeHole?: (next: number) => void;
+  holeCount?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -896,59 +904,51 @@ function MapboxCourseView({
     );
   }
 
+  const toggleMeasure = () =>
+    setMeasureActive((v) => {
+      const next = !v;
+      if (!next) setMeasurePoint(null);
+      return next;
+    });
+
   return (
-    <>
     <div
-      className={`gswing-map relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant ${
+      className={`gswing-map relative overflow-hidden rounded-[28px] border border-gold/25 bg-black shadow-elegant ${
         mapView === "satellite" ? "is-satellite" : "is-premium"
       }`}
     >
       <div
         ref={containerRef}
-        className="h-[48vh] min-h-[320px] w-full md:h-[58vh] md:min-h-[410px]"
+        className="h-[80vh] min-h-[560px] w-full md:h-[78vh] md:min-h-[600px]"
       />
 
-      {/* Honest empty-mapping experience — shown only when we have no
-          real surveyed geometry AND the user is in Premium mode. No
-          fake fairways, no fake hazards, no fake distances. Player GPS,
-          measure mode, weather, and accuracy continue to function. */}
-      {mapView === "premium" && mappingStatus !== "mapped" && mappingStatus !== "loading" && (
-        <PremiumEmptyMappingCard
-          courseName={selectedCourse.name}
-          onRefresh={onRefreshMapping}
-          onSwitchToSatellite={() => setMapView("satellite")}
-        />
+      {/* Premium ambience — soft vignette + emerald wash; no clutter. */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_50%,transparent_55%,rgba(0,0,0,0.55)_100%)]" />
+      {mapView === "premium" && (
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(160%_120%_at_50%_60%,rgba(8,52,32,0.18)_0%,rgba(2,16,10,0.55)_100%)]" />
       )}
 
-      <GpsHud
-        holeNumber={gps?.hole_number ?? hole}
+      <PremiumGpsChrome
+        hole={gps?.hole_number ?? hole}
         par={gps?.par ?? null}
-        holeLengthYards={holeLengthYards}
-        playerHandicap={playerHandicap}
-        courseName={selectedCourse.name}
-        holeName={gps?.notes ?? null}
-        liveTournament={null}
-        unit={unit}
-        readout={effectiveReadout}
-        fallbackCenterYards={effectiveFallbackCenter}
-        playerPosition={playerPosition}
-        playerAccuracy={playerAccuracy}
-        weather={hudWeather}
-        caddieInsight={effectiveInsight}
-        measureActive={measureActive}
-        onToggleMeasure={() =>
-          setMeasureActive((v) => {
-            const next = !v;
-            if (!next) setMeasurePoint(null);
-            return next;
-          })
+        handicap={gps?.handicap ?? null}
+        totalHoles={holeCount ?? 18}
+        onNextHole={
+          onChangeHole
+            ? () => {
+                const total = holeCount ?? 18;
+                onChangeHole(hole >= total ? 1 : hole + 1);
+              }
+            : undefined
         }
-        measurePoint={measurePoint}
-        onClearMeasure={() => setMeasurePoint(null)}
-        showHazards={showHazards}
-        onToggleHazards={() => setShowHazards((v) => !v)}
+        mapView={mapView}
+        onSetMapView={setMapView}
+        measureActive={measureActive}
+        onToggleMeasure={toggleMeasure}
         showOverlays={showOverlays}
         onToggleOverlays={() => setShowOverlays((v) => !v)}
+        showHazards={showHazards}
+        onToggleHazards={() => setShowHazards((v) => !v)}
         showLabels={showLabels}
         onToggleLabels={() => setShowLabels((v) => !v)}
         onRecenter={onRecenter}
@@ -956,55 +956,159 @@ function MapboxCourseView({
         onFlyover={onFlyover}
         flyoverDisabled={!geometry}
         flyoverRunning={flyoverRunning}
+        cameraMode={cameraMode}
+        onSetCameraMode={setCameraMode}
+        onRefreshMapping={onRefreshMapping}
+        mappingStatus={mappingStatus}
+        playerPosition={playerPosition}
+        playerAccuracy={playerAccuracy}
+        weather={hudWeather}
+        caddieInsight={effectiveInsight}
       />
 
-      {/* Camera mode pill — desktop full segmented tabs. On mobile we
-          replace it with a compact dropdown so the full mode rail never
-          stretches across the map. */}
-      <div className="pointer-events-auto absolute left-1/2 top-[3.4rem] hidden -translate-x-1/2 md:block">
-        <div
-          className="flex max-w-[94vw] items-center gap-0.5 overflow-x-auto rounded-full border border-gold/30 bg-black/55 p-0.5 text-[9px] uppercase tracking-wider shadow-lg backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          role="tablist"
-          aria-label="Camera mode"
-        >
-          {CAMERA_MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="tab"
-              onClick={() => setCameraMode(m.id)}
-              aria-selected={cameraMode === m.id}
-              className={`shrink-0 rounded-full px-2 py-1 font-semibold transition-colors ${
-                cameraMode === m.id
-                  ? "bg-gold text-black shadow-[0_0_12px_rgba(245,200,75,0.35)]"
-                  : "text-white/70 hover:text-white"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
+      <GpsBottomSheet
+        unit={unit}
+        readout={effectiveReadout}
+        fallbackCenterYards={effectiveFallbackCenter}
+        caddieInsight={effectiveInsight}
+        measureActive={measureActive}
+        onToggleMeasure={toggleMeasure}
+        measurePoint={measurePoint}
+        onClearMeasure={() => setMeasurePoint(null)}
+        playerPosition={playerPosition}
+      />
+    </div>
+  );
+}
+
+/**
+ * PremiumGpsChrome — minimal, luxury HUD that overlays the live GPS map.
+ * Matches the G-Swing Live GPS Premium reference: clean top bar with
+ * hole/par/hcp pill + hole counter, Premium/Satellite pill, elegant
+ * left rail of 4 round buttons, and a flag focus button. Every
+ * existing capability remains reachable via the More menu.
+ */
+function PremiumGpsChrome(props: {
+  hole: number;
+  par: number | null;
+  handicap: number | null;
+  totalHoles: number;
+  mapView: "premium" | "satellite";
+  onSetMapView: (m: "premium" | "satellite") => void;
+  measureActive: boolean;
+  onToggleMeasure: () => void;
+  showOverlays: boolean;
+  onToggleOverlays: () => void;
+  showHazards: boolean;
+  onToggleHazards: () => void;
+  showLabels: boolean;
+  onToggleLabels: () => void;
+  onRecenter: () => void;
+  onFitHole: () => void;
+  onFlyover: () => void;
+  flyoverDisabled: boolean;
+  flyoverRunning: boolean;
+  cameraMode: CameraMode;
+  onSetCameraMode: (m: CameraMode) => void;
+  onRefreshMapping: () => void;
+  mappingStatus: "idle" | "loading" | "mapped" | "missing";
+  playerPosition: LatLng | null;
+  playerAccuracy: number | null;
+  weather: { status: string; data?: GswingWeather };
+  caddieInsight: string;
+  onNextHole?: () => void;
+}): JSX.Element {
+  const {
+    hole,
+    par,
+    handicap,
+    totalHoles,
+    mapView,
+    onSetMapView,
+    measureActive,
+    onToggleMeasure,
+    showOverlays,
+    onToggleOverlays,
+    showHazards,
+    onToggleHazards,
+    showLabels,
+    onToggleLabels,
+    onRecenter,
+    onFitHole,
+    onFlyover,
+    flyoverDisabled,
+    flyoverRunning,
+    cameraMode,
+    onSetCameraMode,
+    onRefreshMapping,
+    mappingStatus,
+    playerPosition,
+    playerAccuracy,
+    weather,
+    onNextHole,
+  } = props;
+
+  const wx = weather.status === "ready" && weather.data ? weather.data : null;
+  const accClass = playerPosition
+    ? classifyAccuracy(playerAccuracy) === "low"
+      ? "text-amber-300"
+      : "text-emerald-300"
+    : "text-amber-300";
+
+  return (
+    <>
+      {/* TOP BAR — minimal: back · hole/par/hcp · hole counter */}
+      <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+        <div className="pointer-events-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("gswing-exit-gps"))}
+            aria-label="Back"
+            className="grid h-10 w-10 place-items-center rounded-full border border-gold/35 bg-black/55 text-gold-soft backdrop-blur-md transition-colors hover:text-gold active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="flex h-10 items-center gap-2 rounded-full border border-gold/35 bg-black/55 pl-2 pr-3 backdrop-blur-md">
+            <span className="font-serif text-2xl leading-none text-gold">{hole}</span>
+            <div className="flex flex-col text-[9px] uppercase tracking-[0.18em] leading-tight text-white/70">
+              <span>
+                Par <span className="text-gold">{par ?? "—"}</span>
+              </span>
+              {handicap != null && (
+                <span>
+                  HCP <span className="text-gold">{handicap}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => onNextHole?.()}
+            disabled={!onNextHole}
+            className="flex h-10 min-w-[3.25rem] items-center gap-1 rounded-full border border-gold/35 bg-black/55 px-3 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur-md transition-all active:scale-95 disabled:opacity-60"
+            aria-label="Next hole"
+          >
+            <span>H{hole}/{totalHoles}</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 
-      {/* Premium / Satellite view toggle — desktop placement under the
-          camera pill. On mobile we pin a compact version in the top
-          corner alongside the mode dropdown. */}
-      <div className="pointer-events-auto absolute left-1/2 top-[5.4rem] hidden -translate-x-1/2 md:block">
-        <div
-          className="flex items-center gap-0.5 rounded-full border border-gold/30 bg-black/65 p-0.5 text-[9px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-md"
-          role="tablist"
-          aria-label="Map view"
-        >
+      {/* PREMIUM / SATELLITE PILL — sits just under the top bar, right side */}
+      <div className="pointer-events-auto absolute right-3 top-[3.65rem]">
+        <div className="flex items-center rounded-full border border-gold/35 bg-black/55 p-0.5 backdrop-blur-md">
           {(["premium", "satellite"] as const).map((mode) => (
             <button
               key={mode}
               type="button"
-              role="tab"
-              onClick={() => setMapView(mode)}
-              aria-selected={mapView === mode}
-              className={`rounded-full px-2.5 py-0.5 transition-colors ${
+              onClick={() => onSetMapView(mode)}
+              aria-pressed={mapView === mode}
+              className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] transition-all ${
                 mapView === mode
-                  ? "bg-gold text-black"
+                  ? "bg-gold text-black shadow-[0_0_14px_rgba(245,200,75,0.35)]"
                   : "text-gold-soft hover:text-gold"
               }`}
             >
@@ -1014,107 +1118,180 @@ function MapboxCourseView({
         </div>
       </div>
 
-      {/* Mobile-only compact mode + view chips. Sit on a single row in
-          the top-right safe area so the map stays uncluttered. */}
-      <div className="pointer-events-auto absolute right-2 top-[3.4rem] flex items-center gap-1 md:hidden">
-        <Select
-          value={cameraMode}
-          onValueChange={(v) => setCameraMode(v as CameraMode)}
+      {/* LEFT RAIL — 4 elegant round buttons (Locate · Measure · Layers · More) */}
+      <div className="pointer-events-auto absolute left-3 top-1/2 flex -translate-y-1/2 flex-col gap-2.5">
+        <ChromeBtn label="Locate" onClick={onRecenter}>
+          <Crosshair className="h-4 w-4" />
+        </ChromeBtn>
+        <ChromeBtn label="Measure" active={measureActive} onClick={onToggleMeasure}>
+          <Ruler className="h-4 w-4" />
+        </ChromeBtn>
+        <ChromeBtn
+          label="Layers"
+          active={showOverlays}
+          onClick={onToggleOverlays}
         >
-          <SelectTrigger className="h-7 min-w-[6.5rem] gap-1 rounded-full border-gold/35 bg-black/65 px-2 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur-md">
-            <SelectValue placeholder="Mode" />
-          </SelectTrigger>
-          <SelectContent className="border-gold/30 bg-black/90 text-gold backdrop-blur-xl">
+          <LayersIcon className="h-4 w-4" />
+        </ChromeBtn>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="More"
+              className="grid h-10 w-10 place-items-center rounded-full border border-gold/30 bg-black/55 text-gold-soft backdrop-blur-md transition-all hover:text-gold active:scale-95"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="center"
+            className="w-56 border-gold/30 bg-black/90 p-2 text-gold-soft backdrop-blur-xl"
+          >
+            <MoreItem onClick={onFitHole} icon={<Maximize2 className="h-3.5 w-3.5" />}>
+              Fit hole
+            </MoreItem>
+            <MoreItem
+              onClick={onFlyover}
+              disabled={flyoverDisabled || flyoverRunning}
+              icon={<Plane className="h-3.5 w-3.5" />}
+            >
+              {flyoverRunning ? "Flyover…" : "Flyover"}
+            </MoreItem>
+            <MoreItem
+              onClick={onToggleHazards}
+              active={showHazards}
+              icon={<Droplets className="h-3.5 w-3.5" />}
+            >
+              Hazards · {showHazards ? "on" : "off"}
+            </MoreItem>
+            <MoreItem
+              onClick={onToggleLabels}
+              active={showLabels}
+              icon={<Mountain className="h-3.5 w-3.5" />}
+            >
+              Yardages · {showLabels ? "on" : "off"}
+            </MoreItem>
+            <div className="my-1 h-px bg-gold/15" />
+            <div className="px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-gold-soft/70">
+              Camera
+            </div>
             {CAMERA_MODES.map((m) => (
-              <SelectItem
+              <MoreItem
                 key={m.id}
-                value={m.id}
-                className="text-[11px] uppercase tracking-wider"
+                onClick={() => onSetCameraMode(m.id)}
+                active={cameraMode === m.id}
               >
                 {m.label}
-              </SelectItem>
+              </MoreItem>
             ))}
-          </SelectContent>
-        </Select>
-        <div className="flex items-center gap-0.5 rounded-full border border-gold/30 bg-black/65 p-0.5 backdrop-blur-md">
-          {(["premium", "satellite"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setMapView(mode)}
-              aria-pressed={mapView === mode}
-              className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider transition-colors ${
-                mapView === mode ? "bg-gold text-black" : "text-gold-soft"
-              }`}
-            >
-              {mode === "premium" ? "Prem" : "Sat"}
-            </button>
-          ))}
-        </div>
+            <div className="my-1 h-px bg-gold/15" />
+            <MoreItem onClick={onRefreshMapping} icon={<RefreshCw className="h-3.5 w-3.5" />}>
+              Refresh mapping
+            </MoreItem>
+            <div className="px-2 py-1.5 text-[10px] leading-snug text-white/70">
+              <div className="flex items-center gap-1.5">
+                {playerPosition ? (
+                  <Wifi className={`h-3 w-3 ${accClass}`} />
+                ) : (
+                  <WifiOff className="h-3 w-3 text-amber-300" />
+                )}
+                <span>
+                  {playerPosition ? "GPS live" : "GPS waiting"}
+                  {playerAccuracy != null && playerPosition && (
+                    <span className={`${accClass} ml-1`}>±{Math.round(playerAccuracy)}m</span>
+                  )}
+                </span>
+              </div>
+              {wx && (
+                <div className="mt-1 flex items-center gap-1.5">
+                  <Wind className="h-3 w-3 text-emerald-300" />
+                  <span>
+                    {Math.round(wx.windSpeedKmh)} km/h {wx.windDirectionLabel} · {Math.round(wx.temperatureC)}°
+                  </span>
+                </div>
+              )}
+              <div className="mt-1 text-[9px] uppercase tracking-wider text-gold-soft/70">
+                Mapping ·{" "}
+                {mappingStatus === "mapped"
+                  ? "ready"
+                  : mappingStatus === "loading"
+                    ? "loading…"
+                    : "required"}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
-      {/* Honest GPS lock banner — no fake "locked" state. Tells the truth
-          about location permission, accuracy, and whether a mapped course
-          was actually detected nearby. Sits above the bottom HUD. */}
-      <GpsLockBanner
-        playerPosition={playerPosition}
-        playerAccuracy={playerAccuracy}
-        nearestCourseFound={nearestCourseFound}
-        mappingStatus={mappingStatus}
-        courseName={selectedCourse.name}
-      />
-
-      {/* Mapping status badge + Refresh control. Honest about whether
-          the screen is showing real surveyed geometry or placeholders. */}
-      <div className="pointer-events-auto absolute bottom-1 left-2 flex items-center gap-1">
-        <div
-          className={`rounded-md border px-1.5 py-0.5 text-[8px] uppercase tracking-wider backdrop-blur-sm ${
-            mappingStatus === "mapped"
-              ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
-              : mappingStatus === "loading"
-                ? "border-gold/30 bg-black/55 text-gold-soft/85"
-                : "border-gold/25 bg-black/55 text-gold-soft/80"
-          }`}
-        >
-          {mappingStatus === "mapped"
-            ? "Mapped course"
-            : mappingStatus === "loading"
-              ? "Loading mapping…"
-              : "Professional mapping required"}
-        </div>
+      {/* FLAG focus button — bottom-right, above bottom sheet */}
+      <div className="pointer-events-auto absolute bottom-[16rem] right-3 md:bottom-[14rem]">
         <button
           type="button"
-          onClick={onRefreshMapping}
-          title="Refresh mapping"
-          aria-label="Refresh mapping"
-          className="flex h-5 w-5 items-center justify-center rounded-md border border-gold/30 bg-black/55 text-gold-soft backdrop-blur-sm transition-colors hover:text-gold active:scale-95"
+          onClick={onFitHole}
+          aria-label="Focus on green"
+          className="grid h-11 w-11 place-items-center rounded-full border border-gold/35 bg-black/55 text-gold backdrop-blur-md transition-all hover:bg-black/70 active:scale-95"
         >
-          <RefreshCw className="h-3 w-3" />
+          <Flag className="h-4 w-4" />
         </button>
       </div>
-    </div>
-
-    {/* Mobile-only bottom sheet — houses Front/Center/Back, ACE, hazards,
-        measure controls and smart yardages. Default expanded section is
-        Green so the most important data is always visible first. */}
-    <GpsBottomSheet
-      unit={unit}
-      readout={effectiveReadout}
-      fallbackCenterYards={effectiveFallbackCenter}
-      caddieInsight={effectiveInsight}
-      measureActive={measureActive}
-      onToggleMeasure={() =>
-        setMeasureActive((v) => {
-          const next = !v;
-          if (!next) setMeasurePoint(null);
-          return next;
-        })
-      }
-      measurePoint={measurePoint}
-      onClearMeasure={() => setMeasurePoint(null)}
-      playerPosition={playerPosition}
-    />
     </>
+  );
+}
+
+function ChromeBtn({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`grid h-10 w-10 place-items-center rounded-full border backdrop-blur-md transition-all active:scale-95 ${
+        active
+          ? "border-gold bg-gold text-black shadow-[0_0_16px_rgba(245,200,75,0.4)]"
+          : "border-gold/30 bg-black/55 text-gold-soft hover:text-gold"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MoreItem({
+  onClick,
+  disabled,
+  active,
+  icon,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? "text-gold" : ""
+      }`}
+    >
+      {icon}
+      <span className="flex-1">{children}</span>
+    </button>
   );
 }
 
@@ -2228,7 +2405,7 @@ export const GpsMap = () => {
 
   return (
     <div className="space-y-3 pb-28">
-      <div className="flex items-center gap-3">
+      <div className="hidden md:flex items-center gap-3">
         <Target className="h-6 w-6 text-gold" />
         <div className="min-w-0">
           <h2 className="font-serif text-2xl text-gradient-gold">Live GPS</h2>
@@ -2239,7 +2416,7 @@ export const GpsMap = () => {
         </div>
       </div>
 
-      <Card className="gradient-card flex items-center gap-2 border-gold/20 p-3">
+      <Card className="gradient-card hidden md:flex items-center gap-2 border-gold/20 p-3">
         <select
           value={courseId}
           onChange={(event) => {
@@ -2290,6 +2467,8 @@ export const GpsMap = () => {
         caddieInsight={caddieInsight}
         unit={unit}
         fallbackCenterYards={loading ? null : displayCenterDistance}
+        onChangeHole={changeHole}
+        holeCount={selectableHoleCount}
       />
 
       <div className="hidden md:block">
@@ -2380,7 +2559,7 @@ export const GpsMap = () => {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="hidden md:grid grid-cols-2 gap-2">
         <Button
           onClick={activeRound ? toggleLiveTracking : startPlayMode}
           disabled={syncing}
@@ -2410,7 +2589,7 @@ export const GpsMap = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="hidden md:grid grid-cols-3 gap-2">
         <Button onClick={() => changeHole(hole - 1)} disabled={hole === 1} variant="outline" className="border-gold/40">
           <ChevronLeft className="mr-1 h-4 w-4" />
           Prev
@@ -2431,9 +2610,11 @@ export const GpsMap = () => {
         </Card>
       )}
 
-      <RoundIntelligence stats={roundStats} loading={statsLoading} />
+      <div className="hidden md:block">
+        <RoundIntelligence stats={roundStats} loading={statsLoading} />
+      </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="hidden md:grid grid-cols-2 gap-2">
         <Button
           variant="outline"
           className="border-gold/40"
@@ -2454,7 +2635,7 @@ export const GpsMap = () => {
       </div>
 
       <Button
-        className="w-full gradient-gold text-primary-foreground shadow-elegant"
+        className="hidden md:flex w-full gradient-gold text-primary-foreground shadow-elegant"
         onClick={() => setExperienceOpen(true)}
         disabled={roundShots.length === 0}
       >
@@ -2482,7 +2663,7 @@ export const GpsMap = () => {
         model={experienceModel}
       />
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="hidden md:flex gap-2 overflow-x-auto pb-2">
         {Array.from({ length: selectableHoleCount }, (_, index) => index + 1).map((holeNumber) => (
           <button
             key={holeNumber}
