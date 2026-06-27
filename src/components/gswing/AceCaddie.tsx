@@ -4,6 +4,7 @@ import { Sparkles, Send, X, Bot, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBag } from "@/lib/gswing-store";
 import { toast } from "sonner";
+import { useGswingMembership } from "@/hooks/useGswingMembership";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -17,6 +18,8 @@ const STARTERS = [
 export const AceCaddie = () => {
   const [open, setOpen] = useState(false);
   const [bag] = useBag();
+  const { canAccess } = useGswingMembership();
+  const allowed = canAccess("ai.caddie");
   const [messages, setMessages] = useState<Msg[]>([
     { role: "assistant", content: "Hi Riaan — I'm **ACE**, your AI Caddie. Ask me about clubs, swing fixes, course strategy, or anything in G Swing." },
   ]);
@@ -121,7 +124,14 @@ export const AceCaddie = () => {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (!allowed) {
+            toast.error("ACE Caddie is a Premium feature. Upgrade to unlock.");
+            window.location.href = "/auth";
+            return;
+          }
+          setOpen(true);
+        }}
         className={cn(
           "fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full gradient-gold shadow-gold animate-glow-pulse",
           open && "hidden"
