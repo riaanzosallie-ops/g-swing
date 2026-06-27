@@ -95,6 +95,8 @@ import {
 import { computeYardages } from "@/lib/yardage-engine";
 import { useGswingWeather } from "@/lib/use-gswing-weather";
 import { Ruler, X as XIcon, Wifi, WifiOff, Wind } from "lucide-react";
+import { GpsHud } from "@/components/gswing/gps/GpsHud";
+import type { YardageReadout } from "@/lib/yardage-engine";
 
 const MEASURE_SRC = "gs-measure-src";
 const MEASURE_LINE = "gs-measure-line";
@@ -221,6 +223,12 @@ function MapboxCourseView({
   displayUnit,
   geometry,
   holeShots,
+  holeLengthYards,
+  playerHandicap,
+  yardageReadout,
+  caddieInsight,
+  unit,
+  fallbackCenterYards,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -232,6 +240,12 @@ function MapboxCourseView({
   displayUnit: "y" | "m";
   geometry: HoleGeometryPayload | null;
   holeShots: StoredShot[];
+  holeLengthYards: number | null;
+  playerHandicap: number | null;
+  yardageReadout: YardageReadout;
+  caddieInsight: string;
+  unit: "yards" | "meters";
+  fallbackCenterYards: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
