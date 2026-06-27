@@ -56,6 +56,14 @@ const Index = () => {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Listen for the in-map "back" button dispatched by the GPS chrome.
+  // MUST be declared before any conditional return to respect Rules of Hooks.
+  useEffect(() => {
+    const handler = () => setView("home");
+    window.addEventListener("gswing-exit-gps", handler);
+    return () => window.removeEventListener("gswing-exit-gps", handler);
+  }, []);
+
   function handleEnter() {
     if (hasSession) setStage("app");
     else setStage("auth");
@@ -78,13 +86,6 @@ const Index = () => {
 
   const showBack = !NAV.some((n) => n.id === view);
   const isGps = view === "gps";
-
-  // Listen for the in-map "back" button dispatched by the GPS chrome.
-  useEffect(() => {
-    const handler = () => setView("home");
-    window.addEventListener("gswing-exit-gps", handler);
-    return () => window.removeEventListener("gswing-exit-gps", handler);
-  }, []);
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background">
