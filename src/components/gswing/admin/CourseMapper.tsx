@@ -19,6 +19,14 @@ import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { ensureMappedLayers, setMappedHoleData } from "@/lib/mapbox-mapped-layers";
 import { buildMappedHoleFromRows, loadMappedHole } from "@/lib/gswing-course-map-loader";
 
+// Sharjah Golf and Shooting Club — seeded with the verified front-9 par
+// layout. Used by the Sharjah quick-select to jump straight into mapping
+// without hunting through the course list.
+const SHARJAH_QUICK = {
+  name: "Sharjah Golf and Shooting Club",
+  pars: { 1: 4, 2: 4, 3: 3, 4: 5, 5: 4, 6: 5, 7: 4, 8: 3, 9: 4 } as Record<number, number>,
+};
+
 type Tool =
   | "select"
   | "tee"
@@ -332,6 +340,45 @@ export default function CourseMapper() {
     });
   }, [saving]);
 
+  // Sharjah quick-select — finds the seeded course and jumps straight to
+  // hole 1. Falls back to a toast if the seed migration was not applied.
+  const openSharjah = useCallback(async () => {
+    const { data } = await supabase
+      .from("gswing_course_maps")
+      .select("id")
+      .eq("course_name", SHARJAH_QUICK.name)
+      .maybeSingle();
+    if (!data?.id) {
+      toast.error("Sharjah course not seeded yet.");
+      return;
+    }
+    setHoleNumber(1);
+    await onSelectCourse(data.id);
+  }, []);
+
+  // Honest per-hole completeness checklist. Reads the current draft
+  // features — does not invent missing data.
+  const checklist = useMemo(() => {
+    const has = (t: FeatureType) => features.some((f) => f.feature_type === t);
+    return [
+      { key: "tee", label: "Tee", done: has("tee") },
+      { key: "green_front", label: "Green front", done: has("green_front") },
+      { key: "green_center", label: "Green center", done: has("green_center") },
+      { key: "green_back", label: "Green back", done: has("green_back") },
+      { key: "pin", label: "Pin", done: has("pin") },
+      {
+        key: "hazards",
+        label: "Hazards",
+        done: features.some((f) => ["bunker","water","penalty","ob"].includes(f.feature_type)),
+      },
+      {
+        key: "layups",
+        label: "Layups",
+        done: features.some((f) => ["layup","dogleg","landing_zone"].includes(f.feature_type)),
+      },
+    ];
+  }, [features]);
+
   const save = async () => {
     if (admin.status !== "admin") {
       toast.error("Admin role required to save.");
@@ -504,6 +551,15 @@ export default function CourseMapper() {
           <h1 className="font-serif text-base text-gold">{courseName || "Untitled course"}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            onClick={openSharjah}
+            size="sm"
+            variant="outline"
+            className="h-7 border-gold/40 bg-black/40 px-2 text-[10px] uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
+          >
+            Sharjah
+          </Button>
           <select
             value={courseMapId ?? ""}
             onChange={(e) => (e.target.value ? onSelectCourse(e.target.value) : setCourseMapId(null))}
@@ -595,6 +651,28 @@ export default function CourseMapper() {
           </div>
 
           <p className="mt-4 text-[10px] uppercase tracking-[0.25em] text-gold-soft">Features ({features.length})</p>
+          <div className="mt-2 rounded-lg border border-white/10 bg-black/40 p-2">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft">
+              Hole {holeNumber} completeness
+            </p>
+            <ul className="mt-1 space-y-0.5 text-[11px]">
+              {checklist.map((c) => (
+                <li key={c.key} className="flex items-center justify-between">
+                  <span className="text-foreground/80">{c.label}</span>
+                  <span
+                    className={
+                      c.done
+                        ? "inline-flex items-center gap-1 text-emerald-300"
+                        : "inline-flex items-center gap-1 text-amber-300"
+                    }
+                  >
+                    {c.done ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                    {c.done ? "saved" : "missing"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
           {loadingHole && <p className="mt-1 text-[11px] text-foreground/60">Loading hole…</p>}
           <ul className="mt-1 space-y-1">
             {features.map((f) => (
