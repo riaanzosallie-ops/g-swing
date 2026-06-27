@@ -10,6 +10,9 @@ import { usePlayer, useRounds } from "@/lib/gswing-store";
 import { listTournaments, type Tournament } from "@/lib/tournament-engine";
 import { LaunchIntro } from "./LaunchIntro";
 import { HeroAmbience } from "./HeroAmbience";
+import { useBrowserCoords, useGswingWeather } from "@/lib/use-gswing-weather";
+import { buildGolfWeatherInsight } from "@/lib/gswing-weather";
+import { conditionIcon } from "./WeatherPill";
 
 const moreTiles = [
   { id: "gps", label: "Live GPS", icon: MapPin, hint: "Satellite course view" },
@@ -37,6 +40,23 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
   const [rounds] = useRounds();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  // Optional browser geolocation → Open-Meteo weather (silent fallback)
+  const coords = useBrowserCoords();
+  const weatherState = useGswingWeather(coords);
+  const weatherText =
+    weatherState.status === "ready"
+      ? `${weatherState.data.temperatureC}°C · ${weatherState.data.conditionLabel}`
+      : weatherState.status === "loading"
+      ? "Reading conditions…"
+      : weatherState.status === "no_location"
+      ? "Weather ready when course location is added."
+      : "Weather unavailable.";
+  const WeatherIcon = weatherState.status === "ready"
+    ? conditionIcon(weatherState.data.condition)
+    : CloudSun;
+  const weatherInsight =
+    weatherState.status === "ready" ? buildGolfWeatherInsight(weatherState.data) : null;
 
   const roundsPlayed = rounds.length;
   const bestScore = roundsPlayed ? Math.min(...rounds.map((r) => r.score)) : null;
@@ -153,9 +173,14 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
 
         <div className="mt-5 space-y-2 text-xs text-muted-foreground">
           <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2"><CloudSun className="h-3.5 w-3.5 text-gold" /> Weather</span>
-            <span className="text-muted-foreground/80">Course weather unavailable</span>
+            <span className="flex items-center gap-2"><WeatherIcon className="h-3.5 w-3.5 text-gold" /> Conditions</span>
+            <span className="text-foreground/80 text-right">{weatherText}</span>
           </div>
+          {weatherInsight && (
+            <p className="border-t border-gold/10 pt-2 text-[11px] italic text-gold/80">
+              {weatherInsight}
+            </p>
+          )}
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2"><Radio className="h-3.5 w-3.5 text-gold" /> Tournament</span>
             <span className="text-foreground/80">{tournamentLabel}</span>
