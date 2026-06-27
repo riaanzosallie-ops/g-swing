@@ -43,27 +43,6 @@ import "mapbox-gl/dist/mapbox-gl.css";
 // Public Mapbox token (publishable pk.*). Loaded from Vite env — never hardcoded.
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined) ?? "";
 
-// =====================================================================
-// PLACEHOLDER COURSE GEOMETRY
-// ---------------------------------------------------------------------
-// Real per-hole geometry (tee boxes, green polygon, hazards) for UAE
-// courses is NOT yet wired in. The values below are hand-picked
-// approximations for Sharjah Golf and Shooting Club, Hole 1 only,
-// purely so the Mapbox view has something to render until real course
-// mapping data is ingested.
-// Replace with surveyed geometry from a course-data provider
-// (e.g. GolfBert, USGA course rating files, manual GeoJSON survey).
-// =====================================================================
-const SHARJAH_HOLE_1_PLACEHOLDER = {
-  courseId: MAIN_COURSE_ID,
-  hole: 1,
-  tee: { lat: 25.35330, lng: 55.48760 },
-  greenCenter: { lat: 25.35470, lng: 55.48905 },
-  pin: { lat: 25.35472, lng: 55.48908 },
-  front: { lat: 25.35458, lng: 55.48895 },
-  back: { lat: 25.35482, lng: 55.48918 },
-} as const;
-
 function MapboxCourseView({
   gps,
   playerPosition,
