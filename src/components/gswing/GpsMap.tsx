@@ -272,6 +272,8 @@ function MapboxCourseView({
   caddieInsight: string;
   unit: "yards" | "meters";
   fallbackCenterYards: number | null;
+  onChangeHole?: (next: number) => void;
+  holeCount?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -1032,6 +1034,7 @@ function PremiumGpsChrome(props: {
     playerPosition,
     playerAccuracy,
     weather,
+    onNextHole,
   } = props;
 
   const wx = weather.status === "ready" && weather.data ? weather.data : null;
