@@ -68,10 +68,15 @@ import {
   persistShot,
   shotsForHole,
   computeRoundStats,
+  updateShotTags,
   type StoredShot,
   type RoundStats,
+  type ShotTagInput,
 } from "@/lib/shot-tracker";
 import { RoundIntelligence } from "@/components/gswing/RoundIntelligence";
+import { ShotTagPrompt } from "@/components/gswing/ShotTagPrompt";
+import { RoundShotReview } from "@/components/gswing/RoundShotReview";
+import { BookOpen, Film } from "lucide-react";
 import {
   applyMode as applyCameraMode,
   followPlayer,
@@ -87,7 +92,7 @@ type TokenState =
   | { status: "error"; message: string };
 
 let cachedTokenPromise: Promise<string> | null = null;
-function loadMapboxToken(): Promise<string> {
+export function loadMapboxToken(): Promise<string> {
   if (!cachedTokenPromise) {
     cachedTokenPromise = (async () => {
       const { data, error } = await supabase.functions.invoke<{ token?: string; error?: string }>(
