@@ -1074,9 +1074,16 @@ function PremiumGpsChrome(props: {
         </div>
 
         <div className="pointer-events-auto">
-          <div className="grid h-10 min-w-[3.25rem] place-items-center rounded-full border border-gold/35 bg-black/55 px-2 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur-md">
-            H{hole}/{totalHoles}
-          </div>
+          <button
+            type="button"
+            onClick={() => onNextHole?.()}
+            disabled={!onNextHole}
+            className="flex h-10 min-w-[3.25rem] items-center gap-1 rounded-full border border-gold/35 bg-black/55 px-3 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur-md transition-all active:scale-95 disabled:opacity-60"
+            aria-label="Next hole"
+          >
+            <span>H{hole}/{totalHoles}</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 
