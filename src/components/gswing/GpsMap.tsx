@@ -46,6 +46,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { fetchHoleGeometry, geometryToHoleGpsResponse } from "@/lib/course-geometry";
 import type { HoleGeometryPayload } from "@/lib/course-geometry";
+import { YardagePanel } from "@/components/gswing/YardagePanel";
 import { supabase } from "@/integrations/supabase/client";
 import {
   applyCourseGeometry,
@@ -973,6 +974,7 @@ export const GpsMap = () => {
   const [activeRound, setActiveRound] = useState<ActiveRound | null>(null);
   const [activeShot, setActiveShot] = useState<Shot | null>(null);
   const [lastShotYards, setLastShotYards] = useState<number | null>(null);
+  const [lastShotEnd, setLastShotEnd] = useState<LatLng | null>(null);
   const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
