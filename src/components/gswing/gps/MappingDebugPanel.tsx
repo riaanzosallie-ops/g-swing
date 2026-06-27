@@ -20,6 +20,10 @@ export interface MappingDebugPanelProps {
   center: number | null;
   back: number | null;
   unitShort: "y" | "m";
+  /** External provider link, if any, on the course map. */
+  externalProvider?: string | null;
+  externalCourseId?: string | null;
+  lastSynced?: string | null;
 }
 
 function yn(v: boolean) {
@@ -30,9 +34,16 @@ function fmt(v: number | null) {
   return v == null || !Number.isFinite(v) ? "—" : Math.round(v).toString();
 }
 
-function source(status: MappingDebugPanelProps["mappingStatus"]): string {
-  if (status === "mapped") return "mapped";
-  if (status === "missing") return "missing";
+function source(
+  status: MappingDebugPanelProps["mappingStatus"],
+  provider?: string | null,
+): string {
+  // Distance priority: G-Swing mapping → GolfCourseAPI → OSM Preview → Missing.
+  // We only return a single source — sources are never mixed for one hole.
+  if (status === "mapped") return "G-Swing Mapping";
+  if (status === "missing") {
+    return provider ? `${provider} (metadata only — geometry missing)` : "Missing";
+  }
   return "loading";
 }
 
@@ -84,7 +95,14 @@ export function MappingDebugPanel(props: MappingDebugPanelProps) {
       <Row k={`Front ${unitShort}`} v={fmt(front)} />
       <Row k={`Center ${unitShort}`} v={fmt(center)} />
       <Row k={`Back ${unitShort}`} v={fmt(back)} />
-      <Row k="Source" v={source(mappingStatus)} />
+      <Row k="Source" v={source(mappingStatus, props.externalProvider)} />
+      {props.externalProvider && (
+        <>
+          <Row k="Linked provider" v={props.externalProvider} />
+          <Row k="External id" v={props.externalCourseId ?? "—"} mono />
+          <Row k="Last synced" v={props.lastSynced ?? "—"} />
+        </>
+      )}
     </div>
   );
 }
