@@ -1418,6 +1418,28 @@ export const GpsMap = () => {
   const fallbackDistance = playerPos ? toDisplayUnit(haversineYards(playerPos, courseCenter), unit) : null;
   const displayCenterDistance = centerDistance ?? fallbackDistance;
 
+  const savePendingTags = async (tags: ShotTagInput) => {
+    if (!pendingTagShot) return;
+    const updated = await updateShotTags(pendingTagShot.id, tags);
+    if (updated) {
+      setRoundShots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      toast.success("Shot tagged");
+    } else {
+      toast.error("Could not save tags");
+    }
+    setPendingTagShot(null);
+  };
+
+  const tagSummary = pendingTagShot
+    ? `Hole ${pendingTagShot.hole_number ?? "?"} · #${pendingTagShot.shot_number ?? "?"}${
+        pendingTagShot.club ? ` · ${pendingTagShot.club}` : ""
+      }${
+        pendingTagShot.distance_yards != null
+          ? ` · ${Math.round(pendingTagShot.distance_yards)}y`
+          : ""
+      }`
+    : undefined;
+
   return (
     <div className="space-y-3 pb-28">
       <div className="flex items-center gap-3">
