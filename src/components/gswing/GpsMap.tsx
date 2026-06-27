@@ -1007,6 +1007,10 @@ export const GpsMap = () => {
   const [lastShotEnd, setLastShotEnd] = useState<LatLng | null>(null);
   const [roundShots, setRoundShots] = useState<StoredShot[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [pendingTagShot, setPendingTagShot] = useState<StoredShot | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [replayAll, setReplayAll] = useState(false);
+  const [mapboxToken, setMapboxToken] = useState<string | null>(null);
   const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -1016,6 +1020,22 @@ export const GpsMap = () => {
   );
   const watchIdRef = useRef<number | null>(null);
   const [bag] = useBag();
+
+  // Lazy-load the publishable Mapbox token at the parent level too —
+  // used for static shot preview images in the Round Shot Review.
+  useEffect(() => {
+    let cancelled = false;
+    loadMapboxToken()
+      .then((t) => {
+        if (!cancelled) setMapboxToken(t);
+      })
+      .catch(() => {
+        if (!cancelled) setMapboxToken(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === courseId) ?? courses[0] ?? UAE_COURSES[0],
