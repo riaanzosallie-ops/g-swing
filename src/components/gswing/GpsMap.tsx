@@ -1380,6 +1380,7 @@ export const GpsMap = () => {
         centerDistance={loading ? null : displayCenterDistance}
         displayUnit={displayUnit}
         geometry={geometryPayload}
+        holeShots={shotsForHole(roundShots, hole)}
       />
 
       <YardagePanel
