@@ -317,20 +317,16 @@ function MapboxCourseView({
     };
   }, []);
 
-  // Resolve geometry: prefer live gps payload, otherwise fall back to
-  // the Sharjah Hole 1 placeholder (only valid for that specific hole).
+  // Resolve geometry from the live gps payload only. We never substitute
+  // fabricated tee/pin coordinates in Premium mode — when geometry is
+  // missing the HUD honestly shows the "professional mapping required"
+  // state instead of drawing a fake hole.
   const primaryTee = getPrimaryTee(gps?.tee_boxes ?? []);
   const teeFromGps = teeToPoint(primaryTee);
   const pinFromGps = pointFromLatLng(gps?.green?.pin) ?? pointFromLatLng(gps?.green?.center);
 
-  const usePlaceholder =
-    !teeFromGps &&
-    !pinFromGps &&
-    selectedCourse.id === SHARJAH_HOLE_1_PLACEHOLDER.courseId &&
-    hole === SHARJAH_HOLE_1_PLACEHOLDER.hole;
-
-  const tee: LatLng | null = teeFromGps ?? (usePlaceholder ? SHARJAH_HOLE_1_PLACEHOLDER.tee : null);
-  const pin: LatLng | null = pinFromGps ?? (usePlaceholder ? SHARJAH_HOLE_1_PLACEHOLDER.pin : null);
+  const tee: LatLng | null = teeFromGps;
+  const pin: LatLng | null = pinFromGps;
   const focus: LatLng =
     playerPosition ??
     tee ??
