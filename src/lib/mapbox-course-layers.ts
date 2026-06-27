@@ -25,15 +25,26 @@ const LAYERS = {
   fairwayLine: "gs-fairway-line",
   greenFill: "gs-green-fill",
   greenLine: "gs-green-line",
+  roughFill: "gs-hazard-rough-fill",
+  roughLine: "gs-hazard-rough-line",
+  teeBoxFill: "gs-hazard-teebox-fill",
+  teeBoxLine: "gs-hazard-teebox-line",
+  wasteFill: "gs-hazard-waste-fill",
+  wasteLine: "gs-hazard-waste-line",
+  treesFill: "gs-hazard-trees-fill",
+  treesLine: "gs-hazard-trees-line",
   waterFill: "gs-hazard-water-fill",
   waterLine: "gs-hazard-water-line",
+  waterShimmer: "gs-hazard-water-shimmer",
   bunkerFill: "gs-hazard-bunker-fill",
   bunkerLine: "gs-hazard-bunker-line",
   obFill: "gs-hazard-ob-fill",
   obLine: "gs-hazard-ob-line",
+  obDash: "gs-hazard-ob-dash",
   otherFill: "gs-hazard-other-fill",
   otherLine: "gs-hazard-other-line",
   cartLine: "gs-hazard-cart-line",
+  cartCasing: "gs-hazard-cart-casing",
   hazardPoints: "gs-hazard-points",
   teeCircles: "gs-tee-circles",
   teeLabels: "gs-tee-labels",
@@ -49,13 +60,26 @@ const LAYERS = {
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
-type HazardCategory = "water" | "bunker" | "ob" | "cartpath" | "other";
+type HazardCategory =
+  | "water"
+  | "bunker"
+  | "ob"
+  | "cartpath"
+  | "rough"
+  | "tee_box"
+  | "trees"
+  | "waste"
+  | "other";
 
 function hazardCategory(type: string): HazardCategory {
   if (type === "water" || type === "creek") return "water";
   if (type === "bunker") return "bunker";
   if (type === "ob") return "ob";
   if (type === "cart_path") return "cartpath";
+  if (type === "rough") return "rough";
+  if (type === "tee_box" || type === "teebox") return "tee_box";
+  if (type === "trees" || type === "tree" || type === "woods") return "trees";
+  if (type === "waste" || type === "waste_area" || type === "sand_waste") return "waste";
   return "other";
 }
 
@@ -97,6 +121,34 @@ export function ensureCourseLayers(map: mapboxgl.Map): void {
   for (const id of Object.values(SRC)) {
     if (!map.getSource(id)) map.addSource(id, { type: "geojson", data: EMPTY_FC });
   }
+
+  // ---- Underlay hazards (drawn before fairway so fairway/green sit on top).
+  const underFill = (id: string, cat: HazardCategory, color: string, opacity: number) =>
+    map.addLayer({
+      id,
+      type: "fill",
+      source: SRC.hazards,
+      filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], cat]],
+      paint: { "fill-color": color, "fill-opacity": opacity },
+    });
+  const underLine = (id: string, cat: HazardCategory, color: string, opacity: number, width = 1) =>
+    map.addLayer({
+      id,
+      type: "line",
+      source: SRC.hazards,
+      filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], cat]],
+      paint: { "line-color": color, "line-width": width, "line-opacity": opacity },
+    });
+
+  // Rough — muted olive halo around fairway.
+  underFill(LAYERS.roughFill, "rough", "#3a4a22", 0.38);
+  underLine(LAYERS.roughLine, "rough", "#6c7a3e", 0.5);
+  // Tee box — premium dark emerald pad with gold edge.
+  underFill(LAYERS.teeBoxFill, "tee_box", "#0c2f1f", 0.7);
+  underLine(LAYERS.teeBoxLine, "tee_box", "#F5C84B", 0.75, 1.2);
+  // Waste area — warm sand-mauve.
+  underFill(LAYERS.wasteFill, "waste", "#b89968", 0.5);
+  underLine(LAYERS.wasteLine, "waste", "#e7c896", 0.65);
 
   // Fairway — dark emerald translucent + subtle gold outline.
   map.addLayer({
@@ -146,19 +198,71 @@ export function ensureCourseLayers(map: mapboxgl.Map): void {
 
   hazardFill(LAYERS.waterFill, "water", "#3aa9ff", 0.5);
   hazardLine(LAYERS.waterLine, "water", "#bee8ff", 0.75);
+  // Animated water shimmer — bright dashed inner edge with marching offset.
+  map.addLayer({
+    id: LAYERS.waterShimmer,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "water"]],
+    paint: {
+      "line-color": "#ffffff",
+      "line-width": 1.1,
+      "line-opacity": 0.55,
+      "line-blur": 0.6,
+      "line-dasharray": [0.6, 2.4],
+    },
+  });
   hazardFill(LAYERS.bunkerFill, "bunker", "#e8cf8f", 0.7);
   hazardLine(LAYERS.bunkerLine, "bunker", "#f7e5a7", 0.85);
   hazardFill(LAYERS.obFill, "ob", "#ef4444", 0.22);
   hazardLine(LAYERS.obLine, "ob", "#ef4444", 0.85, 1.4);
+  // OB red dashed warning line on top of the solid stroke.
+  map.addLayer({
+    id: LAYERS.obDash,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "ob"]],
+    paint: {
+      "line-color": "#ff2d2d",
+      "line-width": 1.6,
+      "line-opacity": 0.95,
+      "line-dasharray": [2, 2],
+    },
+  });
   hazardFill(LAYERS.otherFill, "other", "#7c5cff", 0.28);
   hazardLine(LAYERS.otherLine, "other", "#a48bff", 0.6);
 
-  // Cart path — LineString hazards rendered as silver line.
+  // Trees — canopy fill drawn above ground hazards.
+  map.addLayer({
+    id: LAYERS.treesFill,
+    type: "fill",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "trees"]],
+    paint: { "fill-color": "#0f2a18", "fill-opacity": 0.62 },
+  });
+  map.addLayer({
+    id: LAYERS.treesLine,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "category"], "trees"]],
+    paint: { "line-color": "#1f5a32", "line-width": 1, "line-opacity": 0.75, "line-blur": 0.6 },
+  });
+
+  // Cart path — dark casing under bright silver line for premium contrast.
+  map.addLayer({
+    id: LAYERS.cartCasing,
+    type: "line",
+    source: SRC.hazards,
+    filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "category"], "cartpath"]],
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-color": "#0a0a0a", "line-width": 3.2, "line-opacity": 0.7 },
+  });
   map.addLayer({
     id: LAYERS.cartLine,
     type: "line",
     source: SRC.hazards,
     filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "category"], "cartpath"]],
+    layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": "#cbd5e1", "line-width": 1.4, "line-opacity": 0.8 },
   });
 
@@ -320,6 +424,37 @@ export function ensureCourseLayers(map: mapboxgl.Map): void {
       "line-blur": 0.4,
     },
   });
+
+  // Kick off the water-shimmer marching animation (idempotent per map).
+  startWaterShimmer(map);
+}
+
+// ---- Water shimmer animation -------------------------------------------------
+const SHIMMER_KEY = "__gsWaterShimmerTimer";
+function startWaterShimmer(map: mapboxgl.Map): void {
+  const anyMap = map as unknown as Record<string, unknown>;
+  if (anyMap[SHIMMER_KEY]) return;
+  let phase = 0;
+  const timer = window.setInterval(() => {
+    if (!map.getLayer(LAYERS.waterShimmer)) return;
+    phase = (phase + 0.18) % (Math.PI * 2);
+    try {
+      map.setPaintProperty(
+        LAYERS.waterShimmer,
+        "line-translate",
+        [Math.sin(phase) * 0.8, Math.cos(phase) * 0.8],
+      );
+      const op = 0.4 + 0.25 * (0.5 + 0.5 * Math.sin(phase * 2));
+      map.setPaintProperty(LAYERS.waterShimmer, "line-opacity", op);
+    } catch {
+      /* style swap mid-frame — ignore */
+    }
+  }, 160);
+  anyMap[SHIMMER_KEY] = timer;
+  map.once("remove", () => {
+    window.clearInterval(timer);
+    delete anyMap[SHIMMER_KEY];
+  });
 }
 
 /** Push the latest player breadcrumb trail into the trail source. */
@@ -469,11 +604,19 @@ export function updateYardageLabels(
 export type LayerGroup = "overlays" | "hazards" | "labels" | "markers";
 
 const GROUP_LAYERS: Record<LayerGroup, string[]> = {
-  overlays: [LAYERS.fairwayFill, LAYERS.fairwayLine, LAYERS.greenFill, LAYERS.greenLine],
+  overlays: [
+    LAYERS.fairwayFill, LAYERS.fairwayLine, LAYERS.greenFill, LAYERS.greenLine,
+    LAYERS.roughFill, LAYERS.roughLine,
+    LAYERS.teeBoxFill, LAYERS.teeBoxLine,
+  ],
   hazards: [
     LAYERS.waterFill, LAYERS.waterLine, LAYERS.bunkerFill, LAYERS.bunkerLine,
-    LAYERS.obFill, LAYERS.obLine, LAYERS.otherFill, LAYERS.otherLine,
-    LAYERS.cartLine, LAYERS.hazardPoints,
+    LAYERS.waterShimmer,
+    LAYERS.obFill, LAYERS.obLine, LAYERS.obDash,
+    LAYERS.otherFill, LAYERS.otherLine,
+    LAYERS.wasteFill, LAYERS.wasteLine,
+    LAYERS.treesFill, LAYERS.treesLine,
+    LAYERS.cartCasing, LAYERS.cartLine, LAYERS.hazardPoints,
   ],
   labels: [LAYERS.teeLabels, LAYERS.greenPtLabels, LAYERS.layupLabels, LAYERS.yardage],
   markers: [
