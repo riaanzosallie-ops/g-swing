@@ -20,6 +20,7 @@ import { LiveScoringSheet } from "./LiveScoringSheet";
 import { TournamentLiveTV } from "./TournamentLiveTV";
 import { TournamentAwards } from "./TournamentAwards";
 import { buildLiveMoments } from "@/lib/tournament-moments";
+import { TournamentBroadcastCenter } from "./TournamentBroadcastCenter";
 
 type Props = { tournamentId: string; spectator?: boolean; onExit: () => void };
 
@@ -29,7 +30,7 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
   const [players, setPlayers] = useState<TournamentPlayer[]>([]);
   const [scores, setScores] = useState<TournamentScore[]>([]);
   const prevPosRef = useRef<Record<string, number>>({});
-  const [tab, setTab] = useState<"board" | "score" | "director" | "broadcast" | "awards">("board");
+  const [tab, setTab] = useState<"board" | "score" | "broadcast" | "livetv" | "director" | "awards">("board");
   const prevPosForMomentsRef = useRef<Record<string, number>>({});
   const [scoring, setScoring] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -179,12 +180,13 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList className="grid w-full grid-cols-5 gap-1 bg-secondary">
-          <TabsTrigger value="board" className="text-[11px]"><Trophy className="mr-1 h-3 w-3" />Board</TabsTrigger>
-          <TabsTrigger value="score" className="text-[11px]" disabled={spectator}><Target className="mr-1 h-3 w-3" />Score</TabsTrigger>
-          <TabsTrigger value="director" className="text-[11px]"><Sparkles className="mr-1 h-3 w-3" />Director</TabsTrigger>
-          <TabsTrigger value="broadcast" className="text-[11px]"><Tv2 className="mr-1 h-3 w-3" />Live TV</TabsTrigger>
-          <TabsTrigger value="awards" className="text-[11px]"><Award className="mr-1 h-3 w-3" />Awards</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-6 gap-1 bg-secondary">
+          <TabsTrigger value="board" className="text-[10px]"><Trophy className="mr-1 h-3 w-3" />Board</TabsTrigger>
+          <TabsTrigger value="score" className="text-[10px]" disabled={spectator}><Target className="mr-1 h-3 w-3" />Score</TabsTrigger>
+          <TabsTrigger value="broadcast" className="text-[10px]"><Radio className="mr-1 h-3 w-3" />Cast</TabsTrigger>
+          <TabsTrigger value="livetv" className="text-[10px]"><Tv2 className="mr-1 h-3 w-3" />Live TV</TabsTrigger>
+          <TabsTrigger value="director" className="text-[10px]"><Sparkles className="mr-1 h-3 w-3" />Dir.</TabsTrigger>
+          <TabsTrigger value="awards" className="text-[10px]"><Award className="mr-1 h-3 w-3" />Awards</TabsTrigger>
         </TabsList>
 
         <TabsContent value="board" className="mt-3 space-y-3">
@@ -269,6 +271,17 @@ export const TournamentDashboard = ({ tournamentId, spectator, onExit }: Props) 
         </TabsContent>
 
         <TabsContent value="broadcast" className="mt-3">
+          <TournamentBroadcastCenter
+            tournament={tournament}
+            players={players}
+            scores={scores}
+            rows={rows}
+            moments={moments}
+            onOpenAwards={() => setTab("awards")}
+          />
+        </TabsContent>
+
+        <TabsContent value="livetv" className="mt-3">
           <TournamentLiveTV
             tournament={tournament}
             rows={rows}
