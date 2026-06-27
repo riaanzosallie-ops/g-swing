@@ -14,123 +14,20 @@ export type Database = {
   }
   public: {
     Tables: {
-      golf_courses: {
-        Row: {
-          id: string; name: string; city: string; country: string
-          lat: number; lng: number; holes_count: number; par: number
-          website: string | null; timezone: string; created_at: string
-        }
-        Insert: {
-          id?: string; name: string; city: string; country: string
-          lat: number; lng: number; holes_count?: number; par?: number
-          website?: string | null; timezone?: string
-        }
-        Update: Partial<Database["public"]["Tables"]["golf_courses"]["Insert"]>
-      }
-      course_holes: {
-        Row: {
-          id: string; course_id: string; hole_number: number
-          par: number; handicap: number; notes: string | null
-        }
-        Insert: {
-          id?: string; course_id: string; hole_number: number
-          par: number; handicap: number; notes?: string | null
-        }
-        Update: Partial<Database["public"]["Tables"]["course_holes"]["Insert"]>
-      }
-      tee_boxes: {
-        Row: {
-          id: string; hole_id: string; color: string
-          lat: number; lng: number; yardage: number
-        }
-        Insert: {
-          id?: string; hole_id: string; color: string
-          lat: number; lng: number; yardage: number
-        }
-        Update: Partial<Database["public"]["Tables"]["tee_boxes"]["Insert"]>
-      }
-      greens: {
-        Row: {
-          id: string; hole_id: string
-          center_lat: number; center_lng: number
-          front_lat: number;  front_lng: number
-          back_lat: number;   back_lng: number
-          pin_lat: number | null; pin_lng: number | null
-          polygon: Json | null; depth_yards: number; width_yards: number
-        }
-        Insert: {
-          id?: string; hole_id: string
-          center_lat: number; center_lng: number
-          front_lat: number;  front_lng: number
-          back_lat: number;   back_lng: number
-          pin_lat?: number | null; pin_lng?: number | null
-          polygon?: Json | null; depth_yards?: number; width_yards?: number
-        }
-        Update: Partial<Database["public"]["Tables"]["greens"]["Insert"]>
-      }
-      hazards: {
-        Row: {
-          id: string; hole_id: string
-          type: "bunker" | "water" | "dogleg" | "layup" | "ob" | "trees"
-          label: string | null; lat: number | null; lng: number | null
-          geometry: Json | null; carry_yards_from_tee: number | null
-        }
-        Insert: {
-          id?: string; hole_id: string
-          type: "bunker" | "water" | "dogleg" | "layup" | "ob" | "trees"
-          label?: string | null; lat?: number | null; lng?: number | null
-          geometry?: Json | null; carry_yards_from_tee?: number | null
-        }
-        Update: Partial<Database["public"]["Tables"]["hazards"]["Insert"]>
-      }
-      active_rounds: {
-        Row: {
-          id: string; course_id: string; session_id: string
-          current_hole: number; player_lat: number | null; player_lng: number | null
-          unit: "yards" | "meters"; started_at: string; updated_at: string
-          completed_at: string | null
-        }
-        Insert: {
-          id?: string; course_id: string; session_id: string
-          current_hole?: number; player_lat?: number | null; player_lng?: number | null
-          unit?: "yards" | "meters"
-        }
-        Update: Partial<Database["public"]["Tables"]["active_rounds"]["Insert"]>
-      }
-      round_hole_states: {
-        Row: {
-          id: string; round_id: string; hole_number: number
-          score: number | null; putts: number | null
-          fairway_hit: boolean | null; gir: boolean | null; notes: string | null
-        }
-        Insert: {
-          id?: string; round_id: string; hole_number: number
-          score?: number | null; putts?: number | null
-          fairway_hit?: boolean | null; gir?: boolean | null; notes?: string | null
-        }
-        Update: Partial<Database["public"]["Tables"]["round_hole_states"]["Insert"]>
-      }
-      shots: {
-        Row: {
-          id: string; round_id: string; hole_number: number; shot_number: number
-          start_lat: number; start_lng: number
-          end_lat: number | null; end_lng: number | null
-          distance_yards: number | null; club_used: string | null
-          started_at: string; ended_at: string | null
-        }
-        Insert: {
-          id?: string; round_id: string; hole_number: number; shot_number?: number
-          start_lat: number; start_lng: number
-          end_lat?: number | null; end_lng?: number | null
-          distance_yards?: number | null; club_used?: string | null
-        }
-        Update: Partial<Database["public"]["Tables"]["shots"]["Insert"]>
-      }
+      [_ in never]: never
     }
-    Views:     { [_ in never]: never }
-    Functions: { [_ in never]: never }
-    Enums:     { [_ in never]: never }
-    CompositeTypes: { [_ in never]: never }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
 
