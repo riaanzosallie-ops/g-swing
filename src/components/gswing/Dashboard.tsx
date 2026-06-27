@@ -158,8 +158,8 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
 
         <div className="grid grid-cols-3 gap-2 text-center">
           <div>
-            <p className="font-serif text-2xl text-gold">{player.handicap}</p>
-            <p className="mt-0.5 text-[9px] uppercase tracking-widest text-muted-foreground">Handicap</p>
+            <p className="font-serif text-2xl text-gold">{typeof player.handicap === "number" ? player.handicap : "--"}</p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-widest text-muted-foreground">{typeof player.handicap === "number" ? "Handicap" : "Handicap pending"}</p>
           </div>
           <div className="border-x border-gold/15">
             <p className="font-serif text-2xl text-gold">{roundsPlayed || "--"}</p>
@@ -252,10 +252,10 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
       {/* ===== PREMIUM QUICK STATS ===== */}
       <section className="hero-rise grid grid-cols-2 gap-2.5" style={{ animationDelay: "260ms" }}>
         {[
-          { label: "Current Handicap", value: player.handicap },
-          { label: "Average Score", value: avgScore ?? "--" },
-          { label: "Season Best", value: bestScore ?? "--" },
-          { label: "Rounds Played", value: roundsPlayed || "--" },
+          { label: typeof player.handicap === "number" ? "Current Handicap" : "Handicap pending", value: typeof player.handicap === "number" ? player.handicap : "--" },
+          { label: avgScore !== null ? "Average Score" : "No rounds yet", value: avgScore ?? "--" },
+          { label: bestScore !== null ? "Season Best" : "No rounds yet", value: bestScore ?? "--" },
+          { label: roundsPlayed ? "Rounds Played" : "No rounds played yet", value: roundsPlayed || "--" },
         ].map((s) => (
           <div key={s.label} className="glass-chip tactile-card rounded-2xl p-4">
             <p className="font-serif text-2xl text-gold">{s.value}</p>
