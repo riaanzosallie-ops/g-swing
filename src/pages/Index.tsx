@@ -16,12 +16,14 @@ import { LiveDashboard } from "@/components/gswing/LiveDashboard";
 import { RoundChat } from "@/components/gswing/RoundChat";
 import { Roast } from "@/components/gswing/Roast";
 import { FairwayMemories } from "@/components/gswing/FairwayMemories";
-import { Home, MapPin, Briefcase, Target, User, ChevronLeft, Film } from "lucide-react";
+import { Tournaments } from "@/components/gswing/tournament/Tournaments";
+import { Home, MapPin, Trophy, Target, User, ChevronLeft, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { id: "home", label: "Home", icon: Home },
   { id: "gps", label: "GPS", icon: MapPin },
+  { id: "tournament", label: "Events", icon: Trophy },
   { id: "memories", label: "Memories", icon: Film },
   { id: "scorecard", label: "Score", icon: Target },
   { id: "profile", label: "Profile", icon: User },
@@ -32,7 +34,7 @@ const TITLES: Record<string, string> = {
   swing: "Swing Analysis", pros: "Pros' Bags", news: "Tour News",
   stats: "Performance", profile: "Profile", clublink: "Club-Link",
   arena: "Betting Arena", live: "Live Dashboard", chat: "Round Chat", roast: "ACE Roast",
-  memories: "Fairway Memories",
+  memories: "Fairway Memories", tournament: "Tournaments",
 };
 
 const Index = () => {
@@ -73,12 +75,13 @@ const Index = () => {
         {view === "chat" && <RoundChat />}
         {view === "roast" && <Roast />}
         {view === "memories" && <FairwayMemories />}
+        {view === "tournament" && <Tournaments />}
       </main>
 
       <AceCaddie />
 
       <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-md -translate-x-1/2 border-t border-gold/20 bg-background/90 backdrop-blur-md">
-        <div className="grid grid-cols-5 px-2 py-2">
+        <div className="grid grid-cols-6 px-2 py-2">
           {NAV.map((n) => (
             <button key={n.id} onClick={() => setView(n.id)}
               className={cn(
