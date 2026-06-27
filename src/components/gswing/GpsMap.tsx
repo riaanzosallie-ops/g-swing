@@ -46,6 +46,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { fetchHoleGeometry, geometryToHoleGpsResponse } from "@/lib/course-geometry";
 import type { HoleGeometryPayload } from "@/lib/course-geometry";
+import { YardagePanel } from "@/components/gswing/YardagePanel";
 import { supabase } from "@/integrations/supabase/client";
 import {
   applyCourseGeometry,
@@ -973,6 +974,7 @@ export const GpsMap = () => {
   const [activeRound, setActiveRound] = useState<ActiveRound | null>(null);
   const [activeShot, setActiveShot] = useState<Shot | null>(null);
   const [lastShotYards, setLastShotYards] = useState<number | null>(null);
+  const [lastShotEnd, setLastShotEnd] = useState<LatLng | null>(null);
   const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -1267,6 +1269,7 @@ export const GpsMap = () => {
         const yards = haversineYards({ lat: activeShot.start_lat, lng: activeShot.start_lng }, playerPos);
         setActiveShot(null);
         setLastShotYards(yards);
+        setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
         toast.success(`Shot saved: ${yards} yards`);
         return;
       }
@@ -1279,6 +1282,7 @@ export const GpsMap = () => {
         const result = await endShot(activeRound.id, playerPos, activeShot.id);
         setActiveShot(null);
         setLastShotYards(result.distance_yards);
+        setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
         toast.success(`Shot saved: ${result.distance_yards} yards`);
       }
     } catch (error) {
@@ -1349,6 +1353,14 @@ export const GpsMap = () => {
         centerDistance={loading ? null : displayCenterDistance}
         displayUnit={displayUnit}
         geometry={geometryPayload}
+      />
+
+      <YardagePanel
+        geometry={geometryPayload}
+        playerPosition={playerPos}
+        lastShotEnd={lastShotEnd}
+        unit={unit}
+        fallbackCenterYards={loading ? null : displayCenterDistance}
       />
 
       <div className="grid grid-cols-2 gap-2">
