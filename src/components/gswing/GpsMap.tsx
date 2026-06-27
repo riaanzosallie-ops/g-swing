@@ -185,7 +185,7 @@ function MapboxCourseView({
       pinMarkerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tokenState.status]);
 
   // After map style is ready: install layers and push current data.
   useEffect(() => {
