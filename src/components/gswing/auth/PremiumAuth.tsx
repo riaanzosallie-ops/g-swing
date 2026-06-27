@@ -18,8 +18,17 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { PlanPicker, type PlanChoice } from "@/components/gswing/membership/PlanPicker";
+import { OWNER_EMAIL } from "@/hooks/useGswingMembership";
 
 const PLAN_STORAGE_KEY = "gswing.signup.plan";
+
+const isOwnerEmail = (e?: string | null) =>
+  !!e && e.trim().toLowerCase() === OWNER_EMAIL;
+
+async function currentEmail(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data?.user?.email ?? null;
+}
 
 type Mode = "login" | "register";
 type Phase = "auth" | "verify";
@@ -62,7 +71,19 @@ export function PremiumAuth({
     localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(next));
   }
 
-  function routeAfterAuth(selected: PlanChoice) {
+  async function routeAfterAuth(selected: PlanChoice) {
+    const em = await currentEmail();
+    // OWNER bypass — never go through payment.
+    if (isOwnerEmail(em)) {
+      localStorage.removeItem(PLAN_STORAGE_KEY);
+      try {
+        sessionStorage.removeItem("gswing.pay.session");
+      } catch {
+        /* ignore */
+      }
+      onAuthenticated();
+      return;
+    }
     if (selected.code === "free") {
       localStorage.removeItem(PLAN_STORAGE_KEY);
       onAuthenticated();
@@ -85,7 +106,7 @@ export function PremiumAuth({
         return;
       }
       if (result.redirected) return;
-      routeAfterAuth(plan);
+      await routeAfterAuth(plan);
     } finally {
       setBusy(false);
     }
@@ -109,7 +130,7 @@ export function PremiumAuth({
       return;
     }
     toast.success("Welcome back");
-    onAuthenticated();
+    await routeAfterAuth(plan);
   }
 
   async function handleRegister() {
