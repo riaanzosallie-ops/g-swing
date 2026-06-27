@@ -255,6 +255,8 @@ function MapboxCourseView({
   caddieInsight,
   unit,
   fallbackCenterYards,
+  onChangeHole,
+  holeCount,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -930,7 +932,15 @@ function MapboxCourseView({
         hole={gps?.hole_number ?? hole}
         par={gps?.par ?? null}
         handicap={gps?.handicap ?? null}
-        totalHoles={18}
+        totalHoles={holeCount ?? 18}
+        onNextHole={
+          onChangeHole
+            ? () => {
+                const total = holeCount ?? 18;
+                onChangeHole(hole >= total ? 1 : hole + 1);
+              }
+            : undefined
+        }
         mapView={mapView}
         onSetMapView={setMapView}
         measureActive={measureActive}
