@@ -896,13 +896,52 @@ function MapboxCourseView({
     return { readout, insight: parts.join(" ") };
   }, [mappedHole, playerPosition, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
 
-  const effectiveReadout: YardageReadout = mappedOverride?.readout ?? yardageReadout;
+  // Strict source-of-truth rules:
+  //   - When mapped data exists for the selected hole, ONLY mapped data
+  //     feeds the distance UI. Legacy gps.distances.* + computeYardages
+  //     are suppressed, and the player→course-centroid fallback is
+  //     never shown as a green distance.
+  //   - When mapping is missing for the selected hole, render an empty
+  //     readout so the bottom sheet shows "Mapping required". No
+  //     fabricated numbers.
+  const emptyReadout: YardageReadout = {
+    pin: null,
+    front: null,
+    center: null,
+    back: null,
+    carries: [],
+    layups: [],
+    doglegs: [],
+    fromLastShot: yardageReadout.fromLastShot,
+    inGreenMode: false,
+    dailyPin: yardageReadout.dailyPin,
+    missSide: null,
+    missReason: null,
+  };
+  const effectiveReadout: YardageReadout =
+    mappingStatus === "mapped" && mappedOverride
+      ? mappedOverride.readout
+      : mappingStatus === "missing"
+        ? emptyReadout
+        : yardageReadout;
   const effectiveInsight: string =
     mappingStatus === "missing"
       ? "Professional mapping required for this hole."
-      : (mappedOverride?.insight ?? caddieInsight);
+      : mappingStatus === "mapped" && mappedOverride
+        ? mappedOverride.insight
+        : caddieInsight;
+  // The bottom sheet only falls back to fallbackCenterYards when
+  // readout.center is null. Suppress the centroid-based fallback
+  // whenever we have an authoritative mapping answer (either real
+  // mapped data, or an explicit "missing" state).
   const effectiveFallbackCenter =
-    mappedOverride ? null : fallbackCenterYards;
+    mappingStatus === "mapped" || mappingStatus === "missing"
+      ? null
+      : fallbackCenterYards;
+
+  // Owner-only mapping debug snapshot — feeds the More menu panel.
+  const membership = useGswingMembership();
+  const unitShort: "y" | "m" = unit === "meters" ? "m" : "y";
 
   const onRefreshMapping = useCallback(() => {
     setMappingRefreshTick((t) => t + 1);
