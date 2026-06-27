@@ -1669,6 +1669,15 @@ export const GpsMap = () => {
         </Button>
       </div>
 
+      <Button
+        className="w-full gradient-gold text-primary-foreground shadow-elegant"
+        onClick={() => setExperienceOpen(true)}
+        disabled={roundShots.length === 0}
+      >
+        <Sparkles className="mr-2 h-4 w-4" />
+        Open Round Experience
+      </Button>
+
       <ShotTagPrompt
         open={!!pendingTagShot}
         shotSummary={tagSummary}
@@ -1681,6 +1690,12 @@ export const GpsMap = () => {
         onClose={() => setReviewOpen(false)}
         shots={roundShots}
         mapboxToken={mapboxToken}
+      />
+
+      <PostRoundExperience
+        open={experienceOpen}
+        onClose={() => setExperienceOpen(false)}
+        model={experienceModel}
       />
 
       <div className="flex gap-2 overflow-x-auto pb-2">
