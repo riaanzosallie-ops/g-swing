@@ -95,6 +95,8 @@ import {
 import { computeYardages } from "@/lib/yardage-engine";
 import { useGswingWeather } from "@/lib/use-gswing-weather";
 import { Ruler, X as XIcon, Wifi, WifiOff, Wind } from "lucide-react";
+import { GpsHud } from "@/components/gswing/gps/GpsHud";
+import type { YardageReadout } from "@/lib/yardage-engine";
 
 const MEASURE_SRC = "gs-measure-src";
 const MEASURE_LINE = "gs-measure-line";
@@ -221,6 +223,12 @@ function MapboxCourseView({
   displayUnit,
   geometry,
   holeShots,
+  holeLengthYards,
+  playerHandicap,
+  yardageReadout,
+  caddieInsight,
+  unit,
+  fallbackCenterYards,
 }: {
   gps: HoleGpsResponse | null;
   playerPosition: LatLng | null;
@@ -232,6 +240,12 @@ function MapboxCourseView({
   displayUnit: "y" | "m";
   geometry: HoleGeometryPayload | null;
   holeShots: StoredShot[];
+  holeLengthYards: number | null;
+  playerHandicap: number | null;
+  yardageReadout: YardageReadout;
+  caddieInsight: string;
+  unit: "yards" | "meters";
+  fallbackCenterYards: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -251,6 +265,13 @@ function MapboxCourseView({
   const [cameraMode, setCameraMode] = useState<CameraMode>("playing");
   const [measureActive, setMeasureActive] = useState(false);
   const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
+
+  // Live weather for the in-map HUD (real Open-Meteo via existing hook).
+  const hudWeather = useGswingWeather(
+    playerPosition
+      ? { latitude: playerPosition.lat, longitude: playerPosition.lng }
+      : { latitude: selectedCourse.lat ?? null, longitude: selectedCourse.lng ?? null },
+  );
 
   // Fetch the public Mapbox token from the edge function once per mount.
   useEffect(() => {
@@ -518,10 +539,10 @@ function MapboxCourseView({
       el.style.cssText =
         "position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;pointer-events:none;";
       el.innerHTML = `
-        <div class="gs-player-accuracy" style="position:absolute;border-radius:50%;border:1px solid rgba(52,211,153,0.55);background:rgba(52,211,153,0.10);width:34px;height:34px;"></div>
-        <div class="gs-player-pulse" style="position:absolute;width:34px;height:34px;border-radius:50%;background:rgba(52,211,153,0.35);animation:gs-pulse 1.8s ease-out infinite;"></div>
-        <div class="gs-player-dot" style="position:relative;width:14px;height:14px;border-radius:50%;background:#ffffff;border:3px solid #34d399;box-shadow:0 0 10px rgba(52,211,153,0.85);"></div>
-        <div class="gs-player-heading" style="position:absolute;top:-6px;left:50%;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #34d399;transform-origin:50% 22px;transform:translateX(-50%) rotate(0deg);transition:transform 220ms ease-out;filter:drop-shadow(0 0 4px rgba(52,211,153,0.6));"></div>
+        <div class="gs-player-accuracy" style="position:absolute;border-radius:50%;border:1px solid rgba(245,200,75,0.55);background:rgba(245,200,75,0.08);width:34px;height:34px;box-shadow:inset 0 0 12px rgba(245,200,75,0.18);"></div>
+        <div class="gs-player-pulse" style="position:absolute;width:34px;height:34px;border-radius:50%;background:rgba(245,200,75,0.35);animation:gs-pulse 1.8s ease-out infinite;"></div>
+        <div class="gs-player-dot" style="position:relative;width:14px;height:14px;border-radius:50%;background:#ffffff;border:3px solid #F5C84B;box-shadow:0 0 0 2px rgba(0,0,0,0.45),0 0 12px rgba(245,200,75,0.85);"></div>
+        <div class="gs-player-heading" style="position:absolute;top:-6px;left:50%;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid #F5C84B;transform-origin:50% 22px;transform:translateX(-50%) rotate(0deg);transition:transform 220ms ease-out;filter:drop-shadow(0 0 4px rgba(245,200,75,0.7));"></div>
       `;
       playerElRef.current = el;
       playerMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
@@ -631,73 +652,52 @@ function MapboxCourseView({
     <div className="relative overflow-hidden rounded-lg border border-gold/25 bg-black shadow-elegant">
       <div ref={containerRef} className="h-[58vh] min-h-[410px] w-full" />
 
-      <div className="pointer-events-none absolute left-4 top-4 rounded-md border border-black/30 bg-black/55 px-3 py-1.5 text-sm backdrop-blur-sm">
-        <span className="font-semibold text-gold">Hole {gps?.hole_number ?? hole}</span>
-        <span className="text-white/75"> - Par {gps?.par ?? "-"}</span>
-      </div>
+      <GpsHud
+        holeNumber={gps?.hole_number ?? hole}
+        par={gps?.par ?? null}
+        holeLengthYards={holeLengthYards}
+        playerHandicap={playerHandicap}
+        courseName={selectedCourse.name}
+        holeName={gps?.notes ?? null}
+        liveTournament={null}
+        unit={unit}
+        readout={yardageReadout}
+        fallbackCenterYards={fallbackCenterYards}
+        playerPosition={playerPosition}
+        playerAccuracy={playerAccuracy}
+        weather={hudWeather}
+        caddieInsight={caddieInsight}
+        measureActive={measureActive}
+        onToggleMeasure={() =>
+          setMeasureActive((v) => {
+            const next = !v;
+            if (!next) setMeasurePoint(null);
+            return next;
+          })
+        }
+        measurePoint={measurePoint}
+        onClearMeasure={() => setMeasurePoint(null)}
+        showHazards={showHazards}
+        onToggleHazards={() => setShowHazards((v) => !v)}
+        showOverlays={showOverlays}
+        onToggleOverlays={() => setShowOverlays((v) => !v)}
+        showLabels={showLabels}
+        onToggleLabels={() => setShowLabels((v) => !v)}
+        onRecenter={onRecenter}
+        onFitHole={onFitHole}
+        onFlyover={onFlyover}
+        flyoverDisabled={!geometry}
+        flyoverRunning={flyoverRunning}
+      />
 
-      <div className="pointer-events-none absolute right-4 top-4 w-[178px] overflow-hidden rounded-lg border border-gold/40 bg-background/88 text-gold shadow-xl backdrop-blur-md sm:w-[218px]">
-        <div className="p-3 text-right">
-          <div className="text-[10px] uppercase tracking-wide text-gold-soft">Center of Green</div>
-          <div className="font-serif text-5xl font-bold leading-none text-gold sm:text-6xl">
-            {formatDistance(centerDistance)}
-          </div>
-          <div className="text-xl font-semibold leading-none text-gold-soft">
-            {displayUnit === "m" ? "Meters" : "Yards"}
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute bottom-3 left-3 flex flex-col gap-1 rounded-md border border-gold/30 bg-black/65 p-1 shadow-xl backdrop-blur-md">
-        <MapCtrlBtn active={showOverlays} onClick={() => setShowOverlays((v) => !v)} title="Toggle overlays">
-          <LayersIcon className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn active={showHazards} onClick={() => setShowHazards((v) => !v)} title="Toggle hazards">
-          <Droplets className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn active={showLabels} onClick={() => setShowLabels((v) => !v)} title="Toggle yardage labels">
-          <TypeIcon className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn onClick={onRecenter} title="Recenter on player">
-          <Crosshair className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn onClick={onFitHole} title="Fit hole">
-          <Maximize2 className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn
-          onClick={onFlyover}
-          disabled={!geometry || flyoverRunning}
-          title={geometry ? "Hole flyover" : "Flyover unavailable until course geometry is mapped"}
-        >
-          <Plane className="h-4 w-4" />
-        </MapCtrlBtn>
-        <MapCtrlBtn
-          active={measureActive}
-          onClick={() => {
-            setMeasureActive((v) => {
-              const next = !v;
-              if (!next) setMeasurePoint(null);
-              return next;
-            });
-          }}
-          title={measureActive ? "Exit measure mode" : "Tap-to-measure"}
-        >
-          <Ruler className="h-4 w-4" />
-        </MapCtrlBtn>
-        {measurePoint && (
-          <MapCtrlBtn onClick={() => setMeasurePoint(null)} title="Clear measurement">
-            <XIcon className="h-4 w-4" />
-          </MapCtrlBtn>
-        )}
-      </div>
-
-      <div className="absolute left-4 top-14 flex flex-wrap gap-1 rounded-md border border-gold/30 bg-black/60 p-1 text-[10px] uppercase tracking-wide backdrop-blur-md">
+      {/* Camera mode strip — kept for power users; lifted above quick-action dock. */}
+      <div className="pointer-events-auto absolute right-2 bottom-2 flex flex-wrap justify-end gap-1 rounded-full border border-gold/30 bg-black/60 p-1 text-[9px] uppercase tracking-wider backdrop-blur-md">
         {CAMERA_MODES.map((m) => (
           <button
             key={m.id}
             type="button"
             onClick={() => setCameraMode(m.id)}
-            className={`rounded px-2 py-1 font-semibold transition-colors ${
+            className={`rounded-full px-2 py-0.5 font-semibold transition-colors ${
               cameraMode === m.id
                 ? "bg-gold/25 text-gold"
                 : "text-white/65 hover:text-white"
@@ -710,64 +710,10 @@ function MapboxCourseView({
       </div>
 
       {usePlaceholder && (
-        <div className="pointer-events-none absolute bottom-3 left-[3.25rem] rounded-md border border-gold/30 bg-black/60 px-2 py-1 text-[10px] text-gold-soft backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-2 top-[5.5rem] rounded-md border border-gold/30 bg-black/55 px-2 py-0.5 text-[9px] text-gold-soft backdrop-blur-sm">
           Placeholder geometry (Sharjah H1)
         </div>
       )}
-
-      {/* GPS Live + accuracy badge */}
-      <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full border border-gold/30 bg-black/65 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-md">
-        {playerPosition ? (
-          <>
-            <span className="relative flex h-2 w-2">
-              <span
-                className={`absolute inline-flex h-full w-full animate-ping rounded-full ${
-                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
-                } opacity-70`}
-              />
-              <span
-                className={`relative inline-flex h-2 w-2 rounded-full ${
-                  classifyAccuracy(playerAccuracy) === "low" ? "bg-amber-400" : "bg-emerald-400"
-                }`}
-              />
-            </span>
-            <Wifi className="h-3 w-3 text-emerald-300" />
-            <span className="text-white/90">GPS LIVE</span>
-            {playerAccuracy != null && (
-              <span className="text-white/60">± {Math.round(playerAccuracy)} m</span>
-            )}
-          </>
-        ) : (
-          <>
-            <WifiOff className="h-3 w-3 text-amber-300" />
-            <span className="text-amber-200">GPS waiting</span>
-          </>
-        )}
-      </div>
-
-      {/* Tap-to-measure overlay */}
-      {measureActive && !measurePoint && (
-        <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[11px] font-semibold text-gold backdrop-blur-md">
-          {playerPosition ? "Tap any point on the map to measure" : "GPS location required to measure."}
-        </div>
-      )}
-      {measurePoint && playerPosition && (() => {
-        const m = measureBetween(
-          playerPosition,
-          measurePoint,
-          displayUnit === "m" ? "meters" : "yards",
-        );
-        return (
-          <div className="pointer-events-none absolute left-1/2 top-16 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-gold/40 bg-black/75 px-3 py-1.5 backdrop-blur-md">
-            <Ruler className="h-3.5 w-3.5 text-gold" />
-            <span className="font-serif text-base text-gold">
-              {m.distance}
-              <span className="ml-0.5 text-[10px] text-gold-soft">{m.unit}</span>
-            </span>
-            <span className="text-[10px] text-white/65">brg {Math.round(m.bearing)}°</span>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -1752,6 +1698,12 @@ export const GpsMap = () => {
         displayUnit={displayUnit}
         geometry={geometryPayload}
         holeShots={replayAll ? roundShots : shotsForHole(roundShots, hole)}
+        holeLengthYards={getPrimaryTee(gps?.tee_boxes ?? [])?.yardage ?? null}
+        playerHandicap={typeof player?.handicap === "number" ? player.handicap : null}
+        yardageReadout={caddieReadout}
+        caddieInsight={caddieInsight}
+        unit={unit}
+        fallbackCenterYards={loading ? null : displayCenterDistance}
       />
 
       <YardagePanel
