@@ -1497,7 +1497,7 @@ export const GpsMap = () => {
         centerDistance={loading ? null : displayCenterDistance}
         displayUnit={displayUnit}
         geometry={geometryPayload}
-        holeShots={shotsForHole(roundShots, hole)}
+        holeShots={replayAll ? roundShots : shotsForHole(roundShots, hole)}
       />
 
       <YardagePanel
@@ -1610,6 +1610,40 @@ export const GpsMap = () => {
       )}
 
       <RoundIntelligence stats={roundStats} loading={statsLoading} />
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          className="border-gold/40"
+          onClick={() => setReviewOpen(true)}
+        >
+          <BookOpen className="mr-2 h-4 w-4 text-gold" />
+          View Round Shots
+        </Button>
+        <Button
+          variant={replayAll ? "default" : "outline"}
+          className={replayAll ? "gradient-gold text-primary-foreground" : "border-gold/40"}
+          onClick={() => setReplayAll((v) => !v)}
+          disabled={roundShots.length === 0}
+        >
+          <Film className="mr-2 h-4 w-4" />
+          {replayAll ? "Replay: All Holes" : "Full Round Replay"}
+        </Button>
+      </div>
+
+      <ShotTagPrompt
+        open={!!pendingTagShot}
+        shotSummary={tagSummary}
+        onClose={() => setPendingTagShot(null)}
+        onSave={savePendingTags}
+      />
+
+      <RoundShotReview
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        shots={roundShots}
+        mapboxToken={mapboxToken}
+      />
 
       <div className="flex gap-2 overflow-x-auto pb-2">
         {Array.from({ length: selectableHoleCount }, (_, index) => index + 1).map((holeNumber) => (
