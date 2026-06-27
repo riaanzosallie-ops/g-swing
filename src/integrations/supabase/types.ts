@@ -317,6 +317,8 @@ export type Database = {
           hole_number: number | null
           id: string
           lie: string | null
+          metadata: Json
+          notes: string | null
           round_id: string | null
           shot_number: number | null
           start_location: unknown
@@ -336,6 +338,8 @@ export type Database = {
           hole_number?: number | null
           id?: string
           lie?: string | null
+          metadata?: Json
+          notes?: string | null
           round_id?: string | null
           shot_number?: number | null
           start_location?: unknown
@@ -355,6 +359,8 @@ export type Database = {
           hole_number?: number | null
           id?: string
           lie?: string | null
+          metadata?: Json
+          notes?: string | null
           round_id?: string | null
           shot_number?: number | null
           start_location?: unknown
