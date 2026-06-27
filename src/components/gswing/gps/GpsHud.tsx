@@ -17,13 +17,13 @@ import {
   X as XIcon,
 } from "lucide-react";
 import type { CarryTarget, Unit, YardageReadout } from "@/lib/yardage-engine";
-import type { WeatherSnapshot } from "@/lib/gswing-weather";
+import type { GswingWeather } from "@/lib/gswing-weather";
 import type { LatLng } from "@/lib/gps-utils";
 import { measureBetween, classifyAccuracy } from "@/lib/gswing-gps";
 
 export type HudWeatherState =
   | { status: "loading" | "idle" | "error" }
-  | { status: "ready"; data: WeatherSnapshot };
+  | { status: "ready"; data: GswingWeather };
 
 export interface HudTournamentInfo {
   name: string;
