@@ -335,20 +335,46 @@ All colors MUST be HSL.
 .gswing-map .mapboxgl-ctrl-bottom-right {
   display: none !important;
 }
-/* Premium GPS overlay — emerald wash + radial vignette painted over
-   the canvas itself so toggling the in-HUD overlays cannot remove it. */
-.gswing-map::after {
+/* Premium GPS — when satellite raster is hidden the WebGL canvas is
+   transparent, so this dark emerald gradient becomes the visual base
+   of the map and the screen stops looking like aerial photography. */
+.gswing-map.is-premium {
+  background:
+    radial-gradient(120% 90% at 50% 45%, #0f4a30 0%, #08321f 38%, #04190f 78%, #010604 100%);
+}
+.gswing-map.is-premium .mapboxgl-canvas {
+  background: transparent !important;
+}
+/* Subtle vignette in premium mode only. Satellite stays raw. */
+.gswing-map.is-premium::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(120% 80% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
-    linear-gradient(180deg, rgba(4, 28, 18, 0.32) 0%, rgba(4, 28, 18, 0) 35%, rgba(4, 28, 18, 0.45) 100%);
-  mix-blend-mode: multiply;
+  background: radial-gradient(120% 80% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
 }
-.gswing-map.is-satellite::after {
-  background: none;
+/* Stylized "mapping preview" placeholder shown only when there is no
+   real surveyed geometry. Sits above the empty canvas, below the HUD. */
+.gswing-premium-placeholder {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.gswing-premium-placeholder svg {
+  width: 100%;
+  height: 100%;
+}
+@keyframes gs-premium-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.18); opacity: 1; }
+}
+.gswing-premium-placeholder .gs-tee-dot {
+  transform-origin: center;
+  animation: gs-premium-pulse 2.4s ease-in-out infinite;
 }
 .gswing-map .mapboxgl-ctrl-bottom-right {
   margin: 0 8px 6px 0;
