@@ -1698,6 +1698,12 @@ export const GpsMap = () => {
         displayUnit={displayUnit}
         geometry={geometryPayload}
         holeShots={replayAll ? roundShots : shotsForHole(roundShots, hole)}
+        holeLengthYards={getPrimaryTee(gps?.tee_boxes ?? [])?.yardage ?? null}
+        playerHandicap={typeof player?.handicap === "number" ? player.handicap : null}
+        yardageReadout={caddieReadout}
+        caddieInsight={caddieInsight}
+        unit={unit}
+        fallbackCenterYards={loading ? null : displayCenterDistance}
       />
 
       <YardagePanel
