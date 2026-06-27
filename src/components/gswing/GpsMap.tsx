@@ -1328,10 +1328,28 @@ export const GpsMap = () => {
           return;
         }
         const yards = haversineYards({ lat: activeShot.start_lat, lng: activeShot.start_lng }, playerPos);
+        const offlineStart: LatLng = { lat: activeShot.start_lat, lng: activeShot.start_lng };
+        const offlineEnd: LatLng = { lat: playerPos.lat, lng: playerPos.lng };
         setActiveShot(null);
         setLastShotYards(yards);
-        setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
+        setLastShotEnd(offlineEnd);
         toast.success(`Shot saved: ${yards} yards`);
+        // Persist offline shots too — round_id is a text column, so an
+        // offline session id is a valid value. This lets the stats panel
+        // and replay overlay work even without an authenticated round.
+        const saved = await persistShot({
+          roundId: activeRound.id,
+          courseId: activeRound.course_id ?? courseId,
+          holeNumber: activeShot.hole_number ?? hole,
+          shotNumber: roundShots.filter(
+            (s) => s.hole_number === (activeShot.hole_number ?? hole),
+          ).length + 1,
+          club: activeShot.club_used ?? recommendedClub?.name ?? null,
+          start: offlineStart,
+          end: offlineEnd,
+          distanceYards: yards,
+        });
+        if (saved) setRoundShots((prev) => [...prev, saved]);
         return;
       }
       if (!activeShot) {
