@@ -266,6 +266,7 @@ function MapboxCourseView({
       setLayerGroupVisibility(map, "overlays", showOverlays);
       setLayerGroupVisibility(map, "hazards", showHazards);
       setLayerGroupVisibility(map, "labels", showLabels);
+      ensureMeasureLayers(map);
     };
     if (map.isStyleLoaded()) onLoad();
     else map.on("load", onLoad);
