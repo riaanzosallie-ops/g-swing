@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      course_sync_history: {
+        Row: {
+          accepted: Json
+          changes: Json
+          course_map_id: string | null
+          external_course_id: string | null
+          id: string
+          notes: string | null
+          owner_id: string | null
+          provider: string
+          rejected: Json
+          synced_at: string
+        }
+        Insert: {
+          accepted?: Json
+          changes?: Json
+          course_map_id?: string | null
+          external_course_id?: string | null
+          id?: string
+          notes?: string | null
+          owner_id?: string | null
+          provider: string
+          rejected?: Json
+          synced_at?: string
+        }
+        Update: {
+          accepted?: Json
+          changes?: Json
+          course_map_id?: string | null
+          external_course_id?: string | null
+          id?: string
+          notes?: string | null
+          owner_id?: string | null
+          provider?: string
+          rejected?: Json
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_sync_history_course_map_id_fkey"
+            columns: ["course_map_id"]
+            isOneToOne: false
+            referencedRelation: "gswing_course_maps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       golf_courses: {
         Row: {
           city: string | null
@@ -390,28 +437,40 @@ export type Database = {
         Row: {
           course_name: string
           created_at: string
+          external_course_id: string | null
+          external_provider: string | null
           id: string
+          last_synced: string | null
           latitude: number
           location_label: string | null
           longitude: number
+          sync_version: number
           updated_at: string
         }
         Insert: {
           course_name: string
           created_at?: string
+          external_course_id?: string | null
+          external_provider?: string | null
           id?: string
+          last_synced?: string | null
           latitude: number
           location_label?: string | null
           longitude: number
+          sync_version?: number
           updated_at?: string
         }
         Update: {
           course_name?: string
           created_at?: string
+          external_course_id?: string | null
+          external_provider?: string | null
           id?: string
+          last_synced?: string | null
           latitude?: number
           location_label?: string | null
           longitude?: number
+          sync_version?: number
           updated_at?: string
         }
         Relationships: []
