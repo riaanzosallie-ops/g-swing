@@ -1345,6 +1345,22 @@ export const GpsMap = () => {
         setLastShotYards(result.distance_yards);
         setLastShotEnd({ lat: playerPos.lat, lng: playerPos.lng });
         toast.success(`Shot saved: ${result.distance_yards} yards`);
+        // Persist to the golf_shots table so hole replay + round
+        // intelligence stats reflect real shot data only.
+        const start: LatLng = { lat: activeShot.start_lat, lng: activeShot.start_lng };
+        await persistShot({
+          roundId: activeRound.id,
+          courseId: activeRound.course_id ?? courseId,
+          holeNumber: activeShot.hole_number ?? hole,
+          shotNumber: activeShot.shot_number ?? roundShots.filter(
+            (s) => s.hole_number === (activeShot.hole_number ?? hole),
+          ).length + 1,
+          club: activeShot.club_used ?? recommendedClub?.name ?? null,
+          start,
+          end: { lat: playerPos.lat, lng: playerPos.lng },
+          distanceYards: result.distance_yards,
+        });
+        await refreshRoundShots();
       }
     } catch (error) {
       setGpsError(error instanceof Error ? error.message : "Could not update shot tracking.");
