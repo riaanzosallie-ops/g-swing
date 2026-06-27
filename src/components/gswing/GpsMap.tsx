@@ -1375,6 +1375,7 @@ export const GpsMap = () => {
           distanceYards: yards,
         });
         if (saved) setRoundShots((prev) => [...prev, saved]);
+        if (saved) setPendingTagShot(saved);
         return;
       }
       if (!activeShot) {
@@ -1391,7 +1392,7 @@ export const GpsMap = () => {
         // Persist to the golf_shots table so hole replay + round
         // intelligence stats reflect real shot data only.
         const start: LatLng = { lat: activeShot.start_lat, lng: activeShot.start_lng };
-        await persistShot({
+        const saved = await persistShot({
           roundId: activeRound.id,
           courseId: activeRound.course_id ?? courseId,
           holeNumber: activeShot.hole_number ?? hole,
@@ -1404,6 +1405,7 @@ export const GpsMap = () => {
           distanceYards: result.distance_yards,
         });
         await refreshRoundShots();
+        if (saved) setPendingTagShot(saved);
       }
     } catch (error) {
       setGpsError(error instanceof Error ? error.message : "Could not update shot tracking.");
