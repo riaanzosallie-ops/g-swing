@@ -7,6 +7,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { haversineYards, type LatLng } from "@/lib/gps-utils";
 import type { HoleGeometryPayload } from "@/lib/course-geometry";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface StoredShot {
   id: string;
@@ -153,7 +154,7 @@ export async function persistShot(input: {
       distance_yards: input.distanceYards,
       start_location: startWkt,
       end_location: endWkt,
-      metadata,
+      metadata: metadata as Json,
       notes: input.tags?.notes ?? null,
     })
     .select(SHOT_COLS)
@@ -172,7 +173,7 @@ export async function updateShotTags(
   if (tags.results?.length) metadata.results = tags.results;
   const { data, error } = await supabase
     .from("golf_shots")
-    .update({ metadata, notes: tags.notes ?? null })
+    .update({ metadata: metadata as Json, notes: tags.notes ?? null })
     .eq("id", shotId)
     .select(SHOT_COLS)
     .single();
