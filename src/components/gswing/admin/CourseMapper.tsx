@@ -323,10 +323,12 @@ export default function CourseMapper() {
       for (const t of m.tees) drafts.push(asDraft("tee", t.coordinate, t.name, t.id));
       for (const h of m.hazards) {
         const type = h.type === "penalty_area" ? "penalty" : h.type === "out_of_bounds" ? "ob" : h.type;
+        const ft: FeatureType =
+          type === "waste_area" ? "waste" : (type as FeatureType);
         drafts.push({
           id: h.id,
           persistedId: h.id,
-          feature_type: type as FeatureType,
+          feature_type: ft,
           name: h.name,
           side_label: h.side ?? null,
           center_lat: h.center.lat,
@@ -338,6 +340,41 @@ export default function CourseMapper() {
       for (const l of m.layups) drafts.push(asDraft("layup", l.coordinate, l.name, l.id));
       for (const d of m.doglegs) drafts.push(asDraft("dogleg", d.coordinate, "Dogleg", d.id));
       for (const z of m.landingZones) drafts.push(asDraft("landing_zone", z.coordinate, z.name, z.id));
+      // Premium visual polygons (no per-row id on MappedHole — synth ids).
+      const addPoly = (ft: FeatureType, poly: Array<[number, number]> | null | undefined, label: string) => {
+        if (!poly || poly.length < 3) return;
+        let lat = 0, lng = 0;
+        for (const [x, y] of poly) { lng += x; lat += y; }
+        drafts.push({
+          id: uid(),
+          feature_type: ft,
+          name: label,
+          side_label: null,
+          center_lat: lat / poly.length,
+          center_lng: lng / poly.length,
+          polygon_json: poly,
+          notes: null,
+        });
+      };
+      addPoly("fairway_polygon", m.fairwayPolygon, "Fairway");
+      addPoly("green_polygon", m.green.polygon, "Green");
+      addPoly("tee_polygon", m.teePolygon, "Tee box");
+      addPoly("hole_boundary", m.holeBoundary, "Boundary");
+      addPoly("rough_polygon", m.roughPolygon, "Rough");
+      addPoly("cart_path", m.cartPath, "Cart path");
+      // N/A markers
+      for (const k of m.naLayers ?? []) {
+        drafts.push({
+          id: uid(),
+          feature_type: "na_marker",
+          name: k,
+          side_label: null,
+          center_lat: null,
+          center_lng: null,
+          polygon_json: null,
+          notes: null,
+        });
+      }
       setFeatures(drafts);
     } finally {
       setLoadingHole(false);
