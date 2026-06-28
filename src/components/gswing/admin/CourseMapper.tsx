@@ -936,7 +936,7 @@ export default function CourseMapper() {
           <p className="mt-4 text-[10px] uppercase tracking-[0.25em] text-gold-soft">Features ({features.length})</p>
           <div className="mt-2 rounded-lg border border-white/10 bg-black/40 p-2">
             <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft">
-              Hole {holeNumber} completeness
+              Hole {holeNumber} · GPS ready
             </p>
             <ul className="mt-1 space-y-0.5 text-[11px]">
               {checklist.map((c) => (
@@ -956,6 +956,65 @@ export default function CourseMapper() {
               ))}
             </ul>
           </div>
+
+          <div className="mt-2 rounded-lg border border-gold/25 bg-black/40 p-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft">
+                Premium visual mapping
+              </p>
+              <span className="text-[10px] text-gold/85">
+                {premiumProgressInfo.done}/{premiumProgressInfo.total}
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] leading-snug text-foreground/55">
+              Required polygons for the illustrated Premium view. Mark a layer
+              N/A when it does not apply to this hole.
+            </p>
+            <ul className="mt-1 space-y-0.5 text-[11px]">
+              {premiumStatuses.map((s) => {
+                const state = s.drawn
+                  ? "drawn"
+                  : s.markedNa
+                    ? "n/a"
+                    : "missing";
+                const tone = s.drawn
+                  ? "text-emerald-300"
+                  : s.markedNa
+                    ? "text-foreground/55"
+                    : s.optional
+                      ? "text-foreground/60"
+                      : "text-amber-300";
+                return (
+                  <li key={s.key} className="flex items-center justify-between gap-2">
+                    <span className="text-foreground/80">
+                      {s.label}
+                      {s.optional && <span className="ml-1 text-foreground/40">(opt)</span>}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 ${tone}`}>
+                        {s.drawn ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                        {state}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => togglePremiumNa(s.key)}
+                        disabled={s.drawn}
+                        className={`rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-wider transition-colors ${
+                          s.markedNa
+                            ? "border-gold/40 bg-gold/20 text-gold"
+                            : "border-white/15 text-foreground/60 hover:bg-white/10 disabled:opacity-30"
+                        }`}
+                        title={s.drawn ? "Drawn — cannot mark N/A" : "Toggle Not Applicable"}
+                      >
+                        N/A
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
           {loadingHole && <p className="mt-1 text-[11px] text-foreground/60">Loading hole…</p>}
           <ul className="mt-1 space-y-1">
             {features.map((f) => (
