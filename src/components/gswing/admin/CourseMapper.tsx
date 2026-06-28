@@ -972,17 +972,24 @@ export default function CourseMapper() {
             <div className="mt-1 flex gap-2 text-[10px] uppercase tracking-wider">
               <button
                 type="button"
-                onClick={() => { setTileError(null); setMapStyle("satellite"); }}
-                className={`rounded px-2 py-1 ${mapStyle === "satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+                onClick={() => { setTileError(null); setMapStyle("fallback-satellite"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "fallback-satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
               >
-                Satellite
+                Esri satellite
               </button>
               <button
                 type="button"
-                onClick={() => { setTileError(null); setMapStyle("streets"); }}
-                className={`rounded px-2 py-1 ${mapStyle === "streets" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+                onClick={() => { setTileError(null); setMapStyle("fallback-streets"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "fallback-streets" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
               >
-                Fallback basemap
+                OSM streets
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTileError(null); setMapStyle("satellite"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+              >
+                Retry Mapbox
               </button>
             </div>
           </div>
