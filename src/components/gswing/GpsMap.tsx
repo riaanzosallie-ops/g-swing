@@ -2194,6 +2194,10 @@ export const GpsMap = () => {
   const loadHole = useCallback(async () => {
     setLoading(true);
     setGpsError(null);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][5] Loading Course/Hole", { courseId, hole });
+    }
     try {
       // 1. Prefer production geometry from the PostGIS-backed tables.
       try {
@@ -2201,6 +2205,10 @@ export const GpsMap = () => {
         if (geom) {
           setGeometryPayload(geom);
           setGps(geometryToHoleGpsResponse(courseId, geom, unit, playerPos));
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line no-console
+            console.info(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (postgis)`, { courseId });
+          }
           return;
         }
         setGeometryPayload(null);
@@ -2215,11 +2223,19 @@ export const GpsMap = () => {
         playerPos: playerPos ?? undefined,
       });
       setGps(data);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (edge)`, { courseId });
+      }
     } catch (error) {
       // 3. Last-resort offline demo geometry so the map still renders.
       setGeometryPayload(null);
       setGps(createFallbackHoleGps(selectedCourse, hole, unit, playerPos));
       setGpsError(null);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (offline fallback)`, { courseId, error });
+      }
     } finally {
       setLoading(false);
     }
