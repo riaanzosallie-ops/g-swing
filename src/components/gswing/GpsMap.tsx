@@ -692,7 +692,9 @@ function MapboxCourseView({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (geometry || !tee) {
+    const teeValid =
+      tee && Number.isFinite(tee.lat) && Number.isFinite(tee.lng);
+    if (geometry || !teeValid) {
       if (teeMarkerRef.current) {
         teeMarkerRef.current.remove();
         teeMarkerRef.current = null;
@@ -703,9 +705,9 @@ function MapboxCourseView({
       const el = document.createElement("div");
       el.style.cssText =
         "width:14px;height:14px;border-radius:50%;background:#F5C84B;border:2px solid #1a1300;box-shadow:0 0 6px rgba(245,200,75,0.7);";
-      teeMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([tee.lng, tee.lat]).addTo(map);
+      teeMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([tee!.lng, tee!.lat]).addTo(map);
     } else {
-      teeMarkerRef.current.setLngLat([tee.lng, tee.lat]);
+      teeMarkerRef.current.setLngLat([tee!.lng, tee!.lat]);
     }
   }, [tee?.lat, tee?.lng, geometry]);
 
