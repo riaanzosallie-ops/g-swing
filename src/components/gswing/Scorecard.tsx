@@ -95,7 +95,40 @@ function formatHandicapIndex(value: number | null | undefined): string {
 }
 
 const PLAYERS_STORAGE_KEY = "gswing.scorecard.players";
+const FORMAT_STORAGE_KEY = "gswing.scorecard.format";
 const MAX_PLAYERS = 4;
+
+const ROUND_FORMATS = [
+  "Stroke Play",
+  "Stableford",
+  "Match Play",
+  "Skins",
+  "Better Ball",
+  "Scramble",
+] as const;
+export type RoundFormat = (typeof ROUND_FORMATS)[number];
+
+function stablefordPts(strokes: number, par: number, given: number) {
+  if (!strokes) return 0;
+  const d = strokes - given - par;
+  if (d <= -3) return 5;
+  if (d === -2) return 4;
+  if (d === -1) return 3;
+  if (d === 0) return 2;
+  if (d === 1) return 1;
+  return 0;
+}
+/** Whole-number course handicap from HI (signed; plus stored negative). */
+function courseHcp(hi: number | null | undefined): number {
+  if (hi == null || !Number.isFinite(hi)) return 0;
+  return Math.max(0, Math.round(hi));
+}
+/** Strokes received on a given hole (even allocation, extras to low holes). */
+function strokesGivenOnHole(ch: number, holeIndex: number, totalHoles = 18) {
+  const base = Math.floor(ch / totalHoles);
+  const extra = ch % totalHoles;
+  return base + (holeIndex < extra ? 1 : 0);
+}
 
 const seedPlayers = (): Player[] => [
   { id: "p1", name: "Riaan", scores: PARS.map(() => 0), handicapIndex: null },
@@ -126,6 +159,17 @@ export const Scorecard = () => {
   const [presses, setPresses] = useState<{ hole: number; by: string }[]>([]);
   const [rounds, setRounds] = useRounds();
 
+  const [format, setFormat] = useState<RoundFormat>(() => {
+    try {
+      const raw = localStorage.getItem(FORMAT_STORAGE_KEY);
+      if (raw && (ROUND_FORMATS as readonly string[]).includes(raw)) return raw as RoundFormat;
+    } catch {}
+    return "Stroke Play";
+  });
+  useEffect(() => {
+    try { localStorage.setItem(FORMAT_STORAGE_KEY, format); } catch {}
+  }, [format]);
+
   // Manage Players modal state
   const [manageOpen, setManageOpen] = useState(false);
   const [draft, setDraft] = useState<Player[]>(players);
@@ -133,6 +177,7 @@ export const Scorecard = () => {
   // Per-player handicap input drafts (raw text so users can type "+", ".").
   const [hiInputs, setHiInputs] = useState<Record<string, string>>({});
   const [hiErrors, setHiErrors] = useState<Record<string, string | null>>({});
+  const [draftFormat, setDraftFormat] = useState<RoundFormat>(format);
 
   const openManage = () => {
     setDraft(players.map((p) => ({ ...p, scores: [...p.scores] })));
@@ -142,6 +187,7 @@ export const Scorecard = () => {
       ),
     );
     setHiErrors({});
+    setDraftFormat(format);
     setManageOpen(true);
   };
 
@@ -215,8 +261,9 @@ export const Scorecard = () => {
       return;
     }
     setPlayers(cleaned);
+    setFormat(draftFormat);
     setManageOpen(false);
-    toast.success("Players updated");
+    toast.success("Players and format updated");
   };
 
   const setScore = (playerIndex: number, holeIndex: number, value: number) => {
@@ -256,15 +303,58 @@ export const Scorecard = () => {
           0,
         );
         const diff = total - playedPar;
-        return { ...player, total, holesPlayed, diff };
+        const ch = courseHcp(player.handicapIndex);
+        const stableford = player.scores.reduce(
+          (sum, s, i) => sum + stablefordPts(s, PARS[i], strokesGivenOnHole(ch, i)),
+          0,
+        );
+        return { ...player, total, holesPlayed, diff, stableford };
       })
       .sort((a, b) => {
         if (a.holesPlayed === 0 && b.holesPlayed === 0) return 0;
         if (a.holesPlayed === 0) return 1;
         if (b.holesPlayed === 0) return -1;
+        if (format === "Stableford") return b.stableford - a.stableford;
         return a.diff - b.diff || a.total - b.total;
       });
-  }, [players]);
+  }, [players, format]);
+
+  /** Match Play state vs current leader (first listed player). */
+  const matchPlay = useMemo(() => {
+    if (format !== "Match Play" || players.length < 2) return null;
+    const a = players[0];
+    const b = players[1];
+    let lead = 0; let played = 0;
+    for (let h = 0; h < 18; h++) {
+      const sa = a.scores[h]; const sb = b.scores[h];
+      if (!sa || !sb) continue;
+      played = h + 1;
+      if (sa < sb) lead += 1;
+      else if (sa > sb) lead -= 1;
+    }
+    const remaining = 18 - played;
+    const closed = Math.abs(lead) > remaining;
+    const label =
+      played === 0 ? "—" :
+      lead === 0 ? "AS" :
+      `${Math.abs(lead)} ${closed ? `&${remaining}` : "UP"}`;
+    const leader = lead > 0 ? a.name : lead < 0 ? b.name : null;
+    return { a, b, lead, played, remaining, label, leader };
+  }, [players, format]);
+
+  /** Team aggregate (Better Ball: sum of best per hole; Scramble: sum of team strokes assumed = first player's). */
+  const teamScore = useMemo(() => {
+    if (format !== "Better Ball" && format !== "Scramble") return null;
+    let total = 0; let playedPar = 0; let holesPlayed = 0;
+    for (let h = 0; h < 18; h++) {
+      const scores = players.map((p) => p.scores[h]).filter((s) => s > 0);
+      if (scores.length === 0) continue;
+      holesPlayed += 1;
+      playedPar += PARS[h];
+      total += format === "Better Ball" ? Math.min(...scores) : scores[0];
+    }
+    return { total, diff: total - playedPar, holesPlayed };
+  }, [players, format]);
 
   const skins = useMemo(() => {
     const won: Record<string, number> = Object.fromEntries(players.map((player) => [player.id, 0]));
@@ -371,7 +461,7 @@ export const Scorecard = () => {
         <Target className="h-6 w-6 text-gold" />
         <h2 className="font-serif text-2xl text-gradient-gold">Scorecard</h2>
         <Badge variant="outline" className="ml-auto border-gold/40 text-gold">
-          H{activeHole + 1}/18
+          H{activeHole + 1}/18 · {format}
         </Badge>
       </div>
 
@@ -438,16 +528,61 @@ export const Scorecard = () => {
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-serif text-base">{player.total || "-"}</p>
-                <p className={`text-[10px] ${player.diff <= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                  {player.holesPlayed === 0 ? "" : player.diff === 0 ? "E" : player.diff > 0 ? `+${player.diff}` : player.diff}
-                </p>
+                {format === "Stableford" ? (
+                  <>
+                    <p className="font-serif text-base text-gold">{player.stableford}</p>
+                    <p className="text-[10px] text-muted-foreground">pts</p>
+                  </>
+                ) : format === "Skins" ? (
+                  <>
+                    <p className="font-serif text-base text-gold">{skins.won[player.id] ?? 0}</p>
+                    <p className="text-[10px] text-muted-foreground">skins</p>
+                  </>
+                ) : format === "Match Play" && matchPlay ? (
+                  <>
+                    <p className="font-serif text-base text-gold">
+                      {matchPlay.leader === player.name ? matchPlay.label : matchPlay.leader && matchPlay.leader !== player.name ? "DN" : matchPlay.label}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">match</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-serif text-base">{player.total || "-"}</p>
+                    <p className={`text-[10px] ${player.diff <= 0 ? "text-emerald-400" : "text-destructive"}`}>
+                      {player.holesPlayed === 0 ? "" : player.diff === 0 ? "E" : player.diff > 0 ? `+${player.diff}` : player.diff}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           ))}
         </div>
         )}
       </Card>
+
+      {teamScore && (
+        <Card className="gradient-card border-gold/30 p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-gold" />
+              <p className="font-serif text-sm">{format} · Team Score</p>
+            </div>
+            <div className="text-right">
+              <p className="font-serif text-xl text-gold">{teamScore.total || "—"}</p>
+              <p className="text-[10px] text-muted-foreground">
+                Thru {teamScore.holesPlayed} ·{" "}
+                {teamScore.holesPlayed === 0
+                  ? "—"
+                  : teamScore.diff === 0
+                    ? "E"
+                    : teamScore.diff > 0
+                      ? `+${teamScore.diff}`
+                      : teamScore.diff}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card className="gradient-card border-gold/30 p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -715,6 +850,31 @@ export const Scorecard = () => {
           </DrawerHeader>
 
           <div className="space-y-2 overflow-y-auto px-4 pb-2">
+            <div className="mb-1 rounded-xl border border-gold/20 bg-background/40 p-2.5">
+              <p className="mb-2 text-[10px] uppercase tracking-widest text-gold/80">
+                Round Format
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {ROUND_FORMATS.map((f) => {
+                  const active = draftFormat === f;
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setDraftFormat(f)}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                        active
+                          ? "border-gold bg-gold/15 text-gold shadow-[0_0_10px_rgba(212,175,55,0.4)]"
+                          : "border-gold/20 bg-background/40 text-muted-foreground hover:border-gold/40 hover:text-gold"
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {draft.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gold/30 bg-background/30 px-4 py-6 text-center">
                 <p className="font-serif text-sm">No players added yet</p>
