@@ -614,6 +614,9 @@ function MapboxCourseView({
     const map = mapRef.current;
     if (!map || !styleLoadedRef.current) return;
     if (!measureActive) return;
+    // Premium mode owns its own tap-to-measure via the SVG renderer.
+    // Skip the Mapbox click handler so taps don't double-fire.
+    if (mapView === "premium") return;
     const onClick = (e: mapboxgl.MapMouseEvent) => {
       setMeasurePoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
     };
@@ -623,7 +626,13 @@ function MapboxCourseView({
       map.off("click", onClick);
       map.getCanvas().style.cursor = "";
     };
-  }, [measureActive]);
+  }, [measureActive, mapView]);
+
+  // Clear stale measurement when the selected hole changes so we never
+  // show a previous hole's tap distance against a different geometry.
+  useEffect(() => {
+    setMeasurePoint(null);
+  }, [hole]);
 
   // Tap-to-measure: sync the GeoJSON source whenever endpoints change.
   useEffect(() => {
