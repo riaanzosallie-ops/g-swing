@@ -2079,6 +2079,13 @@ function CartGpsView({
 }
 
 export const GpsMap = () => {
+  // GPS mount log — verifies stage [4] from the course-select trace.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][4] GPS Mounted");
+    }
+  }, []);
   const [courses, setCourses] = useState<GolfCourse[]>(UAE_COURSES);
   const [courseId, setCourseId] = useState<string>(() => {
     try {
