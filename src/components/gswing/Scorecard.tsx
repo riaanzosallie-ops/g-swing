@@ -482,7 +482,14 @@ export const Scorecard = () => {
                     {initials(player.name)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{player.name}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {player.name}
+                      {player.handicapIndex != null && (
+                        <span className="ml-1.5 text-[10px] font-normal text-gold/80">
+                          · HI {formatHandicapIndex(player.handicapIndex)}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[10px] text-muted-foreground">
                       {score ? `${score - PARS[activeHole] === 0 ? "Par" : score - PARS[activeHole] > 0 ? `+${score - PARS[activeHole]}` : score - PARS[activeHole]} on this hole` : "Score needed"}
                     </p>
