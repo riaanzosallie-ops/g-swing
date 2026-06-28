@@ -142,6 +142,8 @@ export default function CourseMapper() {
 
   const [token, setToken] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const [mapStyle, setMapStyle] = useState<"satellite" | "streets">("satellite");
+  const [tileError, setTileError] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [polygonPoints, setPolygonPoints] = useState<Array<[number, number]>>([]);
 
@@ -178,9 +180,15 @@ export default function CourseMapper() {
   useEffect(() => {
     if (!token || !containerRef.current || mapRef.current) return;
     mapboxgl.accessToken = token;
+    const styleUrl =
+      mapStyle === "satellite"
+        ? "mapbox://styles/mapbox/satellite-streets-v12"
+        : "mapbox://styles/mapbox/dark-v11";
+    // eslint-disable-next-line no-console
+    console.log("[CourseMapper] map init", { style: styleUrl, center: [centerLng, centerLat] });
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/satellite-streets-v12",
+      style: styleUrl,
       center: [centerLng, centerLat],
       zoom: 16.5,
       pitch: 0,
@@ -190,6 +198,23 @@ export default function CourseMapper() {
     map.on("load", () => {
       styleLoadedRef.current = true;
       ensureMappedLayers(map);
+      // eslint-disable-next-line no-console
+      console.log("[CourseMapper] map loaded");
+    });
+    map.on("error", (e: { error?: { status?: number; message?: string } }) => {
+      const status = e?.error?.status;
+      const msg = e?.error?.message ?? "Map tile error";
+      // eslint-disable-next-line no-console
+      console.warn("[CourseMapper] map error", status, msg, e?.error);
+      if (status === 401 || status === 403) {
+        setTileError(
+          `Mapbox tile request denied (${status}). The map token is restricted for this domain. ` +
+            `Switching to fallback basemap.`,
+        );
+        if (mapStyle === "satellite") {
+          setMapStyle("streets");
+        }
+      }
     });
     return () => {
       styleLoadedRef.current = false;
@@ -197,7 +222,7 @@ export default function CourseMapper() {
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, mapStyle]);
 
   // Render features → mapped layers preview
   useEffect(() => {
@@ -374,6 +399,35 @@ export default function CourseMapper() {
         });
       }
       setFeatures(drafts);
+      // eslint-disable-next-line no-console
+      console.log("[CourseMapper] hole loaded", { courseMapId: mapId, hole, featureCount: drafts.length });
+      // Auto-fit map to saved geometry
+      const pts: Array<[number, number]> = [];
+      for (const d of drafts) {
+        if (Number.isFinite(d.center_lat) && Number.isFinite(d.center_lng)) {
+          pts.push([d.center_lng as number, d.center_lat as number]);
+        }
+        if (d.polygon_json) for (const p of d.polygon_json) pts.push([p[0], p[1]]);
+      }
+      const map = mapRef.current;
+      if (map && pts.length > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const [x, y] of pts) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        // eslint-disable-next-line no-console
+        console.log("[CourseMapper] fitBounds", { minX, minY, maxX, maxY });
+        try {
+          map.fitBounds(
+            [[minX, minY], [maxX, maxY]],
+            { padding: 80, maxZoom: 18, duration: 600 },
+          );
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("[CourseMapper] fitBounds failed", err);
+        }
+      }
     } finally {
       setLoadingHole(false);
     }
@@ -862,6 +916,51 @@ export default function CourseMapper() {
       {/* Body: map + drawer */}
       <div className="relative flex-1">
         <div ref={containerRef} className="absolute inset-0" />
+
+        {/* Tile error banner — visible feedback if Mapbox tiles fail */}
+        {tileError && (
+          <div className="pointer-events-auto absolute left-1/2 top-2 z-20 -translate-x-1/2 max-w-[min(92%,640px)] rounded-lg border border-red-400/40 bg-red-950/85 px-3 py-2 text-xs text-red-100 backdrop-blur">
+            <div className="flex items-start gap-2">
+              <span className="font-semibold">Map tiles failed.</span>
+              <span className="opacity-90">{tileError}</span>
+              <button
+                type="button"
+                onClick={() => setTileError(null)}
+                className="ml-auto text-red-200/80 hover:text-white"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="mt-1 flex gap-2 text-[10px] uppercase tracking-wider">
+              <button
+                type="button"
+                onClick={() => { setTileError(null); setMapStyle("satellite"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+              >
+                Satellite
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTileError(null); setMapStyle("streets"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "streets" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+              >
+                Fallback basemap
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Token missing — explicit message instead of a silent black canvas */}
+        {!token && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 text-center text-xs text-foreground/80">
+            <div className="max-w-sm space-y-2 p-4">
+              <p className="text-sm font-semibold text-gold">
+                {tokenError ? "Mapbox token unavailable" : "Loading map…"}
+              </p>
+              {tokenError && <p className="opacity-80">{tokenError}</p>}
+            </div>
+          </div>
+        )}
 
         {/* Left tool dock */}
         <div className="absolute left-2 top-2 flex max-h-[80%] flex-col gap-1 overflow-y-auto rounded-xl border border-gold/30 bg-black/70 p-1 backdrop-blur-md">
