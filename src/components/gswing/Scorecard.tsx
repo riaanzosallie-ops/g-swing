@@ -49,19 +49,59 @@ type Player = {
   name: string;
   scores: number[];
   hero?: number;
+  /**
+   * WHS Handicap Index. Plus-handicaps are stored as NEGATIVE numbers
+   * (e.g. "+1.2" → -1.2). Range: -8.0 … 54.0. `null` means not set yet —
+   * existing players from older local-storage payloads land here.
+   */
+  handicapIndex?: number | null;
 };
 
 const initials = (name: string) =>
   (name.trim().split(/\s+/).map((s) => s[0]).join("").slice(0, 2) || "?").toUpperCase();
 
+/**
+ * Handicap Index helpers.
+ * Input strings accept "+1.2" (plus-handicap), "0", "7.4", "12.8", "54".
+ * Storage is a signed number with one decimal; range −8.0 … 54.0.
+ */
+const HI_MIN = -8.0; // "+8.0"
+const HI_MAX = 54.0;
+
+function parseHandicapIndex(raw: string): { value: number | null; error: string | null } {
+  const s = raw.trim();
+  if (s === "") return { value: null, error: null };
+  // "+1.2" → -1.2 (plus-handicap convention).
+  const plus = s.startsWith("+");
+  const body = plus ? s.slice(1) : s;
+  if (!/^\d{1,2}(\.\d{1,2})?$/.test(body)) {
+    return { value: null, error: "Use 0–54.0 or +0–+8.0" };
+  }
+  const n = Number(body);
+  if (!Number.isFinite(n)) return { value: null, error: "Invalid number" };
+  const signed = plus ? -n : n;
+  const rounded = Math.round(signed * 10) / 10;
+  if (rounded < HI_MIN || rounded > HI_MAX) {
+    return { value: null, error: "Range +8.0 to 54.0" };
+  }
+  return { value: rounded, error: null };
+}
+
+/** Render handicap for display, e.g. -1.2 → "+1.2", 12.4 → "12.4". */
+function formatHandicapIndex(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "";
+  const fixed = Math.abs(value).toFixed(1);
+  return value < 0 ? `+${fixed}` : fixed;
+}
+
 const PLAYERS_STORAGE_KEY = "gswing.scorecard.players";
 const MAX_PLAYERS = 4;
 
 const seedPlayers = (): Player[] => [
-  { id: "p1", name: "Riaan", scores: PARS.map(() => 0) },
-  { id: "p2", name: "Nievo", scores: PARS.map(() => 0) },
-  { id: "p3", name: "Toto", scores: PARS.map(() => 0) },
-  { id: "p4", name: "Docco", scores: PARS.map(() => 0) },
+  { id: "p1", name: "Riaan", scores: PARS.map(() => 0), handicapIndex: null },
+  { id: "p2", name: "Nievo", scores: PARS.map(() => 0), handicapIndex: null },
+  { id: "p3", name: "Toto", scores: PARS.map(() => 0), handicapIndex: null },
+  { id: "p4", name: "Docco", scores: PARS.map(() => 0), handicapIndex: null },
 ];
 
 export const Scorecard = () => {
@@ -90,9 +130,18 @@ export const Scorecard = () => {
   const [manageOpen, setManageOpen] = useState(false);
   const [draft, setDraft] = useState<Player[]>(players);
   const [removeTarget, setRemoveTarget] = useState<Player | null>(null);
+  // Per-player handicap input drafts (raw text so users can type "+", ".").
+  const [hiInputs, setHiInputs] = useState<Record<string, string>>({});
+  const [hiErrors, setHiErrors] = useState<Record<string, string | null>>({});
 
   const openManage = () => {
     setDraft(players.map((p) => ({ ...p, scores: [...p.scores] })));
+    setHiInputs(
+      Object.fromEntries(
+        players.map((p) => [p.id, formatHandicapIndex(p.handicapIndex ?? null)]),
+      ),
+    );
+    setHiErrors({});
     setManageOpen(true);
   };
 
@@ -100,19 +149,33 @@ export const Scorecard = () => {
     setDraft((arr) => arr.map((p) => (p.id === id ? { ...p, name } : p)));
   };
 
+  const updateDraftHandicap = (id: string, raw: string) => {
+    setHiInputs((m) => ({ ...m, [id]: raw }));
+    const { value, error } = parseHandicapIndex(raw);
+    setHiErrors((m) => ({ ...m, [id]: error }));
+    if (!error) {
+      setDraft((arr) =>
+        arr.map((p) => (p.id === id ? { ...p, handicapIndex: value } : p)),
+      );
+    }
+  };
+
   const addDraftPlayer = () => {
     if (draft.length >= MAX_PLAYERS) {
       toast.error(`Max ${MAX_PLAYERS} players`);
       return;
     }
+    const newId = crypto.randomUUID?.() ?? `p-${Date.now()}`;
     setDraft((arr) => [
       ...arr,
       {
-        id: (crypto.randomUUID?.() ?? `p-${Date.now()}`),
+        id: newId,
         name: `Player ${arr.length + 1}`,
         scores: PARS.map(() => 0),
+        handicapIndex: null,
       },
     ]);
+    setHiInputs((m) => ({ ...m, [newId]: "" }));
   };
 
   const removeDraftPlayer = (id: string) => {
@@ -133,9 +196,15 @@ export const Scorecard = () => {
   };
 
   const saveManage = () => {
+    const firstError = Object.values(hiErrors).find((e) => e);
+    if (firstError) {
+      toast.error(firstError);
+      return;
+    }
     const cleaned = draft.map((p) => ({
       ...p,
       name: p.name.trim() || "Player",
+      handicapIndex: p.handicapIndex ?? null,
     }));
     if (cleaned.length < 1) {
       toast.error("At least 1 player required");
@@ -358,6 +427,12 @@ export const Scorecard = () => {
                     {player.name} {player.hero !== undefined && <Flame className="inline h-3 w-3 text-gold" />}
                   </p>
                   <p className="text-[9px] text-muted-foreground">
+                    {player.handicapIndex != null && (
+                      <>
+                        <span className="text-gold/80">HI {formatHandicapIndex(player.handicapIndex)}</span>
+                        <span className="mx-1 text-gold/30">·</span>
+                      </>
+                    )}
                     Thru {player.holesPlayed} · Skins {skins.won[player.id] ?? 0}
                   </p>
                 </div>
@@ -407,7 +482,14 @@ export const Scorecard = () => {
                     {initials(player.name)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{player.name}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {player.name}
+                      {player.handicapIndex != null && (
+                        <span className="ml-1.5 text-[10px] font-normal text-gold/80">
+                          · HI {formatHandicapIndex(player.handicapIndex)}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[10px] text-muted-foreground">
                       {score ? `${score - PARS[activeHole] === 0 ? "Par" : score - PARS[activeHole] > 0 ? `+${score - PARS[activeHole]}` : score - PARS[activeHole]} on this hole` : "Score needed"}
                     </p>
@@ -660,9 +742,25 @@ export const Scorecard = () => {
                         />
                         <Pencil className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
                       </div>
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        Thru {played}/18 · scores preserved on rename
-                      </p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <Input
+                          value={hiInputs[p.id] ?? ""}
+                          onChange={(e) => updateDraftHandicap(p.id, e.target.value)}
+                          inputMode="decimal"
+                          maxLength={6}
+                          placeholder="Handicap Index"
+                          aria-label="Handicap Index"
+                          className={`h-8 w-28 border-gold/20 bg-background/60 text-xs ${
+                            hiErrors[p.id] ? "border-destructive/60" : ""
+                          }`}
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          Thru {played}/18 · scores kept
+                        </p>
+                      </div>
+                      {hiErrors[p.id] && (
+                        <p className="mt-0.5 text-[10px] text-destructive">{hiErrors[p.id]}</p>
+                      )}
                     </div>
                     <Button
                       type="button"
