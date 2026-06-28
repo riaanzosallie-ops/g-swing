@@ -427,6 +427,12 @@ export const Scorecard = () => {
                     {player.name} {player.hero !== undefined && <Flame className="inline h-3 w-3 text-gold" />}
                   </p>
                   <p className="text-[9px] text-muted-foreground">
+                    {player.handicapIndex != null && (
+                      <>
+                        <span className="text-gold/80">HI {formatHandicapIndex(player.handicapIndex)}</span>
+                        <span className="mx-1 text-gold/30">·</span>
+                      </>
+                    )}
                     Thru {player.holesPlayed} · Skins {skins.won[player.id] ?? 0}
                   </p>
                 </div>
