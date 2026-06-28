@@ -160,7 +160,16 @@ serve(async (req) => {
     // GET /golf-courses/:id
     if (parts.length === 1) {
       const { data, error } = await supabase.from("golf_courses").select("*").eq("id", courseId).single();
-      if (error || !data) return err("Course not found", 404);
+      if (error || !data) {
+        // Graceful fallback: course not yet in DB. Return 200 so the client
+        // can fall back to bundled/offline course metadata without crashing.
+        return json({
+          course: null,
+          course_id: courseId,
+          status: "no_data",
+          message: "Course metadata not yet available.",
+        });
+      }
       return json({ course: data });
     }
 
