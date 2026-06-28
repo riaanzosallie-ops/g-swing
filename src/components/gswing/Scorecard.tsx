@@ -564,7 +564,10 @@ export const Scorecard = () => {
             </button>
           </div>
         </div>
-        <div className="mt-2 grid grid-cols-4 gap-1 text-center">
+        <div
+          className="mt-2 grid gap-1 text-center"
+          style={{ gridTemplateColumns: `repeat(${Math.max(1, players.length)}, minmax(0, 1fr))` }}
+        >
           {players.map((player) => (
             <div key={player.id} className="rounded-lg border border-border p-1.5">
               <p className="text-[9px] text-muted-foreground">{player.name}</p>
@@ -616,6 +619,120 @@ export const Scorecard = () => {
           ))}
         </div>
       </div>
+
+      {/* Manage Players modal */}
+      <Drawer open={manageOpen} onOpenChange={setManageOpen}>
+        <DrawerContent className="max-h-[92vh]">
+          <DrawerHeader className="pb-2">
+            <DrawerTitle className="flex items-center gap-2 font-serif text-base text-gradient-gold">
+              <Users className="h-4 w-4 text-gold" /> Manage Players
+            </DrawerTitle>
+            <DrawerDescription className="text-[11px] text-muted-foreground">
+              Edit names, add up to {MAX_PLAYERS} players, or remove. Scores are kept when only renaming.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <div className="space-y-2 overflow-y-auto px-4 pb-2">
+            {draft.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gold/30 bg-background/30 px-4 py-6 text-center">
+                <p className="font-serif text-sm">No players added yet</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Add at least one player to start scoring.</p>
+              </div>
+            ) : (
+              draft.map((p) => {
+                const played = p.scores.filter((s) => s > 0).length;
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 rounded-xl border border-gold/20 bg-background/40 p-2"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold text-gold">
+                      {initials(p.name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="relative">
+                        <Input
+                          value={p.name}
+                          onChange={(e) => updateDraftName(p.id, e.target.value)}
+                          maxLength={20}
+                          aria-label="Player name"
+                          className="h-9 border-gold/20 bg-background/60 pr-7 text-sm"
+                        />
+                        <Pencil className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                      </div>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Thru {played}/18 · scores preserved on rename
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => removeDraftPlayer(p.id)}
+                      aria-label={`Remove ${p.name}`}
+                      className="h-9 w-9 border-destructive/40 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+
+            <Button
+              type="button"
+              onClick={addDraftPlayer}
+              disabled={draft.length >= MAX_PLAYERS}
+              variant="outline"
+              className="mt-1 w-full border-dashed border-gold/40 text-gold hover:bg-gold/10"
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              {draft.length >= MAX_PLAYERS ? `Max ${MAX_PLAYERS} players` : "Add Player"}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 border-t border-gold/10 px-4 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setManageOpen(false)}
+              className="border-gold/40"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={saveManage}
+              disabled={draft.length < 1}
+              className="gradient-gold text-primary-foreground"
+            >
+              <Save className="mr-2 h-4 w-4" /> Save
+            </Button>
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(o) => !o && setRemoveTarget(null)}>
+        <AlertDialogContent className="border-gold/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif text-gradient-gold">
+              Remove {removeTarget?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete their hole scores for this round.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveDraftPlayer}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove player
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
