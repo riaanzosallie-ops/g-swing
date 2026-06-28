@@ -3,7 +3,6 @@ import type { LatLng } from "@/lib/gps-utils";
 import type { HazardGeometry, MappedHole } from "@/types/gswing-course-map";
 import {
   buildHoleBounds,
-  buildSmoothPath,
   calculateFeatureCentroid,
   calculateMeasurementFromTap,
   fitHoleToViewport,
@@ -12,13 +11,21 @@ import {
   unprojectHoleCanvasToLatLng,
   type FittedProjection,
 } from "@/lib/gswing-hole-projection";
+import {
+  evaluatePremiumLayers,
+  isPremiumReady,
+  missingPremiumLayers,
+  premiumProgress,
+} from "@/lib/gswing-premium-readiness";
 
 /**
  * G-Swing Premium Hole Renderer
  * ------------------------------
- * Custom illustrated top-down hole view built from saved G-Swing mapped
- * geometry only (gswing_course_maps / gswing_mapped_holes /
- * gswing_hole_features). Never satellite imagery. Never fabricated.
+ * Polygon-driven illustrated aerial view. The renderer ONLY draws a
+ * premium illustration when the hole is Premium Ready (every required
+ * visual layer is either drawn or explicitly marked Not Applicable).
+ * Otherwise a "Premium Mapping Required" gate is shown — never the old
+ * glowing vector corridor.
  *
  * Tap-to-measure: a tap on the SVG is unprojected back into real lat/lng
  * and emitted to the parent so the bottom sheet shows a real haversine
@@ -65,6 +72,9 @@ export function PremiumHoleRenderer({
   }, []);
 
   const usable = hasUsableHoleMapping(mappedHole);
+  const premiumReady = useMemo(() => isPremiumReady(mappedHole), [mappedHole]);
+  const missing = useMemo(() => missingPremiumLayers(mappedHole), [mappedHole]);
+  const progress = useMemo(() => premiumProgress(mappedHole), [mappedHole]);
   const bounds = useMemo(
     () => buildHoleBounds(mappedHole, playerPosition),
     [mappedHole, playerPosition?.lat, playerPosition?.lng],
@@ -96,9 +106,14 @@ export function PremiumHoleRenderer({
       layups: mappedHole?.layups.length ?? 0,
       doglegs: mappedHole?.doglegs.length ?? 0,
       hasUsableHoleMapping: usable,
-      hasRichMapping: mappedHole ? hasRichMapping(mappedHole) : false,
+      premiumReady,
+      premiumProgress: progress,
+      fairwayPolygon: !!mappedHole?.fairwayPolygon,
+      teePolygon: !!mappedHole?.teePolygon,
+      holeBoundary: !!mappedHole?.holeBoundary,
+      naLayers: mappedHole?.naLayers ?? [],
     });
-  }, [mappedHole, selectedHoleNumber, usable]);
+  }, [mappedHole, selectedHoleNumber, usable, premiumReady, progress]);
 
   const projection: FittedProjection | null = useMemo(() => {
     if (!bounds || size.w < 20 || size.h < 20) return null;
@@ -110,7 +125,7 @@ export function PremiumHoleRenderer({
   }, [bounds, size.w, size.h]);
 
   const handleTap = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
-    if (!isMeasuring || !projection || !svgRef.current) return;
+    if (!isMeasuring || !projection || !svgRef.current || !premiumReady) return;
     const rect = svgRef.current.getBoundingClientRect();
     const t = "touches" in e ? e.changedTouches[0] : e;
     if (!t) return;
@@ -136,13 +151,19 @@ export function PremiumHoleRenderer({
           <div className="rounded-2xl border border-gold/30 bg-black/55 px-5 py-4 backdrop-blur-md">
             <p className="font-serif text-base text-gold">Hole {selectedHoleNumber}</p>
             <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gold-soft">
-              Mapping required
+              GPS mapping required
             </p>
             <p className="mt-2 max-w-[260px] text-[11px] leading-snug text-white/65">
-              Open the Course Mapper to save tee, green and hazards for this hole.
+              Open the Course Mapper to save tee, green front/center/back and pin for this hole.
             </p>
           </div>
         </div>
+      ) : !premiumReady ? (
+        <PremiumMappingRequired
+          selectedHoleNumber={selectedHoleNumber}
+          missing={missing}
+          progress={progress}
+        />
       ) : (
         <svg
           ref={svgRef}
@@ -181,7 +202,7 @@ export function PremiumHoleRenderer({
       )}
 
       {/* Hint chip when measuring with no GPS / no target */}
-      {isMeasuring && usable && (
+      {isMeasuring && usable && premiumReady && (
         <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-gold/35 bg-black/65 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-gold backdrop-blur-md">
           {!playerPosition
             ? "GPS location required to measure"
@@ -190,15 +211,57 @@ export function PremiumHoleRenderer({
               : "Tap the hole to measure"}
         </div>
       )}
-      {usable && mappedHole && !hasRichMapping(mappedHole) && (() => {
-        const missing = describeMissingMapping(mappedHole);
-        if (missing.length === 0) return null;
-        return (
-          <div className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 max-w-[88%] rounded-full border border-amber-300/40 bg-amber-500/10 px-3 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md">
-            Add to mapping: {missing.join(" · ")}
+    </div>
+  );
+}
+
+/**
+ * Premium Mapping Required gate. Replaces the old glowing centreline.
+ * Lists exactly which premium visual layers are still missing for this
+ * hole and directs the user to either map them or use Satellite mode.
+ */
+function PremiumMappingRequired({
+  selectedHoleNumber,
+  missing,
+  progress,
+}: {
+  selectedHoleNumber: number;
+  missing: ReturnType<typeof missingPremiumLayers>;
+  progress: { done: number; total: number };
+}) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+      <div className="max-w-sm rounded-2xl border border-gold/30 bg-black/65 px-5 py-5 backdrop-blur-md">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-gold-soft">G-Swing Premium</p>
+        <h2 className="mt-1 font-serif text-xl text-gold">Hole {selectedHoleNumber}</h2>
+        <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-gold">
+          Premium mapping required
+        </p>
+        <p className="mt-3 text-[12px] leading-snug text-white/75">
+          The illustrated Premium view needs the visual polygons below before
+          it can render this hole. GPS distances continue to work from saved
+          tee / green / pin data.
+        </p>
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-3 text-left">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-gold-soft">
+            <span>Missing visual layers</span>
+            <span>{progress.done}/{progress.total}</span>
           </div>
-        );
-      })()}
+          <ul className="mt-2 space-y-1 text-[12px] text-white/85">
+            {missing.map((m) => (
+              <li key={m.key} className="flex items-center gap-2">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-300" />
+                {m.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="mt-3 text-[11px] leading-snug text-white/55">
+          Tip: switch to <span className="text-gold">Satellite</span> above to
+          play this hole now, or open the Course Mapper to add the missing
+          polygons (or mark them not applicable for this hole).
+        </p>
+      </div>
     </div>
   );
 }
