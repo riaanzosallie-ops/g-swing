@@ -70,6 +70,36 @@ export function PremiumHoleRenderer({
     [mappedHole, playerPosition?.lat, playerPosition?.lng],
   );
 
+  // Dev-only diagnostics so we can verify in console that Premium is
+  // actually receiving saved mapping data and not silently falling back.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const bunkers = mappedHole?.hazards.filter((h) => h.type === "bunker").length ?? 0;
+    const water = mappedHole?.hazards.filter(
+      (h) => h.type === "water" || h.type === "penalty_area",
+    ).length ?? 0;
+    // eslint-disable-next-line no-console
+    console.info("[gswing.premium-renderer] hole render", {
+      selectedHoleNumber,
+      mapped_hole_id: mappedHole?.id ?? null,
+      hole_number: mappedHole?.holeNumber ?? null,
+      tees: mappedHole?.tees.length ?? 0,
+      green_center: !!mappedHole?.green.center,
+      green_front: !!mappedHole?.green.front,
+      green_back: !!mappedHole?.green.back,
+      green_polygon_pts: mappedHole?.green.polygon?.length ?? 0,
+      pin: !!mappedHole?.pin,
+      hazards_total: mappedHole?.hazards.length ?? 0,
+      bunkers,
+      water_or_penalty: water,
+      landing_zones: mappedHole?.landingZones.length ?? 0,
+      layups: mappedHole?.layups.length ?? 0,
+      doglegs: mappedHole?.doglegs.length ?? 0,
+      hasUsableHoleMapping: usable,
+      hasRichMapping: mappedHole ? hasRichMapping(mappedHole) : false,
+    });
+  }, [mappedHole, selectedHoleNumber, usable]);
+
   const projection: FittedProjection | null = useMemo(() => {
     if (!bounds || size.w < 20 || size.h < 20) return null;
     return fitHoleToViewport(bounds, {
@@ -160,11 +190,15 @@ export function PremiumHoleRenderer({
               : "Tap the hole to measure"}
         </div>
       )}
-      {usable && mappedHole && !hasRichMapping(mappedHole) && (
-        <div className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full border border-amber-300/40 bg-amber-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md">
-          Premium map quality limited — add hazards & green polygon
-        </div>
-      )}
+      {usable && mappedHole && !hasRichMapping(mappedHole) && (() => {
+        const missing = describeMissingMapping(mappedHole);
+        if (missing.length === 0) return null;
+        return (
+          <div className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 max-w-[88%] rounded-full border border-amber-300/40 bg-amber-500/10 px-3 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md">
+            Add to mapping: {missing.join(" · ")}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -245,9 +279,24 @@ function RendererDefs() {
 }
 
 function hasRichMapping(h: MappedHole): boolean {
-  const greenOk = !!(h.green.polygon && h.green.polygon.length >= 4) || !!h.green.center;
+  // "Rich" = either a drawn green polygon OR at least one mapped hazard.
+  // Center-only greens with no hazards still render correctly but are
+  // visually plain — we surface a specific hint instead of a vague banner.
+  const greenPolygonOk = !!(h.green.polygon && h.green.polygon.length >= 4);
   const hazardOk = h.hazards.length > 0;
-  return greenOk && hazardOk;
+  return greenPolygonOk || hazardOk;
+}
+
+function describeMissingMapping(h: MappedHole): string[] {
+  const missing: string[] = [];
+  if (!h.green.polygon || h.green.polygon.length < 4) missing.push("green polygon");
+  const bunkers = h.hazards.filter((x) => x.type === "bunker").length;
+  if (bunkers === 0) missing.push("bunkers");
+  const water = h.hazards.filter(
+    (x) => x.type === "water" || x.type === "penalty_area",
+  ).length;
+  if (water === 0) missing.push("water");
+  return missing;
 }
 
 function HoleGeometryLayer({
