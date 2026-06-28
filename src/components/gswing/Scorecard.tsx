@@ -461,7 +461,7 @@ export const Scorecard = () => {
         <Target className="h-6 w-6 text-gold" />
         <h2 className="font-serif text-2xl text-gradient-gold">Scorecard</h2>
         <Badge variant="outline" className="ml-auto border-gold/40 text-gold">
-          H{activeHole + 1}/18
+          H{activeHole + 1}/18 · {format}
         </Badge>
       </div>
 
@@ -528,16 +528,61 @@ export const Scorecard = () => {
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-serif text-base">{player.total || "-"}</p>
-                <p className={`text-[10px] ${player.diff <= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                  {player.holesPlayed === 0 ? "" : player.diff === 0 ? "E" : player.diff > 0 ? `+${player.diff}` : player.diff}
-                </p>
+                {format === "Stableford" ? (
+                  <>
+                    <p className="font-serif text-base text-gold">{player.stableford}</p>
+                    <p className="text-[10px] text-muted-foreground">pts</p>
+                  </>
+                ) : format === "Skins" ? (
+                  <>
+                    <p className="font-serif text-base text-gold">{skins.won[player.id] ?? 0}</p>
+                    <p className="text-[10px] text-muted-foreground">skins</p>
+                  </>
+                ) : format === "Match Play" && matchPlay ? (
+                  <>
+                    <p className="font-serif text-base text-gold">
+                      {matchPlay.leader === player.name ? matchPlay.label : matchPlay.leader && matchPlay.leader !== player.name ? "DN" : matchPlay.label}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">match</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-serif text-base">{player.total || "-"}</p>
+                    <p className={`text-[10px] ${player.diff <= 0 ? "text-emerald-400" : "text-destructive"}`}>
+                      {player.holesPlayed === 0 ? "" : player.diff === 0 ? "E" : player.diff > 0 ? `+${player.diff}` : player.diff}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           ))}
         </div>
         )}
       </Card>
+
+      {teamScore && (
+        <Card className="gradient-card border-gold/30 p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-gold" />
+              <p className="font-serif text-sm">{format} · Team Score</p>
+            </div>
+            <div className="text-right">
+              <p className="font-serif text-xl text-gold">{teamScore.total || "—"}</p>
+              <p className="text-[10px] text-muted-foreground">
+                Thru {teamScore.holesPlayed} ·{" "}
+                {teamScore.holesPlayed === 0
+                  ? "—"
+                  : teamScore.diff === 0
+                    ? "E"
+                    : teamScore.diff > 0
+                      ? `+${teamScore.diff}`
+                      : teamScore.diff}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card className="gradient-card border-gold/30 p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
