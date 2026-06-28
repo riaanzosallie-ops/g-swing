@@ -21,6 +21,12 @@ import { buildMappedHoleFromRows, loadMappedHole } from "@/lib/gswing-course-map
 import { OsmScanPanel } from "@/components/gswing/admin/OsmScanPanel";
 import type { OsmImportPreviewItem } from "@/lib/gswing-osm-overpass";
 import { GolfCourseApiSyncPanel } from "@/components/gswing/admin/GolfCourseApiSyncPanel";
+import {
+  PREMIUM_LAYERS,
+  evaluatePremiumLayers,
+  premiumProgress,
+  type PremiumLayerKey,
+} from "@/lib/gswing-premium-readiness";
 
 // Sharjah Golf and Shooting Club — seeded with the verified front-9 par
 // layout. Used by the Sharjah quick-select to jump straight into mapping
@@ -44,6 +50,15 @@ type Tool =
   | "layup"
   | "dogleg"
   | "landing_zone"
+  // Premium visual mapping polygons
+  | "fairway_polygon"
+  | "green_polygon"
+  | "tee_polygon"
+  | "hole_boundary"
+  | "rough_polygon"
+  | "trees"
+  | "waste"
+  | "cart_path"
   | "delete";
 
 const TOOLS: Array<{ id: Tool; label: string; group: "points" | "polygons" | "ops" }> = [
@@ -56,17 +71,28 @@ const TOOLS: Array<{ id: Tool; label: string; group: "points" | "polygons" | "op
   { id: "layup", label: "Layup", group: "points" },
   { id: "dogleg", label: "Dogleg", group: "points" },
   { id: "landing_zone", label: "Landing", group: "points" },
+  { id: "hole_boundary", label: "Boundary", group: "polygons" },
+  { id: "fairway_polygon", label: "Fairway", group: "polygons" },
+  { id: "green_polygon", label: "Green Poly", group: "polygons" },
+  { id: "tee_polygon", label: "Tee Poly", group: "polygons" },
+  { id: "rough_polygon", label: "Rough", group: "polygons" },
   { id: "bunker", label: "Bunker", group: "polygons" },
   { id: "water", label: "Water", group: "polygons" },
   { id: "penalty", label: "Penalty", group: "polygons" },
   { id: "ob", label: "OB", group: "polygons" },
+  { id: "trees", label: "Trees", group: "polygons" },
+  { id: "waste", label: "Waste", group: "polygons" },
+  { id: "cart_path", label: "Cart Path", group: "polygons" },
   { id: "delete", label: "Delete", group: "ops" },
 ];
 
 type FeatureType =
   | "tee" | "green_front" | "green_center" | "green_back" | "pin"
   | "bunker" | "water" | "penalty" | "ob"
-  | "layup" | "dogleg" | "landing_zone";
+  | "layup" | "dogleg" | "landing_zone"
+  | "fairway_polygon" | "green_polygon" | "tee_polygon" | "hole_boundary"
+  | "rough_polygon" | "trees" | "waste" | "cart_path"
+  | "na_marker";
 
 interface DraftFeature {
   id: string; // local uuid until persisted
@@ -90,7 +116,20 @@ function uid() {
 }
 
 function isPolygonTool(t: Tool): boolean {
-  return t === "bunker" || t === "water" || t === "penalty" || t === "ob";
+  return (
+    t === "bunker" ||
+    t === "water" ||
+    t === "penalty" ||
+    t === "ob" ||
+    t === "fairway_polygon" ||
+    t === "green_polygon" ||
+    t === "tee_polygon" ||
+    t === "hole_boundary" ||
+    t === "rough_polygon" ||
+    t === "trees" ||
+    t === "waste" ||
+    t === "cart_path"
+  );
 }
 function isPointTool(t: Tool): boolean {
   return ["tee","green_front","green_center","green_back","pin","layup","dogleg","landing_zone"].includes(t);
