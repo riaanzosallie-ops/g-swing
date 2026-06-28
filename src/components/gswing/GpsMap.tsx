@@ -117,8 +117,19 @@ import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
 import { MappingDebugPanel } from "@/components/gswing/gps/MappingDebugPanel";
 import type { MappingDebugPanelProps } from "@/components/gswing/gps/MappingDebugPanel";
 import { PremiumHoleRenderer } from "@/components/gswing/gps/PremiumHoleRenderer";
+import { CourseSelectorSheet } from "@/components/gswing/gps/CourseSelectorSheet";
 import { useGswingMembership } from "@/hooks/useGswingMembership";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { GswingWeather } from "@/lib/gswing-weather";
 import {
   Select,
@@ -2051,7 +2062,20 @@ function CartGpsView({
 
 export const GpsMap = () => {
   const [courses, setCourses] = useState<GolfCourse[]>(UAE_COURSES);
-  const [courseId, setCourseId] = useState(MAIN_COURSE_ID);
+  const [courseId, setCourseId] = useState<string>(() => {
+    try {
+      return localStorage.getItem("gswing.lastCourseId") || MAIN_COURSE_ID;
+    } catch {
+      return MAIN_COURSE_ID;
+    }
+  });
+  // Course selection gate — open on mount so the player always sees the
+  // picker before a new round. The previously-used course is remembered
+  // and shown as the default selection, but never silently auto-started.
+  const [courseGateOpen, setCourseGateOpen] = useState(true);
+  const [pendingCourse, setPendingCourse] = useState<GolfCourse | null>(null);
+  const adminState = useGswingAdmin();
+  const isOwner = adminState.status === "admin";
   const [hole, setHole] = useState(1);
   const [unit, setUnit] = useState<"yards" | "meters">("yards");
   const [playerPos, setPlayerPos] = useState<LatLng | null>(DEFAULT_POSITION);
@@ -2202,6 +2226,50 @@ export const GpsMap = () => {
   useEffect(() => {
     loadHole();
   }, [loadHole]);
+
+  // Persist the last course locally for convenience defaulting.
+  useEffect(() => {
+    try {
+      localStorage.setItem("gswing.lastCourseId", courseId);
+    } catch {
+      // best-effort
+    }
+  }, [courseId]);
+
+  // Apply a fresh course pick — resets round-scoped state so scoring,
+  // shot tracking and mapped geometry all rehydrate cleanly. Does NOT
+  // mutate any GPS, mapping or scoring logic — just clears prior round.
+  const applyCourseSelection = useCallback(
+    (course: GolfCourse) => {
+      setCourseId(course.id);
+      setHole(1);
+      setActiveRound(null);
+      setActiveShot(null);
+      setRoundShots([]);
+      setLastShotYards(null);
+      setLastShotEnd(null);
+      setPlayerPos({ lat: course.lat, lng: course.lng });
+      setCourseGateOpen(false);
+      toast.success(`Course set: ${course.name}`);
+    },
+    [],
+  );
+
+  const handleCourseSelect = useCallback(
+    (course: GolfCourse) => {
+      const hasProgress = roundShots.length > 0 || !!activeShot;
+      if (hasProgress && course.id !== courseId) {
+        setPendingCourse(course);
+        return;
+      }
+      applyCourseSelection(course);
+    },
+    [roundShots.length, activeShot, courseId, applyCourseSelection],
+  );
+
+  const openCourseGate = useCallback(() => {
+    setCourseGateOpen(true);
+  }, []);
 
   // Load all stored shots for the active round (for replay + stats).
   const refreshRoundShots = useCallback(async () => {
@@ -2571,12 +2639,8 @@ export const GpsMap = () => {
         <select
           value={courseId}
           onChange={(event) => {
-            setCourseId(event.target.value);
-            setHole(1);
-            setActiveRound(null);
-            setActiveShot(null);
             const nextCourse = courses.find((course) => course.id === event.target.value);
-            if (nextCourse) setPlayerPos({ lat: nextCourse.lat, lng: nextCourse.lng });
+            if (nextCourse) handleCourseSelect(nextCourse);
           }}
           className="min-w-0 flex-1 rounded-lg border border-gold/30 bg-background/60 p-2 text-sm text-foreground"
         >
@@ -2586,6 +2650,15 @@ export const GpsMap = () => {
             </option>
           ))}
         </select>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={openCourseGate}
+          className="border-gold/40 text-gold"
+        >
+          <MapPin className="mr-1 h-3 w-3" /> Change Course
+        </Button>
         <button
           onClick={() => setUnit((current) => (current === "yards" ? "meters" : "yards"))}
           className="rounded-lg border border-gold/30 px-3 py-2 text-xs font-semibold text-gold"
@@ -2600,6 +2673,23 @@ export const GpsMap = () => {
           <span>{gpsError}</span>
         </Card>
       )}
+
+      {/* Mobile-first "Change Course" pill — always visible above the map. */}
+      <div className="flex items-center justify-between gap-2 md:hidden">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-widest text-gold/70">Course</p>
+          <p className="truncate font-serif text-sm text-foreground">{selectedCourse.name}</p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={openCourseGate}
+          className="shrink-0 border-gold/40 text-gold"
+        >
+          <MapPin className="mr-1 h-3 w-3" /> Change
+        </Button>
+      </div>
 
       <MapboxCourseView
         gps={gps}
@@ -2827,6 +2917,48 @@ export const GpsMap = () => {
           </button>
         ))}
       </div>
+
+      {/* Course selection gate — appears before every new round and
+          on demand via the "Change Course" button. Never auto-skipped. */}
+      <CourseSelectorSheet
+        open={courseGateOpen}
+        onOpenChange={setCourseGateOpen}
+        courses={courses}
+        currentCourseId={courseId}
+        playerPosition={playerPos}
+        isOwner={isOwner}
+        onSelect={handleCourseSelect}
+        forcePick={!activeRound && roundShots.length === 0 && courseGateOpen && false}
+      />
+
+      <AlertDialog
+        open={!!pendingCourse}
+        onOpenChange={(o) => !o && setPendingCourse(null)}
+      >
+        <AlertDialogContent className="border-gold/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif text-gradient-gold">
+              Start a new round at {pendingCourse?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You've already recorded shots on this round. Changing course will
+              start a fresh round and reset the current shot history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep current course</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingCourse) applyCourseSelection(pendingCourse);
+                setPendingCourse(null);
+              }}
+              className="gradient-gold text-primary-foreground"
+            >
+              Start new round
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
