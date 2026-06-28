@@ -238,7 +238,7 @@ export function GpsBottomSheet({
                     {l.label}
                   </span>
                   <span className="font-serif text-sm text-gold tabular-nums">
-                    {Math.round(l.yards)} {u}
+                    {Number.isFinite(l.yards) ? `${Math.round(l.yards)} ${u}` : "—"}
                   </span>
                 </li>
               ))}
@@ -251,7 +251,7 @@ export function GpsBottomSheet({
                     {d.label}
                   </span>
                   <span className="font-serif text-sm text-gold tabular-nums">
-                    {Math.round(d.yards)} {u}
+                    {Number.isFinite(d.yards) ? `${Math.round(d.yards)} ${u}` : "—"}
                   </span>
                 </li>
               ))}
