@@ -1064,7 +1064,49 @@ function MapboxCourseView({
         </div>
       )}
 
-      <PremiumGpsChrome
+      {mapView === "premium" ? (
+        <PremiumGpsOverlay
+          hole={gps?.hole_number ?? hole}
+          par={gps?.par ?? null}
+          handicap={gps?.handicap ?? null}
+          totalHoles={holeCount ?? 18}
+          readout={effectiveReadout}
+          unit={unit}
+          mapView={mapView}
+          onSetMapView={setMapView}
+          measureActive={measureActive}
+          onToggleMeasure={toggleMeasure}
+          showOverlays={showOverlays}
+          onToggleOverlays={() => setShowOverlays((v) => !v)}
+          showHazards={showHazards}
+          onToggleHazards={() => setShowHazards((v) => !v)}
+          showLabels={showLabels}
+          onToggleLabels={() => setShowLabels((v) => !v)}
+          onRecenter={onRecenter}
+          onFitHole={onFitHole}
+          onFlyover={onFlyover}
+          flyoverDisabled={!geometry}
+          flyoverRunning={flyoverRunning}
+          onRefreshMapping={onRefreshMapping}
+          weather={hudWeather}
+          onBack={() => window.dispatchEvent(new CustomEvent("gswing-exit-gps"))}
+          onNextHole={
+            onChangeHole
+              ? () => {
+                  const total = holeCount ?? 18;
+                  onChangeHole(hole >= total ? 1 : hole + 1);
+                }
+              : undefined
+          }
+          onOpenScorecard={() =>
+            window.dispatchEvent(new CustomEvent("gswing-nav", { detail: "scorecard" }))
+          }
+          onOpenSettings={() =>
+            window.dispatchEvent(new CustomEvent("gswing-nav", { detail: "profile" }))
+          }
+        />
+      ) : (
+        <PremiumGpsChrome
         hole={gps?.hole_number ?? hole}
         par={gps?.par ?? null}
         handicap={gps?.handicap ?? null}
@@ -1130,19 +1172,22 @@ function MapboxCourseView({
               }
             : undefined
         }
-      />
+        />
+      )}
 
-      <GpsBottomSheet
-        unit={unit}
-        readout={effectiveReadout}
-        fallbackCenterYards={effectiveFallbackCenter}
-        caddieInsight={effectiveInsight}
-        measureActive={measureActive}
-        onToggleMeasure={toggleMeasure}
-        measurePoint={measurePoint}
-        onClearMeasure={() => setMeasurePoint(null)}
-        playerPosition={playerPosition}
-      />
+      {mapView === "satellite" && (
+        <GpsBottomSheet
+          unit={unit}
+          readout={effectiveReadout}
+          fallbackCenterYards={effectiveFallbackCenter}
+          caddieInsight={effectiveInsight}
+          measureActive={measureActive}
+          onToggleMeasure={toggleMeasure}
+          measurePoint={measurePoint}
+          onClearMeasure={() => setMeasurePoint(null)}
+          playerPosition={playerPosition}
+        />
+      )}
     </div>
   );
 }
