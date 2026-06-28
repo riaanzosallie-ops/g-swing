@@ -95,7 +95,40 @@ function formatHandicapIndex(value: number | null | undefined): string {
 }
 
 const PLAYERS_STORAGE_KEY = "gswing.scorecard.players";
+const FORMAT_STORAGE_KEY = "gswing.scorecard.format";
 const MAX_PLAYERS = 4;
+
+const ROUND_FORMATS = [
+  "Stroke Play",
+  "Stableford",
+  "Match Play",
+  "Skins",
+  "Better Ball",
+  "Scramble",
+] as const;
+export type RoundFormat = (typeof ROUND_FORMATS)[number];
+
+function stablefordPts(strokes: number, par: number, given: number) {
+  if (!strokes) return 0;
+  const d = strokes - given - par;
+  if (d <= -3) return 5;
+  if (d === -2) return 4;
+  if (d === -1) return 3;
+  if (d === 0) return 2;
+  if (d === 1) return 1;
+  return 0;
+}
+/** Whole-number course handicap from HI (signed; plus stored negative). */
+function courseHcp(hi: number | null | undefined): number {
+  if (hi == null || !Number.isFinite(hi)) return 0;
+  return Math.max(0, Math.round(hi));
+}
+/** Strokes received on a given hole (even allocation, extras to low holes). */
+function strokesGivenOnHole(ch: number, holeIndex: number, totalHoles = 18) {
+  const base = Math.floor(ch / totalHoles);
+  const extra = ch % totalHoles;
+  return base + (holeIndex < extra ? 1 : 0);
+}
 
 const seedPlayers = (): Player[] => [
   { id: "p1", name: "Riaan", scores: PARS.map(() => 0), handicapIndex: null },
@@ -126,6 +159,17 @@ export const Scorecard = () => {
   const [presses, setPresses] = useState<{ hole: number; by: string }[]>([]);
   const [rounds, setRounds] = useRounds();
 
+  const [format, setFormat] = useState<RoundFormat>(() => {
+    try {
+      const raw = localStorage.getItem(FORMAT_STORAGE_KEY);
+      if (raw && (ROUND_FORMATS as readonly string[]).includes(raw)) return raw as RoundFormat;
+    } catch {}
+    return "Stroke Play";
+  });
+  useEffect(() => {
+    try { localStorage.setItem(FORMAT_STORAGE_KEY, format); } catch {}
+  }, [format]);
+
   // Manage Players modal state
   const [manageOpen, setManageOpen] = useState(false);
   const [draft, setDraft] = useState<Player[]>(players);
@@ -133,6 +177,7 @@ export const Scorecard = () => {
   // Per-player handicap input drafts (raw text so users can type "+", ".").
   const [hiInputs, setHiInputs] = useState<Record<string, string>>({});
   const [hiErrors, setHiErrors] = useState<Record<string, string | null>>({});
+  const [draftFormat, setDraftFormat] = useState<RoundFormat>(format);
 
   const openManage = () => {
     setDraft(players.map((p) => ({ ...p, scores: [...p.scores] })));
@@ -142,6 +187,7 @@ export const Scorecard = () => {
       ),
     );
     setHiErrors({});
+    setDraftFormat(format);
     setManageOpen(true);
   };
 
@@ -215,8 +261,9 @@ export const Scorecard = () => {
       return;
     }
     setPlayers(cleaned);
+    setFormat(draftFormat);
     setManageOpen(false);
-    toast.success("Players updated");
+    toast.success("Players and format updated");
   };
 
   const setScore = (playerIndex: number, holeIndex: number, value: number) => {
