@@ -2098,6 +2098,9 @@ export const GpsMap = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  // Bump to force a fresh hole/geometry load even when courseId+hole
+  // don't change (e.g. user re-selects the current course).
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [currentTime, setCurrentTime] = useState(() =>
     new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
   );
@@ -2195,7 +2198,8 @@ export const GpsMap = () => {
     } finally {
       setLoading(false);
     }
-  }, [courseId, hole, playerPos, selectedCourse, unit]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, hole, playerPos, selectedCourse, unit, reloadNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2264,6 +2268,9 @@ export const GpsMap = () => {
       }
       setCourseGateOpen(false);
       setPendingCourse(null);
+      // Always force the renderer to refetch geometry for the picked
+      // course, even when the id matches the previous selection.
+      setReloadNonce((n) => n + 1);
       toast.success(`Course set: ${course.name}`);
     },
     [],
