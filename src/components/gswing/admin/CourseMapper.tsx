@@ -399,6 +399,35 @@ export default function CourseMapper() {
         });
       }
       setFeatures(drafts);
+      // eslint-disable-next-line no-console
+      console.log("[CourseMapper] hole loaded", { courseMapId: mapId, hole, featureCount: drafts.length });
+      // Auto-fit map to saved geometry
+      const pts: Array<[number, number]> = [];
+      for (const d of drafts) {
+        if (Number.isFinite(d.center_lat) && Number.isFinite(d.center_lng)) {
+          pts.push([d.center_lng as number, d.center_lat as number]);
+        }
+        if (d.polygon_json) for (const p of d.polygon_json) pts.push([p[0], p[1]]);
+      }
+      const map = mapRef.current;
+      if (map && pts.length > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const [x, y] of pts) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        // eslint-disable-next-line no-console
+        console.log("[CourseMapper] fitBounds", { minX, minY, maxX, maxY });
+        try {
+          map.fitBounds(
+            [[minX, minY], [maxX, maxY]],
+            { padding: 80, maxZoom: 18, duration: 600 },
+          );
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("[CourseMapper] fitBounds failed", err);
+        }
+      }
     } finally {
       setLoadingHole(false);
     }
