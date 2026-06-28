@@ -1154,7 +1154,7 @@ function MapboxCourseView({
                 center: effectiveReadout.center,
                 back: effectiveReadout.back,
                 unitShort,
-                rendererActive: mapView === "premium",
+                rendererActive: false,
                 visualMode: mapView,
                 measurementTarget: measurePoint,
                 measurementDistance:
@@ -1164,11 +1164,7 @@ function MapboxCourseView({
                           (unit === "meters" ? 0.9144 : 1),
                       )
                     : null,
-                measurementSource: measurePoint
-                  ? mapView === "premium"
-                    ? "premium-projected"
-                    : "satellite-mapbox"
-                  : null,
+                measurementSource: measurePoint ? "satellite-mapbox" : null,
               }
             : undefined
         }
