@@ -65,6 +65,13 @@ function arrivalRadius(qs: URLSearchParams): number {
   return Math.min(5000, Math.max(100, radius));
 }
 
+function routeParts(pathname: string): string[] {
+  const parts = pathname.split("/").filter(Boolean);
+  const functionIndex = parts.indexOf("golf-courses");
+  if (functionIndex >= 0) return parts.slice(functionIndex + 1);
+  return parts;
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -76,9 +83,10 @@ serve(async (req) => {
   );
 
   const url = new URL(req.url);
-  // Strip prefix: /functions/v1/golf-courses  →  rest of path
-  const stripped = url.pathname.replace(/^\/functions\/v1\/golf-courses\/?/, "");
-  const parts = stripped ? stripped.split("/").filter(Boolean) : [];
+  // Edge runtime can expose either /functions/v1/golf-courses/... or
+  // /golf-courses/... depending on how it is invoked. Normalize both so
+  // GET /golf-courses is always the list route, never course id "golf-courses".
+  const parts = routeParts(url.pathname);
   const qs = url.searchParams;
 
   try {
@@ -159,13 +167,14 @@ serve(async (req) => {
 
     // GET /golf-courses/:id
     if (parts.length === 1) {
-      const { data, error } = await supabase.from("golf_courses").select("*").eq("id", courseId).single();
+      const { data, error } = await supabase.from("golf_courses").select("*").eq("id", courseId).maybeSingle();
       if (error || !data) {
         // Graceful fallback: course not yet in DB. Return 200 so the client
         // can fall back to bundled/offline course metadata without crashing.
         return json({
           course: null,
           course_id: courseId,
+          fallback: true,
           status: "no_data",
           message: "Course metadata not yet available.",
         });
