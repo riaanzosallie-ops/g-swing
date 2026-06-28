@@ -142,6 +142,8 @@ export default function CourseMapper() {
 
   const [token, setToken] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const [mapStyle, setMapStyle] = useState<"satellite" | "streets">("satellite");
+  const [tileError, setTileError] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [polygonPoints, setPolygonPoints] = useState<Array<[number, number]>>([]);
 
@@ -178,9 +180,15 @@ export default function CourseMapper() {
   useEffect(() => {
     if (!token || !containerRef.current || mapRef.current) return;
     mapboxgl.accessToken = token;
+    const styleUrl =
+      mapStyle === "satellite"
+        ? "mapbox://styles/mapbox/satellite-streets-v12"
+        : "mapbox://styles/mapbox/dark-v11";
+    // eslint-disable-next-line no-console
+    console.log("[CourseMapper] map init", { style: styleUrl, center: [centerLng, centerLat] });
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/satellite-streets-v12",
+      style: styleUrl,
       center: [centerLng, centerLat],
       zoom: 16.5,
       pitch: 0,
@@ -190,6 +198,23 @@ export default function CourseMapper() {
     map.on("load", () => {
       styleLoadedRef.current = true;
       ensureMappedLayers(map);
+      // eslint-disable-next-line no-console
+      console.log("[CourseMapper] map loaded");
+    });
+    map.on("error", (e: { error?: { status?: number; message?: string } }) => {
+      const status = e?.error?.status;
+      const msg = e?.error?.message ?? "Map tile error";
+      // eslint-disable-next-line no-console
+      console.warn("[CourseMapper] map error", status, msg, e?.error);
+      if (status === 401 || status === 403) {
+        setTileError(
+          `Mapbox tile request denied (${status}). The map token is restricted for this domain. ` +
+            `Switching to fallback basemap.`,
+        );
+        if (mapStyle === "satellite") {
+          setMapStyle("streets");
+        }
+      }
     });
     return () => {
       styleLoadedRef.current = false;
@@ -197,7 +222,7 @@ export default function CourseMapper() {
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, mapStyle]);
 
   // Render features → mapped layers preview
   useEffect(() => {
