@@ -2917,6 +2917,48 @@ export const GpsMap = () => {
           </button>
         ))}
       </div>
+
+      {/* Course selection gate — appears before every new round and
+          on demand via the "Change Course" button. Never auto-skipped. */}
+      <CourseSelectorSheet
+        open={courseGateOpen}
+        onOpenChange={setCourseGateOpen}
+        courses={courses}
+        currentCourseId={courseId}
+        playerPosition={playerPos}
+        isOwner={isOwner}
+        onSelect={handleCourseSelect}
+        forcePick={!activeRound && roundShots.length === 0 && courseGateOpen && false}
+      />
+
+      <AlertDialog
+        open={!!pendingCourse}
+        onOpenChange={(o) => !o && setPendingCourse(null)}
+      >
+        <AlertDialogContent className="border-gold/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif text-gradient-gold">
+              Start a new round at {pendingCourse?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You've already recorded shots on this round. Changing course will
+              start a fresh round and reset the current shot history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep current course</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingCourse) applyCourseSelection(pendingCourse);
+                setPendingCourse(null);
+              }}
+              className="gradient-gold text-primary-foreground"
+            >
+              Start new round
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
