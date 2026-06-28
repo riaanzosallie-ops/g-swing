@@ -142,7 +142,9 @@ export default function CourseMapper() {
 
   const [token, setToken] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
-  const [mapStyle, setMapStyle] = useState<"satellite" | "streets">("satellite");
+  const [mapStyle, setMapStyle] = useState<
+    "satellite" | "streets" | "fallback-satellite" | "fallback-streets"
+  >("satellite");
   const [tileError, setTileError] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [polygonPoints, setPolygonPoints] = useState<Array<[number, number]>>([]);
@@ -180,15 +182,48 @@ export default function CourseMapper() {
   useEffect(() => {
     if (!token || !containerRef.current || mapRef.current) return;
     mapboxgl.accessToken = token;
-    const styleUrl =
+    const FALLBACK_SAT_STYLE = {
+      version: 8 as const,
+      sources: {
+        "fallback-sat": {
+          type: "raster" as const,
+          tiles: [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          ],
+          tileSize: 256,
+          attribution: "Imagery © Esri",
+        },
+      },
+      layers: [{ id: "fallback-sat-layer", type: "raster" as const, source: "fallback-sat" }],
+    };
+    const FALLBACK_OSM_STYLE = {
+      version: 8 as const,
+      sources: {
+        "fallback-osm": {
+          type: "raster" as const,
+          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: "© OpenStreetMap contributors",
+        },
+      },
+      layers: [{ id: "fallback-osm-layer", type: "raster" as const, source: "fallback-osm" }],
+    };
+    const styleSpec: string | typeof FALLBACK_SAT_STYLE | typeof FALLBACK_OSM_STYLE =
       mapStyle === "satellite"
         ? "mapbox://styles/mapbox/satellite-streets-v12"
-        : "mapbox://styles/mapbox/dark-v11";
+        : mapStyle === "streets"
+          ? "mapbox://styles/mapbox/dark-v11"
+          : mapStyle === "fallback-satellite"
+            ? FALLBACK_SAT_STYLE
+            : FALLBACK_OSM_STYLE;
     // eslint-disable-next-line no-console
-    console.log("[CourseMapper] map init", { style: styleUrl, center: [centerLng, centerLat] });
+    console.log("[CourseMapper] map init", {
+      style: typeof styleSpec === "string" ? styleSpec : mapStyle,
+      center: [centerLng, centerLat],
+    });
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: styleUrl,
+      style: styleSpec as unknown as mapboxgl.Style,
       center: [centerLng, centerLat],
       zoom: 16.5,
       pitch: 0,
@@ -208,11 +243,14 @@ export default function CourseMapper() {
       console.warn("[CourseMapper] map error", status, msg, e?.error);
       if (status === 401 || status === 403) {
         setTileError(
-          `Mapbox tile request denied (${status}). The map token is restricted for this domain. ` +
-            `Switching to fallback basemap.`,
+          `Mapbox token rejected this domain (${status}). Loaded a free Esri/OSM basemap so you can keep mapping. ` +
+            `Add this domain to the Mapbox token's URL allowlist for native imagery.`,
         );
+        // Hop to a non-Mapbox basemap so the canvas is never black.
         if (mapStyle === "satellite") {
-          setMapStyle("streets");
+          setMapStyle("fallback-satellite");
+        } else if (mapStyle === "streets") {
+          setMapStyle("fallback-streets");
         }
       }
     });
@@ -934,17 +972,24 @@ export default function CourseMapper() {
             <div className="mt-1 flex gap-2 text-[10px] uppercase tracking-wider">
               <button
                 type="button"
-                onClick={() => { setTileError(null); setMapStyle("satellite"); }}
-                className={`rounded px-2 py-1 ${mapStyle === "satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+                onClick={() => { setTileError(null); setMapStyle("fallback-satellite"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "fallback-satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
               >
-                Satellite
+                Esri satellite
               </button>
               <button
                 type="button"
-                onClick={() => { setTileError(null); setMapStyle("streets"); }}
-                className={`rounded px-2 py-1 ${mapStyle === "streets" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+                onClick={() => { setTileError(null); setMapStyle("fallback-streets"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "fallback-streets" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
               >
-                Fallback basemap
+                OSM streets
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTileError(null); setMapStyle("satellite"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+              >
+                Retry Mapbox
               </button>
             </div>
           </div>
