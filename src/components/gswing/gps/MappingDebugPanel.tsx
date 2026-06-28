@@ -24,6 +24,13 @@ export interface MappingDebugPanelProps {
   externalProvider?: string | null;
   externalCourseId?: string | null;
   lastSynced?: string | null;
+  /** Premium renderer state. */
+  rendererActive?: boolean;
+  visualMode?: "premium" | "satellite";
+  /** Current measurement state (post-tap). */
+  measurementTarget?: LatLng | null;
+  measurementDistance?: number | null;
+  measurementSource?: "premium-projected" | "satellite-mapbox" | null;
 }
 
 function yn(v: boolean) {
@@ -96,6 +103,23 @@ export function MappingDebugPanel(props: MappingDebugPanelProps) {
       <Row k={`Center ${unitShort}`} v={fmt(center)} />
       <Row k={`Back ${unitShort}`} v={fmt(back)} />
       <Row k="Source" v={source(mappingStatus, props.externalProvider)} />
+      {props.visualMode && <Row k="Visual mode" v={props.visualMode} />}
+      {props.rendererActive != null && (
+        <Row k="Renderer active" v={yn(props.rendererActive)} />
+      )}
+      {props.measurementTarget && (
+        <Row
+          k="Tap target"
+          v={`${props.measurementTarget.lat.toFixed(5)}, ${props.measurementTarget.lng.toFixed(5)}`}
+          mono
+        />
+      )}
+      {props.measurementDistance != null && (
+        <Row k={`Measured ${unitShort}`} v={fmt(props.measurementDistance)} />
+      )}
+      {props.measurementSource && (
+        <Row k="Measurement src" v={props.measurementSource} />
+      )}
       {props.externalProvider && (
         <>
           <Row k="Linked provider" v={props.externalProvider} />
