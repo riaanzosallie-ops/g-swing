@@ -22,9 +22,7 @@ import { OsmScanPanel } from "@/components/gswing/admin/OsmScanPanel";
 import type { OsmImportPreviewItem } from "@/lib/gswing-osm-overpass";
 import { GolfCourseApiSyncPanel } from "@/components/gswing/admin/GolfCourseApiSyncPanel";
 import {
-  PREMIUM_LAYERS,
   evaluatePremiumLayers,
-  premiumProgress,
   type PremiumLayerKey,
 } from "@/lib/gswing-premium-readiness";
 
