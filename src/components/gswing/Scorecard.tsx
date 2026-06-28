@@ -1,7 +1,25 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from "@/components/ui/drawer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import {
   Target,
   Plus,
@@ -15,6 +33,10 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
+  Users,
+  Trash2,
+  UserPlus,
+  Pencil,
 } from "lucide-react";
 import { useRounds } from "@/lib/gswing-store";
 import { toast } from "sonner";
@@ -29,7 +51,11 @@ type Player = {
   hero?: number;
 };
 
-const initials = (name: string) => name.slice(0, 2).toUpperCase();
+const initials = (name: string) =>
+  (name.trim().split(/\s+/).map((s) => s[0]).join("").slice(0, 2) || "?").toUpperCase();
+
+const PLAYERS_STORAGE_KEY = "gswing.scorecard.players";
+const MAX_PLAYERS = 4;
 
 const seedPlayers = (): Player[] => [
   { id: "p1", name: "Riaan", scores: PARS.map(() => 0) },
@@ -39,12 +65,90 @@ const seedPlayers = (): Player[] => [
 ];
 
 export const Scorecard = () => {
-  const [players, setPlayers] = useState<Player[]>(seedPlayers());
+  const [players, setPlayers] = useState<Player[]>(() => {
+    try {
+      const raw = localStorage.getItem(PLAYERS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Player[];
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return seedPlayers();
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYERS_STORAGE_KEY, JSON.stringify(players));
+    } catch {}
+  }, [players]);
   const [activeHole, setActiveHole] = useState(0);
   const [skinValue, setSkinValue] = useState(20);
   const [pressActive, setPressActive] = useState(false);
   const [presses, setPresses] = useState<{ hole: number; by: string }[]>([]);
   const [rounds, setRounds] = useRounds();
+
+  // Manage Players modal state
+  const [manageOpen, setManageOpen] = useState(false);
+  const [draft, setDraft] = useState<Player[]>(players);
+  const [removeTarget, setRemoveTarget] = useState<Player | null>(null);
+
+  const openManage = () => {
+    setDraft(players.map((p) => ({ ...p, scores: [...p.scores] })));
+    setManageOpen(true);
+  };
+
+  const updateDraftName = (id: string, name: string) => {
+    setDraft((arr) => arr.map((p) => (p.id === id ? { ...p, name } : p)));
+  };
+
+  const addDraftPlayer = () => {
+    if (draft.length >= MAX_PLAYERS) {
+      toast.error(`Max ${MAX_PLAYERS} players`);
+      return;
+    }
+    setDraft((arr) => [
+      ...arr,
+      {
+        id: (crypto.randomUUID?.() ?? `p-${Date.now()}`),
+        name: `Player ${arr.length + 1}`,
+        scores: PARS.map(() => 0),
+      },
+    ]);
+  };
+
+  const removeDraftPlayer = (id: string) => {
+    const target = draft.find((p) => p.id === id);
+    if (!target) return;
+    const hasScores = target.scores.some((s) => s > 0);
+    if (hasScores) {
+      setRemoveTarget(target);
+      return;
+    }
+    setDraft((arr) => arr.filter((p) => p.id !== id));
+  };
+
+  const confirmRemoveDraftPlayer = () => {
+    if (!removeTarget) return;
+    setDraft((arr) => arr.filter((p) => p.id !== removeTarget.id));
+    setRemoveTarget(null);
+  };
+
+  const saveManage = () => {
+    const cleaned = draft.map((p) => ({
+      ...p,
+      name: p.name.trim() || "Player",
+    }));
+    if (cleaned.length < 1) {
+      toast.error("At least 1 player required");
+      return;
+    }
+    if (cleaned.length > MAX_PLAYERS) {
+      toast.error(`Max ${MAX_PLAYERS} players`);
+      return;
+    }
+    setPlayers(cleaned);
+    setManageOpen(false);
+    toast.success("Players updated");
+  };
 
   const setScore = (playerIndex: number, holeIndex: number, value: number) => {
     setPlayers((arr) =>
@@ -206,7 +310,30 @@ export const Scorecard = () => {
         <div className="mb-2 flex items-center gap-2">
           <Trophy className="h-4 w-4 text-gold" />
           <p className="font-serif text-sm">Live Leaderboard</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={openManage}
+            className="ml-auto h-7 border-gold/40 px-2 text-[11px] text-gold hover:bg-gold/10"
+          >
+            <Users className="mr-1 h-3 w-3" />
+            Manage Players
+          </Button>
         </div>
+        {players.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gold/30 bg-background/30 px-4 py-6 text-center">
+            <p className="font-serif text-sm text-foreground">No players added yet</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">Add a player to start scoring this round.</p>
+            <Button
+              onClick={openManage}
+              className="mt-3 gradient-gold text-primary-foreground"
+              size="sm"
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add Player
+            </Button>
+          </div>
+        ) : (
         <div className="space-y-1.5">
           {board.map((player, index) => (
             <div
@@ -244,6 +371,7 @@ export const Scorecard = () => {
             </div>
           ))}
         </div>
+        )}
       </Card>
 
       <Card className="gradient-card border-gold/30 p-4">
