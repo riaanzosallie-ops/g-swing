@@ -2639,12 +2639,8 @@ export const GpsMap = () => {
         <select
           value={courseId}
           onChange={(event) => {
-            setCourseId(event.target.value);
-            setHole(1);
-            setActiveRound(null);
-            setActiveShot(null);
             const nextCourse = courses.find((course) => course.id === event.target.value);
-            if (nextCourse) setPlayerPos({ lat: nextCourse.lat, lng: nextCourse.lng });
+            if (nextCourse) handleCourseSelect(nextCourse);
           }}
           className="min-w-0 flex-1 rounded-lg border border-gold/30 bg-background/60 p-2 text-sm text-foreground"
         >
@@ -2654,6 +2650,15 @@ export const GpsMap = () => {
             </option>
           ))}
         </select>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={openCourseGate}
+          className="border-gold/40 text-gold"
+        >
+          <MapPin className="mr-1 h-3 w-3" /> Change Course
+        </Button>
         <button
           onClick={() => setUnit((current) => (current === "yards" ? "meters" : "yards"))}
           className="rounded-lg border border-gold/30 px-3 py-2 text-xs font-semibold text-gold"
@@ -2668,6 +2673,23 @@ export const GpsMap = () => {
           <span>{gpsError}</span>
         </Card>
       )}
+
+      {/* Mobile-first "Change Course" pill — always visible above the map. */}
+      <div className="flex items-center justify-between gap-2 md:hidden">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-widest text-gold/70">Course</p>
+          <p className="truncate font-serif text-sm text-foreground">{selectedCourse.name}</p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={openCourseGate}
+          className="shrink-0 border-gold/40 text-gold"
+        >
+          <MapPin className="mr-1 h-3 w-3" /> Change
+        </Button>
+      </div>
 
       <MapboxCourseView
         gps={gps}
