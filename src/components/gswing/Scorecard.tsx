@@ -850,6 +850,31 @@ export const Scorecard = () => {
           </DrawerHeader>
 
           <div className="space-y-2 overflow-y-auto px-4 pb-2">
+            <div className="mb-1 rounded-xl border border-gold/20 bg-background/40 p-2.5">
+              <p className="mb-2 text-[10px] uppercase tracking-widest text-gold/80">
+                Round Format
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {ROUND_FORMATS.map((f) => {
+                  const active = draftFormat === f;
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setDraftFormat(f)}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                        active
+                          ? "border-gold bg-gold/15 text-gold shadow-[0_0_10px_rgba(212,175,55,0.4)]"
+                          : "border-gold/20 bg-background/40 text-muted-foreground hover:border-gold/40 hover:text-gold"
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {draft.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gold/30 bg-background/30 px-4 py-6 text-center">
                 <p className="font-serif text-sm">No players added yet</p>
