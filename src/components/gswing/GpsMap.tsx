@@ -2062,7 +2062,20 @@ function CartGpsView({
 
 export const GpsMap = () => {
   const [courses, setCourses] = useState<GolfCourse[]>(UAE_COURSES);
-  const [courseId, setCourseId] = useState(MAIN_COURSE_ID);
+  const [courseId, setCourseId] = useState<string>(() => {
+    try {
+      return localStorage.getItem("gswing.lastCourseId") || MAIN_COURSE_ID;
+    } catch {
+      return MAIN_COURSE_ID;
+    }
+  });
+  // Course selection gate — open on mount so the player always sees the
+  // picker before a new round. The previously-used course is remembered
+  // and shown as the default selection, but never silently auto-started.
+  const [courseGateOpen, setCourseGateOpen] = useState(true);
+  const [pendingCourse, setPendingCourse] = useState<GolfCourse | null>(null);
+  const adminState = useGswingAdmin();
+  const isOwner = adminState.status === "admin";
   const [hole, setHole] = useState(1);
   const [unit, setUnit] = useState<"yards" | "meters">("yards");
   const [playerPos, setPlayerPos] = useState<LatLng | null>(DEFAULT_POSITION);
@@ -2213,6 +2226,50 @@ export const GpsMap = () => {
   useEffect(() => {
     loadHole();
   }, [loadHole]);
+
+  // Persist the last course locally for convenience defaulting.
+  useEffect(() => {
+    try {
+      localStorage.setItem("gswing.lastCourseId", courseId);
+    } catch {
+      // best-effort
+    }
+  }, [courseId]);
+
+  // Apply a fresh course pick — resets round-scoped state so scoring,
+  // shot tracking and mapped geometry all rehydrate cleanly. Does NOT
+  // mutate any GPS, mapping or scoring logic — just clears prior round.
+  const applyCourseSelection = useCallback(
+    (course: GolfCourse) => {
+      setCourseId(course.id);
+      setHole(1);
+      setActiveRound(null);
+      setActiveShot(null);
+      setRoundShots([]);
+      setLastShotYards(null);
+      setLastShotEnd(null);
+      setPlayerPos({ lat: course.lat, lng: course.lng });
+      setCourseGateOpen(false);
+      toast.success(`Course set: ${course.name}`);
+    },
+    [],
+  );
+
+  const handleCourseSelect = useCallback(
+    (course: GolfCourse) => {
+      const hasProgress = roundShots.length > 0 || !!activeShot;
+      if (hasProgress && course.id !== courseId) {
+        setPendingCourse(course);
+        return;
+      }
+      applyCourseSelection(course);
+    },
+    [roundShots.length, activeShot, courseId, applyCourseSelection],
+  );
+
+  const openCourseGate = useCallback(() => {
+    setCourseGateOpen(true);
+  }, []);
 
   // Load all stored shots for the active round (for replay + stats).
   const refreshRoundShots = useCallback(async () => {
