@@ -105,6 +105,22 @@ export interface MappedHole {
   layups: LayupTarget[];
   doglegs: DoglegTarget[];
   landingZones: FairwayLandingZone[];
+  /**
+   * Premium visual layers — drawn polygons used exclusively by the Premium
+   * illustrated renderer. Distinct from GPS data (tee/green/pin) which is
+   * sufficient for yardages but NOT for the illustrated experience.
+   */
+  fairwayPolygon?: Array<[number, number]> | null;
+  teePolygon?: Array<[number, number]> | null;
+  holeBoundary?: Array<[number, number]> | null;
+  roughPolygon?: Array<[number, number]> | null;
+  cartPath?: Array<[number, number]> | null;
+  /**
+   * Layer keys explicitly marked "not applicable" for this hole by the
+   * mapper (e.g. a hole with no water). Counted as satisfied when
+   * computing premium readiness.
+   */
+  naLayers?: string[];
 }
 
 export interface CourseMap {

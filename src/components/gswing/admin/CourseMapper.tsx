@@ -21,6 +21,10 @@ import { buildMappedHoleFromRows, loadMappedHole } from "@/lib/gswing-course-map
 import { OsmScanPanel } from "@/components/gswing/admin/OsmScanPanel";
 import type { OsmImportPreviewItem } from "@/lib/gswing-osm-overpass";
 import { GolfCourseApiSyncPanel } from "@/components/gswing/admin/GolfCourseApiSyncPanel";
+import {
+  evaluatePremiumLayers,
+  type PremiumLayerKey,
+} from "@/lib/gswing-premium-readiness";
 
 // Sharjah Golf and Shooting Club — seeded with the verified front-9 par
 // layout. Used by the Sharjah quick-select to jump straight into mapping
@@ -44,6 +48,15 @@ type Tool =
   | "layup"
   | "dogleg"
   | "landing_zone"
+  // Premium visual mapping polygons
+  | "fairway_polygon"
+  | "green_polygon"
+  | "tee_polygon"
+  | "hole_boundary"
+  | "rough_polygon"
+  | "trees"
+  | "waste"
+  | "cart_path"
   | "delete";
 
 const TOOLS: Array<{ id: Tool; label: string; group: "points" | "polygons" | "ops" }> = [
@@ -56,17 +69,28 @@ const TOOLS: Array<{ id: Tool; label: string; group: "points" | "polygons" | "op
   { id: "layup", label: "Layup", group: "points" },
   { id: "dogleg", label: "Dogleg", group: "points" },
   { id: "landing_zone", label: "Landing", group: "points" },
+  { id: "hole_boundary", label: "Boundary", group: "polygons" },
+  { id: "fairway_polygon", label: "Fairway", group: "polygons" },
+  { id: "green_polygon", label: "Green Poly", group: "polygons" },
+  { id: "tee_polygon", label: "Tee Poly", group: "polygons" },
+  { id: "rough_polygon", label: "Rough", group: "polygons" },
   { id: "bunker", label: "Bunker", group: "polygons" },
   { id: "water", label: "Water", group: "polygons" },
   { id: "penalty", label: "Penalty", group: "polygons" },
   { id: "ob", label: "OB", group: "polygons" },
+  { id: "trees", label: "Trees", group: "polygons" },
+  { id: "waste", label: "Waste", group: "polygons" },
+  { id: "cart_path", label: "Cart Path", group: "polygons" },
   { id: "delete", label: "Delete", group: "ops" },
 ];
 
 type FeatureType =
   | "tee" | "green_front" | "green_center" | "green_back" | "pin"
   | "bunker" | "water" | "penalty" | "ob"
-  | "layup" | "dogleg" | "landing_zone";
+  | "layup" | "dogleg" | "landing_zone"
+  | "fairway_polygon" | "green_polygon" | "tee_polygon" | "hole_boundary"
+  | "rough_polygon" | "trees" | "waste" | "cart_path"
+  | "na_marker";
 
 interface DraftFeature {
   id: string; // local uuid until persisted
@@ -90,7 +114,20 @@ function uid() {
 }
 
 function isPolygonTool(t: Tool): boolean {
-  return t === "bunker" || t === "water" || t === "penalty" || t === "ob";
+  return (
+    t === "bunker" ||
+    t === "water" ||
+    t === "penalty" ||
+    t === "ob" ||
+    t === "fairway_polygon" ||
+    t === "green_polygon" ||
+    t === "tee_polygon" ||
+    t === "hole_boundary" ||
+    t === "rough_polygon" ||
+    t === "trees" ||
+    t === "waste" ||
+    t === "cart_path"
+  );
 }
 function isPointTool(t: Tool): boolean {
   return ["tee","green_front","green_center","green_back","pin","layup","dogleg","landing_zone"].includes(t);
@@ -284,10 +321,12 @@ export default function CourseMapper() {
       for (const t of m.tees) drafts.push(asDraft("tee", t.coordinate, t.name, t.id));
       for (const h of m.hazards) {
         const type = h.type === "penalty_area" ? "penalty" : h.type === "out_of_bounds" ? "ob" : h.type;
+        const ft: FeatureType =
+          type === "waste_area" ? "waste" : (type as FeatureType);
         drafts.push({
           id: h.id,
           persistedId: h.id,
-          feature_type: type as FeatureType,
+          feature_type: ft,
           name: h.name,
           side_label: h.side ?? null,
           center_lat: h.center.lat,
@@ -299,6 +338,41 @@ export default function CourseMapper() {
       for (const l of m.layups) drafts.push(asDraft("layup", l.coordinate, l.name, l.id));
       for (const d of m.doglegs) drafts.push(asDraft("dogleg", d.coordinate, "Dogleg", d.id));
       for (const z of m.landingZones) drafts.push(asDraft("landing_zone", z.coordinate, z.name, z.id));
+      // Premium visual polygons (no per-row id on MappedHole — synth ids).
+      const addPoly = (ft: FeatureType, poly: Array<[number, number]> | null | undefined, label: string) => {
+        if (!poly || poly.length < 3) return;
+        let lat = 0, lng = 0;
+        for (const [x, y] of poly) { lng += x; lat += y; }
+        drafts.push({
+          id: uid(),
+          feature_type: ft,
+          name: label,
+          side_label: null,
+          center_lat: lat / poly.length,
+          center_lng: lng / poly.length,
+          polygon_json: poly,
+          notes: null,
+        });
+      };
+      addPoly("fairway_polygon", m.fairwayPolygon, "Fairway");
+      addPoly("green_polygon", m.green.polygon, "Green");
+      addPoly("tee_polygon", m.teePolygon, "Tee box");
+      addPoly("hole_boundary", m.holeBoundary, "Boundary");
+      addPoly("rough_polygon", m.roughPolygon, "Rough");
+      addPoly("cart_path", m.cartPath, "Cart path");
+      // N/A markers
+      for (const k of m.naLayers ?? []) {
+        drafts.push({
+          id: uid(),
+          feature_type: "na_marker",
+          name: k,
+          side_label: null,
+          center_lat: null,
+          center_lng: null,
+          polygon_json: null,
+          notes: null,
+        });
+      }
       setFeatures(drafts);
     } finally {
       setLoadingHole(false);
@@ -391,6 +465,94 @@ export default function CourseMapper() {
       },
     ];
   }, [features]);
+
+  // Synthesise a MappedHole-shaped snapshot from current drafts so we can
+  // run the Premium readiness evaluator (single source of truth shared
+  // with the renderer). Manual mapping wins — same data path as save.
+  const premiumStatuses = useMemo(() => {
+    const getPoly = (t: FeatureType) =>
+      features.find((f) => f.feature_type === t)?.polygon_json ?? null;
+    const naLayers = features
+      .filter((f) => f.feature_type === "na_marker" && f.name)
+      .map((f) => f.name);
+    const synth = {
+      id: mappedHoleId ?? "preview",
+      holeNumber,
+      par,
+      lengthYards: null,
+      lengthMeters: null,
+      tees: [],
+      green: {
+        front: null,
+        center: null,
+        back: null,
+        polygon: getPoly("green_polygon"),
+        slopeNote: null,
+      },
+      pin: null,
+      hazards: features
+        .filter((f) =>
+          ["bunker","water","penalty","ob","trees","waste","rough_polygon"].includes(f.feature_type),
+        )
+        .map((f) => ({
+          id: f.id,
+          name: f.name,
+          type:
+            f.feature_type === "penalty"
+              ? ("penalty_area" as const)
+              : f.feature_type === "ob"
+                ? ("out_of_bounds" as const)
+                : f.feature_type === "waste"
+                  ? ("waste_area" as const)
+                  : f.feature_type === "rough_polygon"
+                    ? ("rough" as const)
+                    : (f.feature_type as "bunker" | "water" | "trees"),
+          side: null,
+          polygon: f.polygon_json,
+          front: null,
+          carry: null,
+          center: { lat: f.center_lat ?? 0, lng: f.center_lng ?? 0 },
+          notes: f.notes,
+        })),
+      layups: [],
+      doglegs: [],
+      landingZones: [],
+      fairwayPolygon: getPoly("fairway_polygon"),
+      teePolygon: getPoly("tee_polygon"),
+      holeBoundary: getPoly("hole_boundary"),
+      roughPolygon: getPoly("rough_polygon"),
+      cartPath: getPoly("cart_path"),
+      naLayers,
+    };
+    return evaluatePremiumLayers(synth);
+  }, [features, mappedHoleId, holeNumber, par]);
+
+  const premiumProgressInfo = useMemo(() => {
+    const req = premiumStatuses.filter((s) => !s.optional);
+    return { done: req.filter((s) => s.satisfied).length, total: req.length };
+  }, [premiumStatuses]);
+
+  const togglePremiumNa = useCallback((layerKey: PremiumLayerKey) => {
+    setFeatures((prev) => {
+      const existing = prev.find(
+        (f) => f.feature_type === "na_marker" && f.name === layerKey,
+      );
+      if (existing) return prev.filter((f) => f.id !== existing.id);
+      return [
+        ...prev,
+        {
+          id: uid(),
+          feature_type: "na_marker",
+          name: layerKey,
+          side_label: null,
+          center_lat: null,
+          center_lng: null,
+          polygon_json: null,
+          notes: null,
+        },
+      ];
+    });
+  }, []);
 
   // Snapshot of current draft for OSM comparison. Manual mapping wins, so we
   // measure against what is *currently* saved/drafted for this hole.
@@ -559,8 +721,12 @@ export default function CourseMapper() {
         if (error) throw new Error(error.message);
       }
 
-      // 3. write all non-embedded features (hazards / layups / doglegs / landing / extra tees)
-      const persistableTypes: FeatureType[] = ["bunker","water","penalty","ob","layup","dogleg","landing_zone"];
+      // 3. write all non-embedded features (hazards / layups / premium polygons / NA markers)
+      const persistableTypes: FeatureType[] = [
+        "bunker","water","penalty","ob","layup","dogleg","landing_zone",
+        "fairway_polygon","green_polygon","tee_polygon","hole_boundary",
+        "rough_polygon","trees","waste","cart_path","na_marker",
+      ];
       const rows = features
         .filter((f) => persistableTypes.includes(f.feature_type))
         .map((f) => ({
@@ -770,7 +936,7 @@ export default function CourseMapper() {
           <p className="mt-4 text-[10px] uppercase tracking-[0.25em] text-gold-soft">Features ({features.length})</p>
           <div className="mt-2 rounded-lg border border-white/10 bg-black/40 p-2">
             <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft">
-              Hole {holeNumber} completeness
+              Hole {holeNumber} · GPS ready
             </p>
             <ul className="mt-1 space-y-0.5 text-[11px]">
               {checklist.map((c) => (
@@ -790,6 +956,65 @@ export default function CourseMapper() {
               ))}
             </ul>
           </div>
+
+          <div className="mt-2 rounded-lg border border-gold/25 bg-black/40 p-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft">
+                Premium visual mapping
+              </p>
+              <span className="text-[10px] text-gold/85">
+                {premiumProgressInfo.done}/{premiumProgressInfo.total}
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] leading-snug text-foreground/55">
+              Required polygons for the illustrated Premium view. Mark a layer
+              N/A when it does not apply to this hole.
+            </p>
+            <ul className="mt-1 space-y-0.5 text-[11px]">
+              {premiumStatuses.map((s) => {
+                const state = s.drawn
+                  ? "drawn"
+                  : s.markedNa
+                    ? "n/a"
+                    : "missing";
+                const tone = s.drawn
+                  ? "text-emerald-300"
+                  : s.markedNa
+                    ? "text-foreground/55"
+                    : s.optional
+                      ? "text-foreground/60"
+                      : "text-amber-300";
+                return (
+                  <li key={s.key} className="flex items-center justify-between gap-2">
+                    <span className="text-foreground/80">
+                      {s.label}
+                      {s.optional && <span className="ml-1 text-foreground/40">(opt)</span>}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 ${tone}`}>
+                        {s.drawn ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                        {state}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => togglePremiumNa(s.key)}
+                        disabled={s.drawn}
+                        className={`rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-wider transition-colors ${
+                          s.markedNa
+                            ? "border-gold/40 bg-gold/20 text-gold"
+                            : "border-white/15 text-foreground/60 hover:bg-white/10 disabled:opacity-30"
+                        }`}
+                        title={s.drawn ? "Drawn — cannot mark N/A" : "Toggle Not Applicable"}
+                      >
+                        N/A
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
           {loadingHole && <p className="mt-1 text-[11px] text-foreground/60">Loading hole…</p>}
           <ul className="mt-1 space-y-1">
             {features.map((f) => (

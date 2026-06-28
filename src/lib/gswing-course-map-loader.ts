@@ -62,7 +62,16 @@ export type HoleFeatureType =
   | "waste"
   | "layup"
   | "dogleg"
-  | "landing_zone";
+  | "landing_zone"
+  // Premium visual mapping layers — polygons used by the illustrated renderer.
+  | "fairway_polygon"
+  | "green_polygon"
+  | "tee_polygon"
+  | "hole_boundary"
+  | "rough_polygon"
+  | "cart_path"
+  // Not-applicable marker — `name` carries the PremiumLayerKey being excluded.
+  | "na_marker";
 
 type HoleFeatureRow = {
   id: string;
@@ -162,6 +171,14 @@ export function buildMappedHoleFromRows(
   const doglegs: DoglegTarget[] = [];
   const landingZones: FairwayLandingZone[] = [];
 
+  let fairwayPolygon: Array<[number, number]> | null = null;
+  let teePolygon: Array<[number, number]> | null = null;
+  let holeBoundary: Array<[number, number]> | null = null;
+  let roughPolygon: Array<[number, number]> | null = null;
+  let cartPath: Array<[number, number]> | null = null;
+  let greenPolygon: Array<[number, number]> | null = null;
+  const naLayers: string[] = [];
+
   for (const f of featureRows) {
     switch (f.feature_type) {
       case "tee": {
@@ -196,6 +213,40 @@ export function buildMappedHoleFromRows(
       case "landing_zone": {
         const c = coord(f.center_lat, f.center_lng);
         if (c) landingZones.push({ id: f.id, name: f.name ?? "Landing", coordinate: c, radiusYards: null, notes: f.notes });
+        break;
+      }
+      case "fairway_polygon": {
+        const p = parsePolygon(f.polygon_json);
+        if (p) fairwayPolygon = p;
+        break;
+      }
+      case "green_polygon": {
+        const p = parsePolygon(f.polygon_json);
+        if (p) greenPolygon = p;
+        break;
+      }
+      case "tee_polygon": {
+        const p = parsePolygon(f.polygon_json);
+        if (p) teePolygon = p;
+        break;
+      }
+      case "hole_boundary": {
+        const p = parsePolygon(f.polygon_json);
+        if (p) holeBoundary = p;
+        break;
+      }
+      case "rough_polygon": {
+        const p = parsePolygon(f.polygon_json);
+        if (p) roughPolygon = p;
+        break;
+      }
+      case "cart_path": {
+        const p = parsePolygon(f.polygon_json);
+        if (p) cartPath = p;
+        break;
+      }
+      case "na_marker": {
+        if (f.name) naLayers.push(f.name);
         break;
       }
       default: {
@@ -234,7 +285,7 @@ export function buildMappedHoleFromRows(
       front: frontCoord,
       center: centerCoord,
       back: backCoord,
-      polygon: null,
+      polygon: greenPolygon,
       slopeNote: null,
     },
     pin,
@@ -242,6 +293,12 @@ export function buildMappedHoleFromRows(
     layups,
     doglegs,
     landingZones,
+    fairwayPolygon,
+    teePolygon,
+    holeBoundary,
+    roughPolygon,
+    cartPath,
+    naLayers,
   };
 }
 

@@ -45,6 +45,7 @@ function collectHolePoints(
     for (const t of hole.tees) pts.push(t.coordinate);
     const g = hole.green;
     [g.front, g.center, g.back].forEach((p) => p && pts.push(p));
+    if (g.polygon) for (const [lng, lat] of g.polygon) pts.push({ lat, lng });
     if (hole.pin) pts.push(hole.pin.coordinate);
     for (const h of hole.hazards) {
       pts.push(h.center);
@@ -55,6 +56,16 @@ function collectHolePoints(
     for (const l of hole.layups) pts.push(l.coordinate);
     for (const d of hole.doglegs) pts.push(d.coordinate);
     for (const z of hole.landingZones) pts.push(z.coordinate);
+    const polyLists: Array<Array<[number, number]> | null | undefined> = [
+      hole.fairwayPolygon,
+      hole.teePolygon,
+      hole.holeBoundary,
+      hole.roughPolygon,
+      hole.cartPath,
+    ];
+    for (const poly of polyLists) {
+      if (poly) for (const [lng, lat] of poly) pts.push({ lat, lng });
+    }
   }
   if (player) pts.push({ lat: player.lat, lng: player.lng });
   return pts;
