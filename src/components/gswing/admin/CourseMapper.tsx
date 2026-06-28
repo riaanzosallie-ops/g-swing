@@ -635,8 +635,12 @@ export default function CourseMapper() {
         if (error) throw new Error(error.message);
       }
 
-      // 3. write all non-embedded features (hazards / layups / doglegs / landing / extra tees)
-      const persistableTypes: FeatureType[] = ["bunker","water","penalty","ob","layup","dogleg","landing_zone"];
+      // 3. write all non-embedded features (hazards / layups / premium polygons / NA markers)
+      const persistableTypes: FeatureType[] = [
+        "bunker","water","penalty","ob","layup","dogleg","landing_zone",
+        "fairway_polygon","green_polygon","tee_polygon","hole_boundary",
+        "rough_polygon","trees","waste","cart_path","na_marker",
+      ];
       const rows = features
         .filter((f) => persistableTypes.includes(f.feature_type))
         .map((f) => ({
