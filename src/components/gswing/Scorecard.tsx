@@ -742,9 +742,25 @@ export const Scorecard = () => {
                         />
                         <Pencil className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
                       </div>
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        Thru {played}/18 · scores preserved on rename
-                      </p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <Input
+                          value={hiInputs[p.id] ?? ""}
+                          onChange={(e) => updateDraftHandicap(p.id, e.target.value)}
+                          inputMode="decimal"
+                          maxLength={6}
+                          placeholder="Handicap Index"
+                          aria-label="Handicap Index"
+                          className={`h-8 w-28 border-gold/20 bg-background/60 text-xs ${
+                            hiErrors[p.id] ? "border-destructive/60" : ""
+                          }`}
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          Thru {played}/18 · scores kept
+                        </p>
+                      </div>
+                      {hiErrors[p.id] && (
+                        <p className="mt-0.5 text-[10px] text-destructive">{hiErrors[p.id]}</p>
+                      )}
                     </div>
                     <Button
                       type="button"
