@@ -147,6 +147,22 @@ export function PremiumHoleRenderer({
     });
   }, [bounds, size.w, size.h]);
 
+  // Stage [10] — first successful paint with all data required.
+  const renderCompleteRef = useRef(false);
+  useEffect(() => {
+    if (renderCompleteRef.current) return;
+    if (!premiumReady || !projection || !mappedHole) return;
+    renderCompleteRef.current = true;
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][10] Render Complete", {
+        hole_number: mappedHole.holeNumber,
+        hazards: mappedHole.hazards.length,
+        premiumReady,
+      });
+    }
+  }, [premiumReady, projection, mappedHole]);
+
   const handleTap = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
     if (!isMeasuring || !projection || !svgRef.current || !premiumReady) return;
     const rect = svgRef.current.getBoundingClientRect();
