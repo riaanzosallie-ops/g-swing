@@ -49,19 +49,59 @@ type Player = {
   name: string;
   scores: number[];
   hero?: number;
+  /**
+   * WHS Handicap Index. Plus-handicaps are stored as NEGATIVE numbers
+   * (e.g. "+1.2" → -1.2). Range: -8.0 … 54.0. `null` means not set yet —
+   * existing players from older local-storage payloads land here.
+   */
+  handicapIndex?: number | null;
 };
 
 const initials = (name: string) =>
   (name.trim().split(/\s+/).map((s) => s[0]).join("").slice(0, 2) || "?").toUpperCase();
 
+/**
+ * Handicap Index helpers.
+ * Input strings accept "+1.2" (plus-handicap), "0", "7.4", "12.8", "54".
+ * Storage is a signed number with one decimal; range −8.0 … 54.0.
+ */
+const HI_MIN = -8.0; // "+8.0"
+const HI_MAX = 54.0;
+
+function parseHandicapIndex(raw: string): { value: number | null; error: string | null } {
+  const s = raw.trim();
+  if (s === "") return { value: null, error: null };
+  // "+1.2" → -1.2 (plus-handicap convention).
+  const plus = s.startsWith("+");
+  const body = plus ? s.slice(1) : s;
+  if (!/^\d{1,2}(\.\d{1,2})?$/.test(body)) {
+    return { value: null, error: "Use 0–54.0 or +0–+8.0" };
+  }
+  const n = Number(body);
+  if (!Number.isFinite(n)) return { value: null, error: "Invalid number" };
+  const signed = plus ? -n : n;
+  const rounded = Math.round(signed * 10) / 10;
+  if (rounded < HI_MIN || rounded > HI_MAX) {
+    return { value: null, error: "Range +8.0 to 54.0" };
+  }
+  return { value: rounded, error: null };
+}
+
+/** Render handicap for display, e.g. -1.2 → "+1.2", 12.4 → "12.4". */
+function formatHandicapIndex(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "";
+  const fixed = Math.abs(value).toFixed(1);
+  return value < 0 ? `+${fixed}` : fixed;
+}
+
 const PLAYERS_STORAGE_KEY = "gswing.scorecard.players";
 const MAX_PLAYERS = 4;
 
 const seedPlayers = (): Player[] => [
-  { id: "p1", name: "Riaan", scores: PARS.map(() => 0) },
-  { id: "p2", name: "Nievo", scores: PARS.map(() => 0) },
-  { id: "p3", name: "Toto", scores: PARS.map(() => 0) },
-  { id: "p4", name: "Docco", scores: PARS.map(() => 0) },
+  { id: "p1", name: "Riaan", scores: PARS.map(() => 0), handicapIndex: null },
+  { id: "p2", name: "Nievo", scores: PARS.map(() => 0), handicapIndex: null },
+  { id: "p3", name: "Toto", scores: PARS.map(() => 0), handicapIndex: null },
+  { id: "p4", name: "Docco", scores: PARS.map(() => 0), handicapIndex: null },
 ];
 
 export const Scorecard = () => {
