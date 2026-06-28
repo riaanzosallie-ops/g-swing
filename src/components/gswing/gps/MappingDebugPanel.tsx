@@ -71,7 +71,24 @@ export function MappingDebugPanel(props: MappingDebugPanelProps) {
 
   const tees = mappedHole?.tees ?? [];
   const green = mappedHole?.green ?? null;
-  const features = mappedHole?.hazards?.length ?? 0;
+  const hazards = mappedHole?.hazards ?? [];
+  const features = hazards.length;
+  const greenPolyVertices = green?.polygon?.length ?? 0;
+  const greenSource =
+    greenPolyVertices >= 3
+      ? `polygon (${greenPolyVertices} pts)`
+      : green?.center
+        ? "center fallback"
+        : "—";
+  const hazardBreakdown = hazards.reduce<Record<string, number>>((acc, h) => {
+    acc[h.type] = (acc[h.type] ?? 0) + 1;
+    return acc;
+  }, {});
+  const fairwayPoints =
+    (tees.length ? 1 : 0) +
+    (mappedHole?.doglegs.length ?? 0) +
+    (mappedHole?.landingZones.length ?? 0) +
+    (green?.front || green?.center ? 1 : 0);
 
   return (
     <div className="rounded-md border border-gold/25 bg-black/85 p-2 text-[10px] leading-snug text-white/80">
@@ -87,6 +104,11 @@ export function MappingDebugPanel(props: MappingDebugPanelProps) {
       <Row k="Center saved" v={yn(!!green?.center)} />
       <Row k="Back saved" v={yn(!!green?.back)} />
       <Row k="Features" v={String(features)} />
+      <Row k="Green render" v={greenSource} />
+      <Row k="Fairway pts" v={String(fairwayPoints)} />
+      {Object.entries(hazardBreakdown).map(([t, n]) => (
+        <Row key={t} k={`· ${t}`} v={String(n)} />
+      ))}
       <Row
         k="Player GPS"
         v={
