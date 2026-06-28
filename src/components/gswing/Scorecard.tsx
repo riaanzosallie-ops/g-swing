@@ -130,9 +130,18 @@ export const Scorecard = () => {
   const [manageOpen, setManageOpen] = useState(false);
   const [draft, setDraft] = useState<Player[]>(players);
   const [removeTarget, setRemoveTarget] = useState<Player | null>(null);
+  // Per-player handicap input drafts (raw text so users can type "+", ".").
+  const [hiInputs, setHiInputs] = useState<Record<string, string>>({});
+  const [hiErrors, setHiErrors] = useState<Record<string, string | null>>({});
 
   const openManage = () => {
     setDraft(players.map((p) => ({ ...p, scores: [...p.scores] })));
+    setHiInputs(
+      Object.fromEntries(
+        players.map((p) => [p.id, formatHandicapIndex(p.handicapIndex ?? null)]),
+      ),
+    );
+    setHiErrors({});
     setManageOpen(true);
   };
 
@@ -140,19 +149,33 @@ export const Scorecard = () => {
     setDraft((arr) => arr.map((p) => (p.id === id ? { ...p, name } : p)));
   };
 
+  const updateDraftHandicap = (id: string, raw: string) => {
+    setHiInputs((m) => ({ ...m, [id]: raw }));
+    const { value, error } = parseHandicapIndex(raw);
+    setHiErrors((m) => ({ ...m, [id]: error }));
+    if (!error) {
+      setDraft((arr) =>
+        arr.map((p) => (p.id === id ? { ...p, handicapIndex: value } : p)),
+      );
+    }
+  };
+
   const addDraftPlayer = () => {
     if (draft.length >= MAX_PLAYERS) {
       toast.error(`Max ${MAX_PLAYERS} players`);
       return;
     }
+    const newId = crypto.randomUUID?.() ?? `p-${Date.now()}`;
     setDraft((arr) => [
       ...arr,
       {
-        id: (crypto.randomUUID?.() ?? `p-${Date.now()}`),
+        id: newId,
         name: `Player ${arr.length + 1}`,
         scores: PARS.map(() => 0),
+        handicapIndex: null,
       },
     ]);
+    setHiInputs((m) => ({ ...m, [newId]: "" }));
   };
 
   const removeDraftPlayer = (id: string) => {
@@ -173,9 +196,15 @@ export const Scorecard = () => {
   };
 
   const saveManage = () => {
+    const firstError = Object.values(hiErrors).find((e) => e);
+    if (firstError) {
+      toast.error(firstError);
+      return;
+    }
     const cleaned = draft.map((p) => ({
       ...p,
       name: p.name.trim() || "Player",
+      handicapIndex: p.handicapIndex ?? null,
     }));
     if (cleaned.length < 1) {
       toast.error("At least 1 player required");
