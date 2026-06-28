@@ -4,6 +4,7 @@ import { PremiumAuth } from "@/components/gswing/auth/PremiumAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Dashboard } from "@/components/gswing/Dashboard";
 import { GpsMap } from "@/components/gswing/GpsMap";
+import { GpsErrorBoundary } from "@/components/gswing/GpsErrorBoundary";
 import { MyBag } from "@/components/gswing/MyBag";
 import { SwingAnalysis } from "@/components/gswing/SwingAnalysis";
 import { Scorecard } from "@/components/gswing/Scorecard";
@@ -106,7 +107,11 @@ const Index = () => {
       <main className={isGps ? "px-0 py-0" : "px-4 py-4"}>
         {view === "home" && <Dashboard go={setView} />}
         {view === "gps" && (
-          <MembershipGate featureKey="gps.full"><GpsMap /></MembershipGate>
+          <MembershipGate featureKey="gps.full">
+            <GpsErrorBoundary>
+              <GpsMap />
+            </GpsErrorBoundary>
+          </MembershipGate>
         )}
         {view === "bag" && <MyBag go={setView} />}
         {view === "swing" && (

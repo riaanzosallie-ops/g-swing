@@ -743,6 +743,7 @@ function MapboxCourseView({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !playerPosition) return;
+    if (!Number.isFinite(playerPosition.lat) || !Number.isFinite(playerPosition.lng)) return;
 
     if (!playerMarkerRef.current) {
       const el = document.createElement("div");
