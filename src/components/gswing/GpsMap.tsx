@@ -1038,17 +1038,28 @@ function MapboxCourseView({
           the same `measurePoint` state the bottom sheet reads. */}
       {mapView === "premium" && (
         <div className="absolute inset-0">
-          <PremiumHoleRenderer
-            mappedHole={mappedHole}
-            playerPosition={playerPosition}
-            gpsAccuracy={playerAccuracy}
-            selectedHoleNumber={hole}
-            unit={unit}
-            isMeasuring={measureActive}
-            measurementTarget={measurePoint}
-            onMapTap={(latlng) => setMeasurePoint(latlng)}
-            onClearMeasurement={() => setMeasurePoint(null)}
-          />
+          {mappingStatus === "loading" && !mappedHole ? (
+            <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+              <div className="rounded-2xl border border-gold/30 bg-black/55 px-5 py-4 backdrop-blur-md">
+                <p className="font-serif text-base text-gold">Hole {hole}</p>
+                <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gold-soft">
+                  Loading mapped course…
+                </p>
+              </div>
+            </div>
+          ) : (
+            <PremiumHoleRenderer
+              mappedHole={mappedHole}
+              playerPosition={playerPosition}
+              gpsAccuracy={playerAccuracy}
+              selectedHoleNumber={hole}
+              unit={unit}
+              isMeasuring={measureActive}
+              measurementTarget={measurePoint}
+              onMapTap={(latlng) => setMeasurePoint(latlng)}
+              onClearMeasurement={() => setMeasurePoint(null)}
+            />
+          )}
         </div>
       )}
 
