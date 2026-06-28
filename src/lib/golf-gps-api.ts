@@ -177,7 +177,12 @@ export async function fetchCourses(country?: string): Promise<GolfCourse[]> {
 
 /** Get a single course by id. */
 export async function fetchCourse(courseId: string): Promise<GolfCourse> {
-  const data = await apiFetch<{ course: GolfCourse }>(`golf-courses/${courseId}`);
+  const data = await apiFetch<{ course: GolfCourse | null; status?: string; message?: string }>(
+    `golf-courses/${courseId}`,
+  );
+  if (!data.course) {
+    throw new Error(data.message ?? "Course not found");
+  }
   return data.course;
 }
 
