@@ -468,6 +468,94 @@ export default function CourseMapper() {
     ];
   }, [features]);
 
+  // Synthesise a MappedHole-shaped snapshot from current drafts so we can
+  // run the Premium readiness evaluator (single source of truth shared
+  // with the renderer). Manual mapping wins — same data path as save.
+  const premiumStatuses = useMemo(() => {
+    const getPoly = (t: FeatureType) =>
+      features.find((f) => f.feature_type === t)?.polygon_json ?? null;
+    const naLayers = features
+      .filter((f) => f.feature_type === "na_marker" && f.name)
+      .map((f) => f.name);
+    const synth = {
+      id: mappedHoleId ?? "preview",
+      holeNumber,
+      par,
+      lengthYards: null,
+      lengthMeters: null,
+      tees: [],
+      green: {
+        front: null,
+        center: null,
+        back: null,
+        polygon: getPoly("green_polygon"),
+        slopeNote: null,
+      },
+      pin: null,
+      hazards: features
+        .filter((f) =>
+          ["bunker","water","penalty","ob","trees","waste","rough_polygon"].includes(f.feature_type),
+        )
+        .map((f) => ({
+          id: f.id,
+          name: f.name,
+          type:
+            f.feature_type === "penalty"
+              ? ("penalty_area" as const)
+              : f.feature_type === "ob"
+                ? ("out_of_bounds" as const)
+                : f.feature_type === "waste"
+                  ? ("waste_area" as const)
+                  : f.feature_type === "rough_polygon"
+                    ? ("rough" as const)
+                    : (f.feature_type as "bunker" | "water" | "trees"),
+          side: null,
+          polygon: f.polygon_json,
+          front: null,
+          carry: null,
+          center: { lat: f.center_lat ?? 0, lng: f.center_lng ?? 0 },
+          notes: f.notes,
+        })),
+      layups: [],
+      doglegs: [],
+      landingZones: [],
+      fairwayPolygon: getPoly("fairway_polygon"),
+      teePolygon: getPoly("tee_polygon"),
+      holeBoundary: getPoly("hole_boundary"),
+      roughPolygon: getPoly("rough_polygon"),
+      cartPath: getPoly("cart_path"),
+      naLayers,
+    };
+    return evaluatePremiumLayers(synth);
+  }, [features, mappedHoleId, holeNumber, par]);
+
+  const premiumProgressInfo = useMemo(() => {
+    const req = premiumStatuses.filter((s) => !s.optional);
+    return { done: req.filter((s) => s.satisfied).length, total: req.length };
+  }, [premiumStatuses]);
+
+  const togglePremiumNa = useCallback((layerKey: PremiumLayerKey) => {
+    setFeatures((prev) => {
+      const existing = prev.find(
+        (f) => f.feature_type === "na_marker" && f.name === layerKey,
+      );
+      if (existing) return prev.filter((f) => f.id !== existing.id);
+      return [
+        ...prev,
+        {
+          id: uid(),
+          feature_type: "na_marker",
+          name: layerKey,
+          side_label: null,
+          center_lat: null,
+          center_lng: null,
+          polygon_json: null,
+          notes: null,
+        },
+      ];
+    });
+  }, []);
+
   // Snapshot of current draft for OSM comparison. Manual mapping wins, so we
   // measure against what is *currently* saved/drafted for this hole.
   const gswingSnapshot = useMemo(() => {
