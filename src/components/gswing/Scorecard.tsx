@@ -303,15 +303,58 @@ export const Scorecard = () => {
           0,
         );
         const diff = total - playedPar;
-        return { ...player, total, holesPlayed, diff };
+        const ch = courseHcp(player.handicapIndex);
+        const stableford = player.scores.reduce(
+          (sum, s, i) => sum + stablefordPts(s, PARS[i], strokesGivenOnHole(ch, i)),
+          0,
+        );
+        return { ...player, total, holesPlayed, diff, stableford };
       })
       .sort((a, b) => {
         if (a.holesPlayed === 0 && b.holesPlayed === 0) return 0;
         if (a.holesPlayed === 0) return 1;
         if (b.holesPlayed === 0) return -1;
+        if (format === "Stableford") return b.stableford - a.stableford;
         return a.diff - b.diff || a.total - b.total;
       });
-  }, [players]);
+  }, [players, format]);
+
+  /** Match Play state vs current leader (first listed player). */
+  const matchPlay = useMemo(() => {
+    if (format !== "Match Play" || players.length < 2) return null;
+    const a = players[0];
+    const b = players[1];
+    let lead = 0; let played = 0;
+    for (let h = 0; h < 18; h++) {
+      const sa = a.scores[h]; const sb = b.scores[h];
+      if (!sa || !sb) continue;
+      played = h + 1;
+      if (sa < sb) lead += 1;
+      else if (sa > sb) lead -= 1;
+    }
+    const remaining = 18 - played;
+    const closed = Math.abs(lead) > remaining;
+    const label =
+      played === 0 ? "—" :
+      lead === 0 ? "AS" :
+      `${Math.abs(lead)} ${closed ? `&${remaining}` : "UP"}`;
+    const leader = lead > 0 ? a.name : lead < 0 ? b.name : null;
+    return { a, b, lead, played, remaining, label, leader };
+  }, [players, format]);
+
+  /** Team aggregate (Better Ball: sum of best per hole; Scramble: sum of team strokes assumed = first player's). */
+  const teamScore = useMemo(() => {
+    if (format !== "Better Ball" && format !== "Scramble") return null;
+    let total = 0; let playedPar = 0; let holesPlayed = 0;
+    for (let h = 0; h < 18; h++) {
+      const scores = players.map((p) => p.scores[h]).filter((s) => s > 0);
+      if (scores.length === 0) continue;
+      holesPlayed += 1;
+      playedPar += PARS[h];
+      total += format === "Better Ball" ? Math.min(...scores) : scores[0];
+    }
+    return { total, diff: total - playedPar, holesPlayed };
+  }, [players, format]);
 
   const skins = useMemo(() => {
     const won: Record<string, number> = Object.fromEntries(players.map((player) => [player.id, 0]));
