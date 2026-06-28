@@ -1082,6 +1082,21 @@ function MapboxCourseView({
                 center: effectiveReadout.center,
                 back: effectiveReadout.back,
                 unitShort,
+                rendererActive: mapView === "premium",
+                visualMode: mapView,
+                measurementTarget: measurePoint,
+                measurementDistance:
+                  measurePoint && playerPosition
+                    ? Math.round(
+                        haversineYards(playerPosition, measurePoint) *
+                          (unit === "meters" ? 0.9144 : 1),
+                      )
+                    : null,
+                measurementSource: measurePoint
+                  ? mapView === "premium"
+                    ? "premium-projected"
+                    : "satellite-mapbox"
+                  : null,
               }
             : undefined
         }
