@@ -714,7 +714,11 @@ function MapboxCourseView({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (geometry || !pin) {
+    const pinValid =
+      pin &&
+      Number.isFinite(pin.lat) &&
+      Number.isFinite(pin.lng);
+    if (geometry || !pinValid) {
       if (pinMarkerRef.current) {
         pinMarkerRef.current.remove();
         pinMarkerRef.current = null;
@@ -725,9 +729,9 @@ function MapboxCourseView({
       const el = document.createElement("div");
       el.style.cssText =
         "width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #0a0a0a;box-shadow:0 0 8px rgba(255,255,255,0.6);";
-      pinMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([pin.lng, pin.lat]).addTo(map);
+      pinMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([pin!.lng, pin!.lat]).addTo(map);
     } else {
-      pinMarkerRef.current.setLngLat([pin.lng, pin.lat]);
+      pinMarkerRef.current.setLngLat([pin!.lng, pin!.lat]);
     }
   }, [pin?.lat, pin?.lng, geometry]);
 
