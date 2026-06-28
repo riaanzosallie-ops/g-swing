@@ -164,7 +164,7 @@ export function CourseSelectorSheet({
   const pick = (c: GolfCourse) => {
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.debug("[CourseSelector] pick", { id: c.id, name: c.name });
+      console.info("[GSWING][1] Course Selected", { id: c.id, name: c.name });
     }
     // Close first so the drawer animation cannot swallow the selection,
     // then commit on the next tick. Fixes "nothing happens" on some

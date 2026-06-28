@@ -1038,17 +1038,28 @@ function MapboxCourseView({
           the same `measurePoint` state the bottom sheet reads. */}
       {mapView === "premium" && (
         <div className="absolute inset-0">
-          <PremiumHoleRenderer
-            mappedHole={mappedHole}
-            playerPosition={playerPosition}
-            gpsAccuracy={playerAccuracy}
-            selectedHoleNumber={hole}
-            unit={unit}
-            isMeasuring={measureActive}
-            measurementTarget={measurePoint}
-            onMapTap={(latlng) => setMeasurePoint(latlng)}
-            onClearMeasurement={() => setMeasurePoint(null)}
-          />
+          {mappingStatus === "loading" && !mappedHole ? (
+            <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+              <div className="rounded-2xl border border-gold/30 bg-black/55 px-5 py-4 backdrop-blur-md">
+                <p className="font-serif text-base text-gold">Hole {hole}</p>
+                <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gold-soft">
+                  Loading mapped course…
+                </p>
+              </div>
+            </div>
+          ) : (
+            <PremiumHoleRenderer
+              mappedHole={mappedHole}
+              playerPosition={playerPosition}
+              gpsAccuracy={playerAccuracy}
+              selectedHoleNumber={hole}
+              unit={unit}
+              isMeasuring={measureActive}
+              measurementTarget={measurePoint}
+              onMapTap={(latlng) => setMeasurePoint(latlng)}
+              onClearMeasurement={() => setMeasurePoint(null)}
+            />
+          )}
         </div>
       )}
 
@@ -2068,6 +2079,13 @@ function CartGpsView({
 }
 
 export const GpsMap = () => {
+  // GPS mount log — verifies stage [4] from the course-select trace.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][4] GPS Mounted");
+    }
+  }, []);
   const [courses, setCourses] = useState<GolfCourse[]>(UAE_COURSES);
   const [courseId, setCourseId] = useState<string>(() => {
     try {
@@ -2176,6 +2194,10 @@ export const GpsMap = () => {
   const loadHole = useCallback(async () => {
     setLoading(true);
     setGpsError(null);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][5] Loading Course/Hole", { courseId, hole });
+    }
     try {
       // 1. Prefer production geometry from the PostGIS-backed tables.
       try {
@@ -2183,6 +2205,10 @@ export const GpsMap = () => {
         if (geom) {
           setGeometryPayload(geom);
           setGps(geometryToHoleGpsResponse(courseId, geom, unit, playerPos));
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line no-console
+            console.info(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (postgis)`, { courseId });
+          }
           return;
         }
         setGeometryPayload(null);
@@ -2197,11 +2223,19 @@ export const GpsMap = () => {
         playerPos: playerPos ?? undefined,
       });
       setGps(data);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (edge)`, { courseId });
+      }
     } catch (error) {
       // 3. Last-resort offline demo geometry so the map still renders.
       setGeometryPayload(null);
       setGps(createFallbackHoleGps(selectedCourse, hole, unit, playerPos));
       setGpsError(null);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (offline fallback)`, { courseId, error });
+      }
     } finally {
       setLoading(false);
     }
@@ -2254,7 +2288,12 @@ export const GpsMap = () => {
     (course: GolfCourse) => {
       if (import.meta.env.DEV) {
         // eslint-disable-next-line no-console
-        console.debug("[GpsMap] applyCourseSelection", { id: course.id, name: course.name });
+        console.info("[GSWING][2] Selected Course Saved", {
+          id: course.id,
+          name: course.name,
+          lat: course.lat,
+          lng: course.lng,
+        });
       }
       // Clear cached course-scoped data BEFORE switching id so the
       // renderer cannot flash stale geometry from the previous course.
@@ -2278,6 +2317,10 @@ export const GpsMap = () => {
       // Always force the renderer to refetch geometry for the picked
       // course, even when the id matches the previous selection.
       setReloadNonce((n) => n + 1);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info("[GSWING][3] Navigation Started → GPS view");
+      }
       toast.success(`Course set: ${course.name}`);
     },
     [],

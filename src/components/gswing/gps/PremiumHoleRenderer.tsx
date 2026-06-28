@@ -59,6 +59,29 @@ export function PremiumHoleRenderer({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
+  // Stage [8] — verifies the renderer actually mounted.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][8] Premium Renderer Mounted", {
+        selectedHoleNumber,
+        mapped_hole_id: mappedHole?.id ?? null,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Stage [9] — first time real player coordinates arrive.
+  const playerLoggedRef = useRef(false);
+  useEffect(() => {
+    if (!playerPosition || playerLoggedRef.current) return;
+    playerLoggedRef.current = true;
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][9] Player Location Ready", playerPosition);
+    }
+  }, [playerPosition?.lat, playerPosition?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Track wrapper size for responsive projection.
   useEffect(() => {
     if (!wrapRef.current) return;
@@ -123,6 +146,22 @@ export function PremiumHoleRenderer({
       paddingPx: PADDING,
     });
   }, [bounds, size.w, size.h]);
+
+  // Stage [10] — first successful paint with all data required.
+  const renderCompleteRef = useRef(false);
+  useEffect(() => {
+    if (renderCompleteRef.current) return;
+    if (!premiumReady || !projection || !mappedHole) return;
+    renderCompleteRef.current = true;
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[GSWING][10] Render Complete", {
+        hole_number: mappedHole.holeNumber,
+        hazards: mappedHole.hazards.length,
+        premiumReady,
+      });
+    }
+  }, [premiumReady, projection, mappedHole]);
 
   const handleTap = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
     if (!isMeasuring || !projection || !svgRef.current || !premiumReady) return;
