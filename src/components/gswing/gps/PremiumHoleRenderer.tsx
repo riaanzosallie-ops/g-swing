@@ -341,27 +341,6 @@ function RendererDefs() {
   );
 }
 
-function hasRichMapping(h: MappedHole): boolean {
-  // "Rich" = either a drawn green polygon OR at least one mapped hazard.
-  // Center-only greens with no hazards still render correctly but are
-  // visually plain — we surface a specific hint instead of a vague banner.
-  const greenPolygonOk = !!(h.green.polygon && h.green.polygon.length >= 4);
-  const hazardOk = h.hazards.length > 0;
-  return greenPolygonOk || hazardOk;
-}
-
-function describeMissingMapping(h: MappedHole): string[] {
-  const missing: string[] = [];
-  if (!h.green.polygon || h.green.polygon.length < 4) missing.push("green polygon");
-  const bunkers = h.hazards.filter((x) => x.type === "bunker").length;
-  if (bunkers === 0) missing.push("bunkers");
-  const water = h.hazards.filter(
-    (x) => x.type === "water" || x.type === "penalty_area",
-  ).length;
-  if (water === 0) missing.push("water");
-  return missing;
-}
-
 function HoleGeometryLayer({
   hole,
   projection,
@@ -379,17 +358,20 @@ function HoleGeometryLayer({
   const greenPolygon = hole.green.polygon ?? null;
   const pin = hole.pin?.coordinate ?? null;
 
-  // Fairway corridor: tee → doglegs → landing zones → green
-  const corridor: { lat: number; lng: number }[] = [];
-  if (tee) corridor.push(tee);
-  for (const d of hole.doglegs) corridor.push(d.coordinate);
-  for (const z of hole.landingZones) corridor.push(z.coordinate);
-  if (greenFront ?? greenCenter) corridor.push((greenFront ?? greenCenter) as { lat: number; lng: number });
+  // Premium illustration is now ENTIRELY polygon-driven. Centreline
+  // corridor fallback has been removed — gating in the parent ensures
+  // we never reach this layer without real polygons.
+  const projectRing = (ring: Array<[number, number]>) =>
+    ring.map(([lng, lat]) => project({ lat, lng }));
 
-  const corridorPts = corridor.map(project);
-  const corridorPath = buildSmoothPath(corridorPts);
+  const holeBoundaryPts = hole.holeBoundary ? projectRing(hole.holeBoundary) : null;
+  const fairwayPts = hole.fairwayPolygon ? projectRing(hole.fairwayPolygon) : null;
+  const teePolyPts = hole.teePolygon ? projectRing(hole.teePolygon) : null;
+  const roughPts = hole.roughPolygon ? projectRing(hole.roughPolygon) : null;
+  const cartPathPts = hole.cartPath ? projectRing(hole.cartPath) : null;
 
-  // Approximate green radius from front/back spread.
+  // Green radius fallback only for the legacy ring overlay; if no polygon
+  // we still draw the front/back-derived footprint as a soft halo.
   let greenRadiusPx = 28;
   if (greenFront && greenBack) {
     const a = project(greenFront);
@@ -397,53 +379,69 @@ function HoleGeometryLayer({
     greenRadiusPx = Math.max(18, Math.hypot(a.x - b.x, a.y - b.y) / 2);
   }
 
-  const fairwayWidth = Math.max(40, greenRadiusPx * 1.8);
-
   return (
     <g>
-      {/* Layered fairway corridor: rough → semi-rough → fairway → highlight */}
-      {corridorPts.length >= 2 && (
+      {/* Hole boundary — painted as the outer rough mass for depth. */}
+      {holeBoundaryPts && holeBoundaryPts.length >= 3 && (
         <g filter="url(#gs-shadow)">
-          {/* Outer rough — soft dark green halo */}
           <path
-            d={corridorPath}
-            fill="none"
-            stroke="url(#gs-rough)"
-            strokeOpacity={0.85}
-            strokeWidth={fairwayWidth * 1.9}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            d={ringPath(holeBoundaryPts)}
+            fill="url(#gs-rough)"
+            fillOpacity={0.95}
+            stroke="#0a2c19"
+            strokeOpacity={0.7}
+            strokeWidth={1}
           />
-          {/* Semi-rough band */}
+        </g>
+      )}
+
+      {/* Explicit rough polygon overlay (if mapped separately). */}
+      {roughPts && roughPts.length >= 3 && (
+        <path
+          d={ringPath(roughPts)}
+          fill="url(#gs-semirough)"
+          fillOpacity={0.85}
+          stroke="#16542f"
+          strokeOpacity={0.55}
+          strokeWidth={0.8}
+        />
+      )}
+
+      {/* Manicured fairway — organic polygon from mapping. */}
+      {fairwayPts && fairwayPts.length >= 3 && (
+        <g filter="url(#gs-shadow)">
           <path
-            d={corridorPath}
-            fill="none"
-            stroke="url(#gs-semirough)"
-            strokeOpacity={0.95}
-            strokeWidth={fairwayWidth * 1.35}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            d={ringPath(fairwayPts)}
+            fill="url(#gs-fairway)"
+            stroke="#1e6b3f"
+            strokeOpacity={0.6}
+            strokeWidth={1}
           />
-          {/* Manicured fairway */}
+          {/* Subtle mowing highlight ribbon along centroid axis. */}
           <path
-            d={corridorPath}
-            fill="none"
-            stroke="url(#gs-fairway)"
-            strokeWidth={fairwayWidth}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {/* Mowing highlight stripe */}
-          <path
-            d={corridorPath}
+            d={ringPath(fairwayPts)}
             fill="none"
             stroke="#c8f5d6"
             strokeOpacity={0.18}
-            strokeWidth={Math.max(3, fairwayWidth * 0.18)}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            strokeWidth={2}
           />
         </g>
+      )}
+
+      {/* Cart path */}
+      {cartPathPts && cartPathPts.length >= 2 && (
+        <path
+          d={cartPathPts
+            .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+            .join(" ")}
+          fill="none"
+          stroke="#d8c8a3"
+          strokeOpacity={0.7}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray="1 0"
+        />
       )}
 
       {/* Hazards (water under sand under trees) */}
@@ -459,7 +457,7 @@ function HoleGeometryLayer({
       {/* Landing zones — premium dashed rings with label */}
       {hole.landingZones.map((z) => {
         const p = project(z.coordinate);
-        const r = Math.max(14, fairwayWidth * 0.55);
+        const r = 22;
         return (
           <g key={z.id}>
             <circle cx={p.x} cy={p.y} r={r} fill="#F5C84B" fillOpacity={0.04} stroke="#F5C84B" strokeOpacity={0.45} strokeWidth={1} strokeDasharray="2 4" />
@@ -515,8 +513,18 @@ function HoleGeometryLayer({
         );
       })()}
 
-      {/* Tee */}
-      {tee && (() => {
+      {/* Tee — prefer polygon, fall back to icon */}
+      {teePolyPts && teePolyPts.length >= 3 ? (
+        <g filter="url(#gs-shadow)">
+          <path
+            d={ringPath(teePolyPts)}
+            fill="url(#gs-tee)"
+            stroke="#F5C84B"
+            strokeOpacity={0.85}
+            strokeWidth={1.2}
+          />
+        </g>
+      ) : tee && (() => {
         const t = project(tee);
         return (
           <g filter="url(#gs-shadow)">
