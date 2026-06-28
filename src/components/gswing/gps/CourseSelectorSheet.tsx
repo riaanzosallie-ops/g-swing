@@ -162,8 +162,16 @@ export function CourseSelectorSheet({
   }, [filtered, playerPosition]);
 
   const pick = (c: GolfCourse) => {
-    onSelect(c);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.debug("[CourseSelector] pick", { id: c.id, name: c.name });
+    }
+    // Close first so the drawer animation cannot swallow the selection,
+    // then commit on the next tick. Fixes "nothing happens" on some
+    // mobile devices where the drawer close race-conditioned the parent
+    // state update.
     onOpenChange(false);
+    setTimeout(() => onSelect(c), 0);
   };
 
   const formatDist = (meters: number | null) => {
@@ -279,7 +287,11 @@ export function CourseSelectorSheet({
                     <li key={course.id}>
                       <button
                         type="button"
-                        onClick={() => pick(course)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          pick(course);
+                        }}
                         disabled={disabled}
                         className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition active:scale-[0.99] ${
                           selected

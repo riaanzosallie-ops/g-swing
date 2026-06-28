@@ -2098,6 +2098,9 @@ export const GpsMap = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  // Bump to force a fresh hole/geometry load even when courseId+hole
+  // don't change (e.g. user re-selects the current course).
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [currentTime, setCurrentTime] = useState(() =>
     new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
   );
@@ -2195,7 +2198,8 @@ export const GpsMap = () => {
     } finally {
       setLoading(false);
     }
-  }, [courseId, hole, playerPos, selectedCourse, unit]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, hole, playerPos, selectedCourse, unit, reloadNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2241,15 +2245,32 @@ export const GpsMap = () => {
   // mutate any GPS, mapping or scoring logic — just clears prior round.
   const applyCourseSelection = useCallback(
     (course: GolfCourse) => {
-      setCourseId(course.id);
-      setHole(1);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.debug("[GpsMap] applyCourseSelection", { id: course.id, name: course.name });
+      }
+      // Clear cached course-scoped data BEFORE switching id so the
+      // renderer cannot flash stale geometry from the previous course.
+      setGps(null);
+      setGeometryPayload(null);
       setActiveRound(null);
       setActiveShot(null);
       setRoundShots([]);
       setLastShotYards(null);
       setLastShotEnd(null);
+      setHole(1);
       setPlayerPos({ lat: course.lat, lng: course.lng });
+      setCourseId(course.id);
+      try {
+        localStorage.setItem("gswing.lastCourseId", course.id);
+      } catch {
+        /* ignore */
+      }
       setCourseGateOpen(false);
+      setPendingCourse(null);
+      // Always force the renderer to refetch geometry for the picked
+      // course, even when the id matches the previous selection.
+      setReloadNonce((n) => n + 1);
       toast.success(`Course set: ${course.name}`);
     },
     [],
