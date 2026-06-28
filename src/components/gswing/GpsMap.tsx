@@ -1013,6 +1013,27 @@ function MapboxCourseView({
         </>
       )}
 
+      {/* PREMIUM ILLUSTRATED HOLE RENDERER — overlays the Mapbox div
+          when Premium mode is active. Source of geometry: saved
+          gswing_mapped_holes / gswing_hole_features only. Tap-to-measure
+          unprojects the SVG tap back into real lat/lng and feeds it to
+          the same `measurePoint` state the bottom sheet reads. */}
+      {mapView === "premium" && (
+        <div className="absolute inset-0">
+          <PremiumHoleRenderer
+            mappedHole={mappedHole}
+            playerPosition={playerPosition}
+            gpsAccuracy={playerAccuracy}
+            selectedHoleNumber={hole}
+            unit={unit}
+            isMeasuring={measureActive}
+            measurementTarget={measurePoint}
+            onMapTap={(latlng) => setMeasurePoint(latlng)}
+            onClearMeasurement={() => setMeasurePoint(null)}
+          />
+        </div>
+      )}
+
       <PremiumGpsChrome
         hole={gps?.hole_number ?? hole}
         par={gps?.par ?? null}
