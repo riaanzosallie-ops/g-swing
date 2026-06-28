@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ChevronUp,
+  ChevronDown,
   Crosshair,
   Droplets,
   Ruler,
@@ -49,6 +50,7 @@ export function GpsBottomSheet({
   playerPosition,
 }: GpsBottomSheetProps) {
   const [expanded, setExpanded] = useState(false);
+  const [minimized, setMinimized] = useState(true);
   const [open, setOpen] = useState<SectionKey>("hazards");
   const u = unitShort(unit);
 
@@ -62,30 +64,60 @@ export function GpsBottomSheet({
       ? measureBetween(playerPosition, measurePoint, unit)
       : null;
 
-  return (
-    <div className="pointer-events-auto absolute inset-x-2 bottom-2 z-30">
-      <div className="rounded-2xl border border-gold/30 bg-black/85 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        {/* Grab handle */}
+  // Minimized — single floating pill, frees the hole. Tap to restore.
+  if (minimized) {
+    return (
+      <div className="pointer-events-auto absolute inset-x-0 bottom-3 z-30 flex justify-center px-3">
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-label={expanded ? "Collapse" : "Expand"}
-          className="mx-auto mt-1.5 flex h-3 w-full items-center justify-center"
+          onClick={() => setMinimized(false)}
+          className="flex items-center gap-3 rounded-full border border-gold/35 bg-black/75 px-4 py-2 text-[11px] backdrop-blur-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
         >
-          <span className="block h-1 w-10 rounded-full bg-gold/40" />
+          <span className="text-[9px] uppercase tracking-[0.22em] text-gold-soft">Green</span>
+          <span className="font-serif text-lg tabular-nums text-gold">
+            {center != null ? fmt(center) : "—"}
+          </span>
+          <span className="text-[9px] uppercase tracking-wider text-gold-soft">{u}</span>
+          <ChevronUp className="h-3.5 w-3.5 text-gold" />
         </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pointer-events-auto absolute inset-x-2 bottom-2 z-30">
+      <div className="rounded-2xl border border-gold/30 bg-black/80 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        {/* Grab handle + minimize */}
+        <div className="flex items-center justify-between px-3 pt-1.5">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? "Collapse" : "Expand"}
+            className="flex h-3 flex-1 items-center justify-center"
+          >
+            <span className="block h-1 w-10 rounded-full bg-gold/40" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMinimized(true)}
+            aria-label="Minimize"
+            className="grid h-6 w-6 place-items-center rounded-full text-gold-soft hover:text-gold"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
         {/* GREEN — always visible, reference layout */}
-        <div className="px-4 pb-3 pt-1">
+        <div className="px-3 pb-2.5 pt-0.5">
           <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-full border border-gold/40 text-gold">
-              <Crosshair className="h-3.5 w-3.5" />
+            <span className="grid h-6 w-6 place-items-center rounded-full border border-gold/40 text-gold">
+              <Crosshair className="h-3 w-3" />
             </span>
-            <span className="flex-1 font-serif text-base text-gold">Green</span>
+            <span className="flex-1 font-serif text-sm text-gold">Green</span>
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="grid h-7 w-7 place-items-center rounded-full text-gold-soft transition-transform hover:text-gold"
+              className="grid h-6 w-6 place-items-center rounded-full text-gold-soft transition-transform hover:text-gold"
               aria-label={expanded ? "Collapse" : "Expand"}
             >
               <ChevronUp
@@ -96,7 +128,7 @@ export function GpsBottomSheet({
             </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
             <DistanceCell label="Front" value={center != null ? fmt(front) : "—"} unit={center != null && front != null ? u : undefined} />
             <DistanceCell label="Center" value={center != null ? fmt(center) : "—"} unit={center != null ? u : undefined} large />
             <DistanceCell label="Back" value={center != null ? fmt(back) : "—"} unit={center != null && back != null ? u : undefined} />
@@ -113,13 +145,14 @@ export function GpsBottomSheet({
             </p>
           )}
 
-          <div className="my-3 h-px w-full bg-gold/15" />
+          {expanded && <div className="my-2 h-px w-full bg-gold/15" />}
 
+          {expanded && (
           <div className="flex justify-center">
             <button
               type="button"
               onClick={onToggleMeasure}
-              className={`flex h-10 items-center gap-2 rounded-full border px-6 text-[11px] font-semibold uppercase tracking-[0.2em] transition-all active:scale-95 ${
+              className={`flex h-9 items-center gap-2 rounded-full border px-5 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all active:scale-95 ${
                 measureActive
                   ? "border-gold bg-gold text-black shadow-[0_0_18px_rgba(245,200,75,0.35)]"
                   : "border-gold/45 bg-transparent text-gold hover:bg-gold/10"
@@ -129,9 +162,10 @@ export function GpsBottomSheet({
               {measureActive ? "Measuring" : "Measure"}
             </button>
           </div>
+          )}
 
           {measureActive && (
-            <div className="mt-2 text-center">
+            <div className="mt-1.5 text-center">
               {!measurePoint && (
                 <p className="text-[10px] uppercase tracking-wider text-gold-soft">
                   {playerPosition ? "Tap the map to mark a target" : "GPS required"}
@@ -139,7 +173,7 @@ export function GpsBottomSheet({
               )}
               {measurement && (
                 <div className="mt-1 inline-flex items-baseline gap-2">
-                  <span className="font-serif text-2xl text-gold tabular-nums">
+                  <span className="font-serif text-xl text-gold tabular-nums">
                     {measurement.distance}
                   </span>
                   <span className="text-[10px] uppercase tracking-wider text-gold-soft">
@@ -275,16 +309,16 @@ function DistanceCell({
 }) {
   return (
     <div className="flex flex-col items-center">
-      <span className="text-[10px] uppercase tracking-[0.2em] text-white/65">{label}</span>
+      <span className="text-[9px] uppercase tracking-[0.2em] text-white/65">{label}</span>
       <span
         className={`mt-1 font-serif tabular-nums leading-none ${
-          large ? "text-3xl text-gold" : "text-2xl text-gold"
+          large ? "text-2xl text-gold" : "text-lg text-gold"
         }`}
       >
         {value === "—" ? <span className="text-gold/55">—</span> : value}
       </span>
       {unit && (
-        <span className="mt-1 text-[9px] uppercase tracking-wider text-gold-soft">{unit}</span>
+        <span className="mt-0.5 text-[9px] uppercase tracking-wider text-gold-soft">{unit}</span>
       )}
     </div>
   );
