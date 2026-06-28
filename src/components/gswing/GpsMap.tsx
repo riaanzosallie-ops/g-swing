@@ -2272,7 +2272,12 @@ export const GpsMap = () => {
     (course: GolfCourse) => {
       if (import.meta.env.DEV) {
         // eslint-disable-next-line no-console
-        console.debug("[GpsMap] applyCourseSelection", { id: course.id, name: course.name });
+        console.info("[GSWING][2] Selected Course Saved", {
+          id: course.id,
+          name: course.name,
+          lat: course.lat,
+          lng: course.lng,
+        });
       }
       // Clear cached course-scoped data BEFORE switching id so the
       // renderer cannot flash stale geometry from the previous course.
@@ -2296,6 +2301,10 @@ export const GpsMap = () => {
       // Always force the renderer to refetch geometry for the picked
       // course, even when the id matches the previous selection.
       setReloadNonce((n) => n + 1);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info("[GSWING][3] Navigation Started → GPS view");
+      }
       toast.success(`Course set: ${course.name}`);
     },
     [],
