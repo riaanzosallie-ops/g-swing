@@ -917,6 +917,51 @@ export default function CourseMapper() {
       <div className="relative flex-1">
         <div ref={containerRef} className="absolute inset-0" />
 
+        {/* Tile error banner — visible feedback if Mapbox tiles fail */}
+        {tileError && (
+          <div className="pointer-events-auto absolute left-1/2 top-2 z-20 -translate-x-1/2 max-w-[min(92%,640px)] rounded-lg border border-red-400/40 bg-red-950/85 px-3 py-2 text-xs text-red-100 backdrop-blur">
+            <div className="flex items-start gap-2">
+              <span className="font-semibold">Map tiles failed.</span>
+              <span className="opacity-90">{tileError}</span>
+              <button
+                type="button"
+                onClick={() => setTileError(null)}
+                className="ml-auto text-red-200/80 hover:text-white"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="mt-1 flex gap-2 text-[10px] uppercase tracking-wider">
+              <button
+                type="button"
+                onClick={() => { setTileError(null); setMapStyle("satellite"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "satellite" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+              >
+                Satellite
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTileError(null); setMapStyle("streets"); }}
+                className={`rounded px-2 py-1 ${mapStyle === "streets" ? "bg-gold text-black" : "bg-white/10 hover:bg-white/20"}`}
+              >
+                Fallback basemap
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Token missing — explicit message instead of a silent black canvas */}
+        {!token && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 text-center text-xs text-foreground/80">
+            <div className="max-w-sm space-y-2 p-4">
+              <p className="text-sm font-semibold text-gold">
+                {tokenError ? "Mapbox token unavailable" : "Loading map…"}
+              </p>
+              {tokenError && <p className="opacity-80">{tokenError}</p>}
+            </div>
+          </div>
+        )}
+
         {/* Left tool dock */}
         <div className="absolute left-2 top-2 flex max-h-[80%] flex-col gap-1 overflow-y-auto rounded-xl border border-gold/30 bg-black/70 p-1 backdrop-blur-md">
           {TOOLS.map((t) => (
