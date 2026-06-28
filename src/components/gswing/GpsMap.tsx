@@ -117,8 +117,19 @@ import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
 import { MappingDebugPanel } from "@/components/gswing/gps/MappingDebugPanel";
 import type { MappingDebugPanelProps } from "@/components/gswing/gps/MappingDebugPanel";
 import { PremiumHoleRenderer } from "@/components/gswing/gps/PremiumHoleRenderer";
+import { CourseSelectorSheet } from "@/components/gswing/gps/CourseSelectorSheet";
 import { useGswingMembership } from "@/hooks/useGswingMembership";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { GswingWeather } from "@/lib/gswing-weather";
 import {
   Select,
