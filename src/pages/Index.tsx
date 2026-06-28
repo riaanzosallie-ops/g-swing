@@ -78,6 +78,16 @@ const Index = () => {
     return () => window.removeEventListener("gswing-exit-gps", handler);
   }, []);
 
+  // Premium GPS dock buttons (Scorecard / Settings) bridge through here.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const next = (e as CustomEvent<string>).detail;
+      if (typeof next === "string" && next) navigate(next);
+    };
+    window.addEventListener("gswing-nav", handler as EventListener);
+    return () => window.removeEventListener("gswing-nav", handler as EventListener);
+  }, []);
+
   function handleEnter() {
     if (hasSession) setStage("app");
     else setStage("auth");
