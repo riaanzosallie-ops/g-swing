@@ -89,8 +89,10 @@ const UNIT_SHORT = { yards: "y", meters: "m" } as const;
 
 /** yards → display unit (integer). */
 function toDisplay(yards: number | null, unit: "yards" | "meters"): number | null {
-  if (yards == null) return null;
-  return Math.round(unit === "meters" ? yards * 0.9144 : yards);
+  // Hard guard: undefined, null, NaN, or non-finite must never surface to UI.
+  if (yards == null || !Number.isFinite(yards)) return null;
+  const v = unit === "meters" ? yards * 0.9144 : yards;
+  return Number.isFinite(v) ? Math.round(v) : null;
 }
 
 export function PremiumGpsOverlay(props: PremiumGpsOverlayProps): JSX.Element {
@@ -148,16 +150,24 @@ export function PremiumGpsOverlay(props: PremiumGpsOverlayProps): JSX.Element {
           {/* gold corner shine */}
           <div className="pointer-events-none absolute -right-8 -top-8 h-20 w-20 rounded-full bg-gold/15 blur-2xl" />
           <div className="relative flex items-baseline gap-2">
-            <span className="font-serif text-[64px] leading-none tracking-tight text-gold drop-shadow-[0_2px_8px_rgba(245,200,75,0.35)]">
-              {center ?? "—"}
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gold-soft">
-              {UNIT_LABEL[unit]}
-            </span>
+            {center != null ? (
+              <>
+                <span className="font-serif text-[64px] leading-none tracking-tight text-gold drop-shadow-[0_2px_8px_rgba(245,200,75,0.35)]">
+                  {center}
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gold-soft">
+                  {UNIT_LABEL[unit]}
+                </span>
+              </>
+            ) : (
+              <span className="font-serif text-[22px] leading-none tracking-[0.18em] text-gold-soft/90">
+                WAITING FOR GPS…
+              </span>
+            )}
           </div>
           <div className="relative mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-200/90">
             <span className="grid h-1.5 w-1.5 place-items-center rounded-full bg-gold shadow-[0_0_8px_rgba(245,200,75,0.8)]" />
-            Center of green
+            {center != null ? "Center of green" : "Acquiring satellite lock"}
           </div>
           <div className="relative mt-2 flex items-center gap-3 text-[10px] uppercase tracking-[0.2em] text-white/70">
             <span>
@@ -167,7 +177,7 @@ export function PremiumGpsOverlay(props: PremiumGpsOverlayProps): JSX.Element {
             <span>
               Par <span className="text-gold">{par ?? "—"}</span>
             </span>
-            {handicap != null && (
+            {Number.isFinite(handicap) && (handicap as number) > 0 && (
               <>
                 <span className="h-3 w-px bg-gold/30" />
                 <span>
