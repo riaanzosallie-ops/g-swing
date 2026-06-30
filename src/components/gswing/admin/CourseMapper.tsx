@@ -179,14 +179,23 @@ export default function CourseMapper() {
     let cancelled = false;
     loadMapboxToken()
       .then((t) => { if (!cancelled) setToken(t); })
-      .catch((e: unknown) => { if (!cancelled) setTokenError(e instanceof Error ? e.message : "Token unavailable"); });
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setTokenError(e instanceof Error ? e.message : "Token unavailable");
+        // No Mapbox token → fall back to free Esri imagery so the canvas
+        // is never blank.
+        setMapStyle((s) => (s === "satellite" || s === "streets" ? "fallback-satellite" : s));
+      });
     return () => { cancelled = true; };
   }, []);
 
   // Map init
   useEffect(() => {
-    if (!token || !containerRef.current || mapRef.current) return;
-    mapboxgl.accessToken = token;
+    if (!containerRef.current || mapRef.current) return;
+    const usingFallback = mapStyle === "fallback-satellite" || mapStyle === "fallback-streets";
+    // Wait for token only when using a Mapbox-hosted style.
+    if (!usingFallback && !token) return;
+    if (token) mapboxgl.accessToken = token;
     const FALLBACK_SAT_STYLE = {
       version: 8 as const,
       sources: {
