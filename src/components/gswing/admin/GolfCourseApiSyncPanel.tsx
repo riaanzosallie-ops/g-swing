@@ -156,7 +156,8 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
     }
   };
 
-  // Add course only — no hole metadata import.
+  // Add course only — no hole metadata import. After success the panel
+  // closes and the parent jumps straight to Hole 1 in Course Mapper.
   const addCourseOnly = async () => {
     if (!course) return;
     setAdding(true);
@@ -169,34 +170,73 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
       });
       setActiveCourseMapId(mapId);
       setExistingMapId(mapId);
-      // Preselect importable rows if available, for the optional metadata import step.
+      const name = course.club_name || course.course_name;
+      toast.success(`Added ${name} — opening Course Mapper`);
+      // Single-click handoff: parent receives the id and pivots the
+      // workspace onto the new course at Hole 1.
+      onCourseMapCreated?.(mapId, name);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Add failed");
+      setAdding(false);
+    }
+  };
+
+  // Add + immediately import all available hole metadata, then jump to
+  // the mapper. Skips the intermediate "linked" stage.
+  const addAndImport = async () => {
+    if (!course) return;
+    setAdding(true);
+    try {
+      const mapId = existingMapId ?? (await ensureCourseMap(course));
+      await linkCourseToProvider({
+        courseMapId: mapId,
+        provider: "GolfCourseAPI",
+        externalId: course.external_id,
+      });
+      setActiveCourseMapId(mapId);
+      setExistingMapId(mapId);
+      // Pre-select every available par / yardage row and import in one shot.
       const preselect = new Set<string>();
       for (const h of course.holes) {
         if (h.par !== null && h.par !== undefined) preselect.add(`${h.hole_number}:par`);
         if (h.yardage !== null && h.yardage !== undefined) preselect.add(`${h.hole_number}:yardage`);
       }
       setAccepted(preselect);
-      toast.success(`Added ${course.club_name}`);
-      setStage("linked");
+      // Import inline (doesn't depend on staged React state).
+      const acceptedRows = buildDiff(gswingHoles, course.holes).filter((d) =>
+        preselect.has(`${d.hole_number}:${d.field}`),
+      );
+      const byHole = new Map<number, Partial<{ par: number | null; length_yards: number | null }>>();
+      for (const row of acceptedRows) {
+        if (row.field === "handicap") continue;
+        const patch = byHole.get(row.hole_number) ?? {};
+        if (row.field === "par") patch.par = row.provider;
+        if (row.field === "yardage") patch.length_yards = row.provider;
+        byHole.set(row.hole_number, patch);
+      }
+      const rows = Array.from(byHole.entries()).map(([hole_number, patch]) => ({
+        course_map_id: mapId,
+        hole_number,
+        ...patch,
+      }));
+      if (rows.length > 0) {
+        await supabase
+          .from("gswing_mapped_holes")
+          .upsert(rows, { onConflict: "course_map_id,hole_number" });
+      }
+      const name = course.club_name || course.course_name;
+      toast.success(`Imported ${name} — opening Course Mapper`);
+      onCourseMapCreated?.(mapId, name);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Add failed");
-    } finally {
       setAdding(false);
     }
-  };
-
-  // Add + immediately import all available hole metadata.
-  const addAndImport = async () => {
-    await addCourseOnly();
-    // importSelected reads `accepted`, which was just pre-populated.
-    await importSelected();
   };
 
   const openExistingInMapper = () => {
     if (!existingMapId || !course) return;
     setActiveCourseMapId(existingMapId);
     onCourseMapCreated?.(existingMapId, course.club_name || course.course_name);
-    onClose();
   };
 
   const toggle = (key: string) => {
