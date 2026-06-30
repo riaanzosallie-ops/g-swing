@@ -928,6 +928,14 @@ export default function CourseMapper() {
 
       // Reload to get persisted IDs
       await loadHole(mapId, holeNumber);
+
+      // Integrated workflow: when launched from Live GPS, hop straight
+      // back to it with a refresh hint so the Premium renderer repaints
+      // this hole instantly — no manual re-selection, no app restart.
+      const returnTo = searchParams.get("returnTo");
+      if (returnTo === "gps") {
+        navigate(`/?view=gps&refreshMap=1&hole=${holeNumber}`, { replace: true });
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
