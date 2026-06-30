@@ -550,10 +550,11 @@ export default function CourseMapper() {
   useEffect(() => {
     if (deepLinkAppliedRef.current) return;
     const courseParam = searchParams.get("course");
+    const courseMapIdParam = searchParams.get("courseMapId");
     const holeParam = searchParams.get("hole");
     const latParam = searchParams.get("lat");
     const lngParam = searchParams.get("lng");
-    if (!courseParam && !holeParam && !latParam && !lngParam) return;
+    if (!courseParam && !courseMapIdParam && !holeParam && !latParam && !lngParam) return;
     const holeNum = holeParam ? Number(holeParam) : NaN;
     if (Number.isFinite(holeNum) && holeNum >= 1 && holeNum <= 18) {
       setHoleNumber(holeNum);
@@ -566,6 +567,13 @@ export default function CourseMapper() {
       setCenterLat(latNum);
       setCenterLng(lngNum);
       mapRef.current?.flyTo({ center: [lngNum, latNum], zoom: 17.5 });
+    }
+    if (courseMapIdParam) {
+      (async () => {
+        deepLinkAppliedRef.current = true;
+        await onSelectCourse(courseMapIdParam);
+      })();
+      return;
     }
     if (!courseParam) {
       deepLinkAppliedRef.current = true;
