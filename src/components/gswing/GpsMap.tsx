@@ -352,6 +352,16 @@ function MapboxCourseView({
   // Legacy alias kept for downstream conditionals — true whenever we're
   // not on the primary Mapbox provider.
   const useEsriFallback = activeSatProvider !== "mapbox";
+  // Provider badge visibility — fades after 2.5s. Re-triggered on
+  // every provider switch or Satellite re-entry via providerBadgeKey.
+  const [providerBadgeVisible, setProviderBadgeVisible] = useState(false);
+  useEffect(() => {
+    if (providerBadgeKey === 0) return;
+    if (mapView !== "satellite") return;
+    setProviderBadgeVisible(true);
+    const t = window.setTimeout(() => setProviderBadgeVisible(false), 2500);
+    return () => window.clearTimeout(t);
+  }, [providerBadgeKey, mapView]);
 
   // Premium Course Mapping Engine — mapped hole data sourced from
   // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
