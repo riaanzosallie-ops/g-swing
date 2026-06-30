@@ -349,6 +349,18 @@ function MapboxCourseView({
   const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
   const [satelliteError, setSatelliteError] = useState<string | null>(null);
   const [satelliteRetryTick, setSatelliteRetryTick] = useState(0);
+  // Tracks whether the user has explicitly chosen a view. If they have NOT
+  // and the current hole has no Premium mapping yet, we auto-switch to
+  // Satellite so the course is always visible and usable — never an empty
+  // screen behind a "premium mapping required" gate.
+  const userPickedViewRef = useRef(false);
+  const handleSetMapView = useCallback((view: "premium" | "satellite") => {
+    userPickedViewRef.current = true;
+    setMapView(view);
+  }, []);
+  // Non-blocking "Premium not mapped yet" banner — user can dismiss it
+  // per session/hole so it stops nagging once acknowledged.
+  const [premiumHintDismissed, setPremiumHintDismissed] = useState(false);
   // When the Mapbox satellite token returns 401/403 (domain restriction,
   // expired, or quota), we automatically swap the basemap to Esri World
   // Imagery raster tiles so the user always sees real satellite imagery.
