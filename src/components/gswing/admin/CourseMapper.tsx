@@ -136,6 +136,7 @@ function isPointTool(t: Tool): boolean {
 
 export default function CourseMapper() {
   const admin = useGswingAdmin();
+  const navigate = useNavigate();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
