@@ -289,6 +289,7 @@ function PremiumMappingRequired({
   isOwner,
   onOpenMapper,
   onMarkLayerNa,
+  onContinueSatellite,
 }: {
   selectedHoleNumber: number;
   missing: ReturnType<typeof missingPremiumLayers>;
@@ -296,6 +297,7 @@ function PremiumMappingRequired({
   isOwner: boolean;
   onOpenMapper?: () => void;
   onMarkLayerNa?: (layerKey: string) => void | Promise<void>;
+  onContinueSatellite?: () => void;
 }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
@@ -329,6 +331,15 @@ function PremiumMappingRequired({
           play this hole now, or open the Course Mapper to add the missing
           polygons (or mark them not applicable for this hole).
         </p>
+        {onContinueSatellite && (
+          <button
+            type="button"
+            onClick={onContinueSatellite}
+            className="mt-4 block w-full rounded-xl border border-gold/40 bg-black/55 px-3 py-2.5 font-hud text-[11px] font-semibold uppercase tracking-[0.22em] text-gold transition-all hover:bg-black/70 active:scale-[0.98]"
+          >
+            Continue with Satellite Only
+          </button>
+        )}
         {isOwner && (
           <div className="mt-4 rounded-xl border border-gold/40 bg-gradient-to-br from-emerald-950/60 via-black/50 to-emerald-950/60 p-3 text-left">
             <div className="mb-2 flex items-center justify-between">
