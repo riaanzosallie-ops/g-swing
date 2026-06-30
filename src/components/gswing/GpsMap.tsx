@@ -1303,7 +1303,7 @@ function MapboxCourseView({
               isOwner={membership.isOwner}
               onOpenMapper={openMapperForCurrentHole}
               onMarkLayerNa={markLayerNotApplicable}
-              onContinueSatellite={() => setMapView("satellite")}
+              onContinueSatellite={() => handleSetMapView("satellite")}
             />
           )}
         </div>
@@ -1318,7 +1318,7 @@ function MapboxCourseView({
           readout={effectiveReadout}
           unit={unit}
           mapView={mapView}
-          onSetMapView={setMapView}
+          onSetMapView={handleSetMapView}
           measureActive={measureActive}
           onToggleMeasure={toggleMeasure}
           showOverlays={showOverlays}
@@ -1365,7 +1365,7 @@ function MapboxCourseView({
             : undefined
         }
         mapView={mapView}
-        onSetMapView={setMapView}
+        onSetMapView={handleSetMapView}
         measureActive={measureActive}
         onToggleMeasure={toggleMeasure}
         showOverlays={showOverlays}
