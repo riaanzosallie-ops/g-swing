@@ -72,6 +72,7 @@ export function PremiumHoleRenderer({
   isOwner,
   onOpenMapper,
   onMarkLayerNa,
+  onContinueSatellite,
 }: PremiumHoleRendererProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
