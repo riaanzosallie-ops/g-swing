@@ -1505,9 +1505,22 @@ function MapboxCourseView({
               onClick={() => {
                 setSatelliteError(null);
                 setSatelliteRetryTick((t) => t + 1);
+                // Full chain retry — let Mapbox have another go.
+                failedSatProvidersRef.current.clear();
+                setActiveSatProvider("mapbox");
                 const map = mapRef.current;
                 if (map) {
                   try {
+                    const ctx = {
+                      mapboxToken:
+                        tokenState.status === "ready" ? tokenState.token : null,
+                    };
+                    const next = pickSatelliteProvider(ctx) ?? "esri";
+                    map.setStyle(
+                      SATELLITE_PROVIDERS[next].buildStyle(ctx) as never,
+                    );
+                    setActiveSatProvider(next);
+                    setProviderBadgeKey((k) => k + 1);
                     map.resize();
                     map.triggerRepaint();
                   } catch { /* ignore */ }
@@ -1524,6 +1537,27 @@ function MapboxCourseView({
             >
               Dismiss
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Satellite provider badge — small, non-intrusive, auto-fades.
+          Tells the user which imagery source is active without leaking
+          technical errors. Hidden in Premium mode. */}
+      {mapView === "satellite" && (
+        <div
+          className={`pointer-events-none absolute right-3 top-16 z-30 transition-opacity duration-500 ${
+            providerBadgeVisible ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 rounded-full border border-gold/30 bg-black/65 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-gold-soft shadow-elegant backdrop-blur-md">
+            <span aria-hidden>🛰️</span>
+            <span>{SATELLITE_PROVIDERS[activeSatProvider].label}</span>
+            {SATELLITE_PROVIDERS[activeSatProvider].badgeSuffix && (
+              <span className="text-white/55">
+                · {SATELLITE_PROVIDERS[activeSatProvider].badgeSuffix}
+              </span>
+            )}
           </div>
         </div>
       )}
