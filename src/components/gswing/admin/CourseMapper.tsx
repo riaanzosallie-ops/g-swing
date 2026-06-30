@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShieldAlert, Save, Trash2, MapPin, Flag, Crosshair, Pentagon, Layers, Check, X, Globe2 } from "lucide-react";
+import { ShieldAlert, Save, Trash2, MapPin, Flag, Crosshair, Pentagon, Layers, Check, X, Globe2, ChevronDown, ChevronUp, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { loadMapboxToken } from "@/components/gswing/GpsMap";
@@ -169,6 +169,10 @@ export default function CourseMapper() {
   const [osmOpen, setOsmOpen] = useState(false);
   // GolfCourseAPI sync (owner only, comparison + import).
   const [gcaOpen, setGcaOpen] = useState(false);
+  // Mobile UI — collapsible tool dock + inspector. Defaults closed on
+  // narrow viewports so the map stays usable; auto-open on >=md.
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
 
   // Token
   useEffect(() => {
