@@ -697,6 +697,52 @@ function MapboxCourseView({
     setMeasureGeo(map, playerPosition, measurePoint);
   }, [playerPosition?.lat, playerPosition?.lng, measurePoint?.lat, measurePoint?.lng]);
 
+  // Floating distance badge anchored at the midpoint of the measure line.
+  // Persists across re-renders by stashing the Marker on a ref so we don't
+  // leak DOM nodes when the player moves and the midpoint shifts.
+  const measureLabelRef = useRef<mapboxgl.Marker | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoadedRef.current) return;
+    if (!measurePoint || !playerPosition) {
+      measureLabelRef.current?.remove();
+      measureLabelRef.current = null;
+      return;
+    }
+    const midLng = (playerPosition.lng + measurePoint.lng) / 2;
+    const midLat = (playerPosition.lat + measurePoint.lat) / 2;
+    const yards = haversineYards(playerPosition, measurePoint);
+    const value = Math.round(toDisplayUnit(yards, displayUnit === "m" ? "m" : "y"));
+    const label = `${value} ${displayUnit === "m" ? "m" : "yd"}`;
+    if (!measureLabelRef.current) {
+      const el = document.createElement("div");
+      el.className =
+        "px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide " +
+        "bg-black/80 text-[#F5C84B] border border-[#F5C84B]/60 shadow-lg backdrop-blur " +
+        "pointer-events-none whitespace-nowrap";
+      el.textContent = label;
+      measureLabelRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
+        .setLngLat([midLng, midLat])
+        .addTo(map);
+    } else {
+      measureLabelRef.current.setLngLat([midLng, midLat]);
+      const el = measureLabelRef.current.getElement();
+      if (el) el.textContent = label;
+    }
+  }, [
+    playerPosition?.lat,
+    playerPosition?.lng,
+    measurePoint?.lat,
+    measurePoint?.lng,
+    displayUnit,
+  ]);
+  useEffect(() => {
+    return () => {
+      measureLabelRef.current?.remove();
+      measureLabelRef.current = null;
+    };
+  }, []);
+
   // Visibility toggles.
   useEffect(() => {
     const map = mapRef.current;
