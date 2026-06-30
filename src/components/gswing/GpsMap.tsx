@@ -1153,6 +1153,7 @@ function MapboxCourseView({
               isOwner={membership.isOwner}
               onOpenMapper={openMapperForCurrentHole}
               onMarkLayerNa={markLayerNotApplicable}
+              onContinueSatellite={() => setMapView("satellite")}
             />
           )}
         </div>
