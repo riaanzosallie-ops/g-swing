@@ -1757,6 +1757,13 @@ function MoreItem({
  * - In `satellite` mode, restores label visibility and full brightness.
  */
 function applyPremiumMapStyle(map: mapboxgl.Map, mode: "premium" | "satellite"): void {
+  // Skip when the active style is our Esri raster fallback — it has no
+  // mapbox symbol layers to scrub and any setPaintProperty on the raster
+  // would just no-op.
+  try {
+    const s = map.getStyle() as { name?: string } | null;
+    if (s?.name === "G-Swing Esri Satellite") return;
+  } catch { /* ignore */ }
   try {
     const style = map.getStyle();
     const layers = style?.layers ?? [];
