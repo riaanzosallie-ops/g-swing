@@ -28,6 +28,9 @@ interface Props {
   onClose: () => void;
   courseMapId: string | null;
   courseName: string;
+  centerLat?: number;
+  centerLng?: number;
+  onCourseMapCreated?: (courseMapId: string, courseName: string) => void;
 }
 
 const statusColor: Record<SyncDiffRow["status"], string> = {
@@ -38,7 +41,7 @@ const statusColor: Record<SyncDiffRow["status"], string> = {
   "missing-provider": "text-foreground/40",
 };
 
-export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseName }: Props) {
+export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseName, centerLat, centerLng, onCourseMapCreated }: Props) {
   const [query, setQuery] = useState(courseName || "");
   const [hits, setHits] = useState<NormalisedSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -46,18 +49,22 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
   const [course, setCourse] = useState<NormalisedCourse | null>(null);
   const [gswingHoles, setGswingHoles] = useState<GswingHoleSnapshot[]>([]);
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
+  const [activeCourseMapId, setActiveCourseMapId] = useState<string | null>(courseMapId);
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => { setActiveCourseMapId(courseMapId); }, [courseMapId]);
 
   useEffect(() => { if (isOpen) setQuery(courseName || ""); }, [isOpen, courseName]);
 
   // Pull current G-Swing hole snapshot for diffing.
   useEffect(() => {
-    if (!isOpen || !courseMapId) { setGswingHoles([]); return; }
+    if (!isOpen || !activeCourseMapId) { setGswingHoles([]); return; }
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from("gswing_mapped_holes")
         .select("hole_number, par, length_yards")
-        .eq("course_map_id", courseMapId)
+        .eq("course_map_id", activeCourseMapId)
         .order("hole_number");
       if (cancelled) return;
       setGswingHoles((data ?? []).map((r) => ({
@@ -68,7 +75,7 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
       })));
     })();
     return () => { cancelled = true; };
-  }, [isOpen, courseMapId]);
+  }, [isOpen, activeCourseMapId]);
 
   const diff = useMemo<SyncDiffRow[]>(
     () => (course ? buildDiff(gswingHoles, course.holes) : []),
@@ -92,21 +99,52 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
     }
   };
 
+  const ensureCourseMap = async (c: NormalisedCourse): Promise<string> => {
+    if (activeCourseMapId) return activeCourseMapId;
+    const lat = c.latitude ?? centerLat ?? 25.2048;
+    const lng = c.longitude ?? centerLng ?? 55.2708;
+    const name = (c.club_name || c.course_name || courseName || "Untitled course").trim();
+    const { data, error } = await supabase
+      .from("gswing_course_maps")
+      .insert({
+        course_name: name,
+        location_label: [c.city, c.country].filter(Boolean).join(", ") || null,
+        latitude: lat,
+        longitude: lng,
+        external_provider: "GolfCourseAPI",
+        external_course_id: c.external_id,
+      })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error(error?.message || "Failed to create G-Swing course");
+    setActiveCourseMapId(data.id);
+    onCourseMapCreated?.(data.id, name);
+    return data.id;
+  };
+
   const loadAndLink = async (hit: NormalisedSearchHit) => {
-    if (!courseMapId) {
-      toast.error("Select or save a G-Swing course first");
-      return;
-    }
     setLoadingId(hit.external_id);
     try {
       const c = await getCourse(hit.external_id);
       setCourse(c);
+      const mapId = await ensureCourseMap(c);
       await linkCourseToProvider({
-        courseMapId,
+        courseMapId: mapId,
         provider: "GolfCourseAPI",
         externalId: hit.external_id,
       });
-      toast.success(`Linked to ${c.club_name}`);
+      // Pre-select every importable row so the user can hit Import immediately.
+      const preselect = new Set<string>();
+      for (const h of c.holes) {
+        if (h.par !== null && h.par !== undefined) preselect.add(`${h.hole_number}:par`);
+        if (h.yardage !== null && h.yardage !== undefined) preselect.add(`${h.hole_number}:yardage`);
+      }
+      setAccepted(preselect);
+      if (c.holes.length === 0) {
+        toast.success(`Linked ${c.club_name} — provider has no hole metadata; map manually.`);
+      } else {
+        toast.success(`Linked ${c.club_name} — ${c.holes.length} holes ready to import`);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Load failed");
     } finally {
@@ -123,9 +161,12 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
   };
 
   const importSelected = async () => {
-    if (!course || !courseMapId) return;
+    if (!course) return;
+    const mapId = activeCourseMapId ?? (await ensureCourseMap(course).catch(() => null));
+    if (!mapId) { toast.error("No G-Swing course to import into"); return; }
     const acceptedRows = diff.filter((d) => accepted.has(`${d.hole_number}:${d.field}`));
     if (acceptedRows.length === 0) { toast.info("Nothing selected"); return; }
+    setImporting(true);
     // Apply per-hole, only par & length_yards (handicap not stored on mapped holes).
     const byHole = new Map<number, Partial<{ par: number | null; length_yards: number | null }>>();
     for (const row of acceptedRows) {
@@ -136,31 +177,34 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
       byHole.set(row.hole_number, patch);
     }
     try {
-      for (const [hole_number, patch] of byHole.entries()) {
-        // Upsert: only update existing rows; never create geometry-free placeholders
-        // because mapping geometry is the source of truth for distances.
-        const { data: existing } = await supabase
+      // Upsert so missing holes are created with metadata (geometry can be
+      // mapped later — the row needs to exist to attach distances to).
+      const rows = Array.from(byHole.entries()).map(([hole_number, patch]) => ({
+        course_map_id: mapId,
+        hole_number,
+        ...patch,
+      }));
+      if (rows.length > 0) {
+        const { error: upErr } = await supabase
           .from("gswing_mapped_holes")
-          .select("id")
-          .eq("course_map_id", courseMapId)
-          .eq("hole_number", hole_number)
-          .maybeSingle();
-        if (existing) {
-          await supabase.from("gswing_mapped_holes").update(patch).eq("id", existing.id);
-        }
+          .upsert(rows, { onConflict: "course_map_id,hole_number" });
+        if (upErr) throw upErr;
       }
       await recordSyncHistory({
-        courseMapId,
+        courseMapId: mapId,
         provider: "GolfCourseAPI",
         externalId: course.external_id,
         changes: diff,
         accepted: acceptedRows,
         rejected: diff.filter((d) => !accepted.has(`${d.hole_number}:${d.field}`)),
       });
-      toast.success(`Imported ${acceptedRows.length} field(s)`);
+      toast.success(`Imported ${byHole.size} hole(s) successfully`);
       setAccepted(new Set());
+      onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -214,7 +258,7 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
           )}
 
           {/* Diff */}
-          {course && (
+          {course && course.holes.length > 0 && (
             <div className="mt-5">
               <div className="mb-2 flex items-center justify-between">
                 <Label className="text-[11px] uppercase tracking-wider text-gold/80">G-Swing vs GolfCourseAPI</Label>
@@ -267,6 +311,23 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
             </div>
           )}
 
+          {course && course.holes.length === 0 && (
+            <div className="mt-6 rounded-md border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-amber-100">
+              <div className="mb-1 flex items-center gap-2 font-semibold text-amber-300">
+                <AlertTriangle className="h-4 w-4" /> No hole metadata available
+              </div>
+              <p className="text-amber-100/80">
+                This provider does not supply hole metadata for this course. The G-Swing course has been
+                created — you can map it manually in the Course Mapper.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" onClick={onClose} className="bg-gold text-black hover:bg-gold/85">
+                  Continue to mapping
+                </Button>
+              </div>
+            </div>
+          )}
+
           {!course && hits.length === 0 && (
             <div className="mt-8 flex flex-col items-center gap-2 text-center text-xs text-foreground/60">
               <AlertTriangle className="h-5 w-5 text-gold/70" />
@@ -276,13 +337,13 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
           )}
         </div>
 
-        {course && (
+        {course && course.holes.length > 0 && (
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-gold/20 bg-black/85 px-4 py-3 backdrop-blur">
             <div className="text-[10px] text-foreground/60">
               {accepted.size} change(s) staged · Nothing was modified automatically.
             </div>
-            <Button onClick={importSelected} disabled={accepted.size === 0} size="sm" className="gap-1 bg-gold text-black hover:bg-gold/85">
-              <CloudDownload className="h-3.5 w-3.5" /> Import selected
+            <Button onClick={importSelected} disabled={accepted.size === 0 || importing} size="sm" className="gap-1 bg-gold text-black hover:bg-gold/85">
+              <CloudDownload className="h-3.5 w-3.5" /> {importing ? "Importing…" : "Import selected"}
             </Button>
           </div>
         )}
