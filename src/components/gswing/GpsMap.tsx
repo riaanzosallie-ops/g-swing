@@ -973,6 +973,52 @@ function MapboxCourseView({
   const membership = useGswingMembership();
   const unitShort: "y" | "m" = unit === "meters" ? "m" : "y";
 
+  // Owner-only enhancement: jump straight into the Course Mapper for the
+  // currently-selected course + hole, or mark a missing premium visual
+  // layer as "not applicable" for this hole. Strictly gated behind
+  // membership.isOwner — non-owner users never see these affordances.
+  const navigateToCourseMapper = useNavigate();
+  const openMapperForCurrentHole = useCallback(() => {
+    if (!membership.isOwner) return;
+    const params = new URLSearchParams();
+    if (selectedCourse?.name) params.set("course", selectedCourse.name);
+    params.set("hole", String(hole));
+    navigateToCourseMapper(`/gswing/course-mapper?${params.toString()}`);
+  }, [membership.isOwner, selectedCourse?.name, hole, navigateToCourseMapper]);
+
+  const markLayerNotApplicable = useCallback(
+    async (layerKey: string) => {
+      if (!membership.isOwner) return;
+      if (!mappedHole?.id) {
+        toast.error("Open the Course Mapper to seed this hole first.");
+        return;
+      }
+      try {
+        if ((mappedHole.naLayers ?? []).includes(layerKey)) {
+          toast.info(`"${layerKey}" already marked not applicable.`);
+          return;
+        }
+        // NA layers are stored as `na_marker` feature rows where the
+        // `name` column holds the premium layer key (see course-map-loader).
+        const { error } = await supabase
+          .from("gswing_hole_features")
+          .insert({
+            mapped_hole_id: mappedHole.id,
+            feature_type: "na_marker",
+            name: layerKey,
+            notes: "Marked NA from GPS gate by owner",
+          });
+        if (error) throw error;
+        toast.success(`Marked "${layerKey}" not applicable.`);
+        setMappingRefreshTick((t) => t + 1);
+      } catch (err) {
+        console.error("[gswing.owner.markNa]", err);
+        toast.error("Could not save. Try again.");
+      }
+    },
+    [membership.isOwner, mappedHole?.id, mappedHole?.naLayers],
+  );
+
   const onRefreshMapping = useCallback(() => {
     setMappingRefreshTick((t) => t + 1);
     toast.info("Refreshing course mapping…");
@@ -1059,6 +1105,9 @@ function MapboxCourseView({
               measurementTarget={measurePoint}
               onMapTap={(latlng) => setMeasurePoint(latlng)}
               onClearMeasurement={() => setMeasurePoint(null)}
+              isOwner={membership.isOwner}
+              onOpenMapper={openMapperForCurrentHole}
+              onMarkLayerNa={markLayerNotApplicable}
             />
           )}
         </div>
