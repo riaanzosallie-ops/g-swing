@@ -4,7 +4,7 @@
 // Writes go directly through Supabase — RLS enforces the same gate server-side.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Card } from "@/components/ui/card";
@@ -136,6 +136,7 @@ function isPointTool(t: Tool): boolean {
 
 export default function CourseMapper() {
   const admin = useGswingAdmin();
+  const navigate = useNavigate();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -543,10 +544,21 @@ export default function CourseMapper() {
     if (deepLinkAppliedRef.current) return;
     const courseParam = searchParams.get("course");
     const holeParam = searchParams.get("hole");
-    if (!courseParam && !holeParam) return;
+    const latParam = searchParams.get("lat");
+    const lngParam = searchParams.get("lng");
+    if (!courseParam && !holeParam && !latParam && !lngParam) return;
     const holeNum = holeParam ? Number(holeParam) : NaN;
     if (Number.isFinite(holeNum) && holeNum >= 1 && holeNum <= 18) {
       setHoleNumber(holeNum);
+    }
+    // Center map on the player's real position so the owner does not
+    // have to pan across the world before placing the tee.
+    const latNum = latParam ? Number(latParam) : NaN;
+    const lngNum = lngParam ? Number(lngParam) : NaN;
+    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      setCenterLat(latNum);
+      setCenterLng(lngNum);
+      mapRef.current?.flyTo({ center: [lngNum, latNum], zoom: 17.5 });
     }
     if (!courseParam) {
       deepLinkAppliedRef.current = true;
@@ -916,6 +928,14 @@ export default function CourseMapper() {
 
       // Reload to get persisted IDs
       await loadHole(mapId, holeNumber);
+
+      // Integrated workflow: when launched from Live GPS, hop straight
+      // back to it with a refresh hint so the Premium renderer repaints
+      // this hole instantly — no manual re-selection, no app restart.
+      const returnTo = searchParams.get("returnTo");
+      if (returnTo === "gps") {
+        navigate(`/?view=gps&refreshMap=1&hole=${holeNumber}`, { replace: true });
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {

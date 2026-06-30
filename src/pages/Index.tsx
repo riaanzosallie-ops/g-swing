@@ -88,6 +88,26 @@ const Index = () => {
     return () => window.removeEventListener("gswing-nav", handler as EventListener);
   }, []);
 
+  // Deep link: /?view=<id> jumps straight to that section (used by the
+  // Course Mapper return path so a saved hole hops straight back to
+  // Live GPS). Leaves `refreshMap` and `hole` params on the URL for
+  // GpsMap to consume, but strips `view` once applied.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const target = url.searchParams.get("view");
+    if (!target) return;
+    if (hasSession === false) return; // wait until session decision
+    setStage("app");
+    setView(target);
+    url.searchParams.delete("view");
+    window.history.replaceState(
+      {},
+      "",
+      url.pathname + (url.search || "") + url.hash,
+    );
+  }, [hasSession]);
+
   function handleEnter() {
     if (hasSession) setStage("app");
     else setStage("auth");
