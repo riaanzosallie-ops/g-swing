@@ -1312,6 +1312,41 @@ function MapboxCourseView({
           playerPosition={playerPosition}
         />
       )}
+
+      {mapView === "satellite" && satelliteError && (
+        <div className="pointer-events-none absolute inset-x-0 top-16 z-30 flex justify-center px-4">
+          <div
+            role="alert"
+            className="pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border border-gold/40 bg-black/80 px-3 py-2 text-[11px] text-white/90 shadow-elegant backdrop-blur"
+          >
+            <span className="flex-1 leading-snug">{satelliteError}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setSatelliteError(null);
+                setSatelliteRetryTick((t) => t + 1);
+                const map = mapRef.current;
+                if (map) {
+                  try {
+                    map.resize();
+                    map.triggerRepaint();
+                  } catch { /* ignore */ }
+                }
+              }}
+              className="rounded-md border border-gold/50 px-2 py-1 text-[10px] font-medium uppercase tracking-widest text-gold hover:bg-gold/10"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => setSatelliteError(null)}
+              className="rounded-md px-2 py-1 text-[10px] uppercase tracking-widest text-white/60 hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
