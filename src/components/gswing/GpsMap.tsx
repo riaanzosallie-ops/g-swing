@@ -331,10 +331,27 @@ function MapboxCourseView({
   // Non-blocking "Premium not mapped yet" banner — user can dismiss it
   // per session/hole so it stops nagging once acknowledged.
   const [premiumHintDismissed, setPremiumHintDismissed] = useState(false);
-  // When the Mapbox satellite token returns 401/403 (domain restriction,
-  // expired, or quota), we automatically swap the basemap to Esri World
-  // Imagery raster tiles so the user always sees real satellite imagery.
-  const [useEsriFallback, setUseEsriFallback] = useState(false);
+  // ---------------------------------------------------------------
+  // Satellite provider chain (Mapbox → Esri → …). The active provider
+  // is an implementation detail: the user just picks "Satellite" and
+  // we deliver imagery from whichever provider is healthy right now.
+  // See src/lib/satellite-providers.ts to register additional sources.
+  // ---------------------------------------------------------------
+  const [activeSatProvider, setActiveSatProvider] =
+    useState<SatelliteProviderId>("mapbox");
+  // Providers we've tried and seen fail during the current Satellite
+  // session. Reset whenever the user re-enters Satellite (silent
+  // recovery — if Mapbox starts working again we use it).
+  const failedSatProvidersRef = useRef<Set<SatelliteProviderId>>(new Set());
+  const [providerBadgeKey, setProviderBadgeKey] = useState(0);
+  const [satDiag, setSatDiag] = useState<{
+    lastTileError: string | null;
+    retryCount: number;
+    lastErrorAt: number | null;
+  }>({ lastTileError: null, retryCount: 0, lastErrorAt: null });
+  // Legacy alias kept for downstream conditionals — true whenever we're
+  // not on the primary Mapbox provider.
+  const useEsriFallback = activeSatProvider !== "mapbox";
 
   // Premium Course Mapping Engine — mapped hole data sourced from
   // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
