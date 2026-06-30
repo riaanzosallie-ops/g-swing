@@ -277,10 +277,16 @@ function PremiumMappingRequired({
   selectedHoleNumber,
   missing,
   progress,
+  isOwner,
+  onOpenMapper,
+  onMarkLayerNa,
 }: {
   selectedHoleNumber: number;
   missing: ReturnType<typeof missingPremiumLayers>;
   progress: { done: number; total: number };
+  isOwner: boolean;
+  onOpenMapper?: () => void;
+  onMarkLayerNa?: (layerKey: string) => void | Promise<void>;
 }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
@@ -314,6 +320,55 @@ function PremiumMappingRequired({
           play this hole now, or open the Course Mapper to add the missing
           polygons (or mark them not applicable for this hole).
         </p>
+        {isOwner && (
+          <div className="mt-4 rounded-xl border border-gold/40 bg-gradient-to-br from-emerald-950/60 via-black/50 to-emerald-950/60 p-3 text-left">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="rounded-full border border-gold/40 bg-black/50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.22em] text-gold">
+                Owner tools
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-gold-soft/80">
+                Unlimited
+              </span>
+            </div>
+            <p className="mb-3 text-[11px] leading-snug text-white/70">
+              Complete missing visual layers to enable Premium view for this hole.
+            </p>
+            <button
+              type="button"
+              onClick={() => onOpenMapper?.()}
+              disabled={!onOpenMapper}
+              className="block w-full rounded-xl bg-gold px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-black shadow-[0_0_18px_rgba(245,200,75,0.35)] transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              Open Course Mapper
+            </button>
+            {missing.length > 0 && onMarkLayerNa && (
+              <div className="mt-2">
+                <label className="text-[9px] uppercase tracking-[0.22em] text-gold-soft/80">
+                  Mark layer not applicable
+                </label>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    void onMarkLayerNa(v);
+                    e.currentTarget.value = "";
+                  }}
+                  className="mt-1 w-full rounded-lg border border-gold/30 bg-black/60 px-2 py-2 text-[11px] text-white/90 focus:border-gold focus:outline-none"
+                >
+                  <option value="" disabled>
+                    Choose a layer…
+                  </option>
+                  {missing.map((m) => (
+                    <option key={m.key} value={m.key}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
