@@ -111,6 +111,8 @@ import {
 } from "@/lib/mapbox-mapped-layers";
 import {
   findNearestCourseMap,
+  loadCourseMapById,
+  loadCourseMaps,
   loadMappedHole,
 } from "@/lib/gswing-course-map-loader";
 import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
@@ -434,6 +436,20 @@ function MapboxCourseView({
 
   const tee: LatLng | null = teeFromGps;
   const pin: LatLng | null = pinFromGps;
+  const measureOrigin: LatLng | null =
+    playerPosition ?? tee ?? { lat: selectedCourse.lat, lng: selectedCourse.lng };
+  const playerPositionRef = useRef<LatLng | null>(playerPosition);
+  const measureOriginRef = useRef<LatLng | null>(measureOrigin);
+  const measurePointRef = useRef<LatLng | null>(measurePoint);
+  useEffect(() => {
+    playerPositionRef.current = playerPosition;
+  }, [playerPosition?.lat, playerPosition?.lng]);
+  useEffect(() => {
+    measureOriginRef.current = measureOrigin;
+  }, [measureOrigin?.lat, measureOrigin?.lng]);
+  useEffect(() => {
+    measurePointRef.current = measurePoint;
+  }, [measurePoint?.lat, measurePoint?.lng]);
   const focus: LatLng =
     playerPosition ??
     tee ??
@@ -552,6 +568,7 @@ function MapboxCourseView({
       setLayerGroupVisibility(map, "hazards", showHazards);
       setLayerGroupVisibility(map, "labels", showLabels);
       ensureMeasureLayers(map);
+      setMeasureGeo(map, measureOriginRef.current, measurePointRef.current);
       ensureMappedLayers(map);
       if (mappedHole) setMappedHoleData(map, mappedHole);
     };
@@ -632,12 +649,28 @@ function MapboxCourseView({
     setMappingStatus("loading");
     (async () => {
       try {
-        // Prefer the nearest mapped course to the player's real GPS
-        // location; fall back to the selected course centre so the
-        // mapper still works pre-fix.
-        const anchor =
-          playerPosition ?? { lat: selectedCourse.lat, lng: selectedCourse.lng };
-        const courseMap = await findNearestCourseMap(anchor);
+        // Selected course is the single source of truth. First try to
+        // load gswing_course_maps by the selected id directly (newly
+        // added provider courses use course_map_id as their GPS id).
+        // Only if that does not exist do a tight name/proximity match
+        // around the selected course centre. Never use the player's GPS
+        // to silently switch Premium back to Sharjah/another course.
+        const selectedCenter = { lat: selectedCourse.lat, lng: selectedCourse.lng };
+        const direct = await loadCourseMapById(selectedCourse.id);
+        let courseMap = direct;
+        if (!courseMap) {
+          const maps = await loadCourseMaps();
+          const name = selectedCourse.name.toLowerCase();
+          const byName = maps.find((m) => {
+            const n = m.courseName.toLowerCase();
+            return n === name || n.includes(name) || name.includes(n);
+          });
+          const byDistance = maps
+            .map((m) => ({ map: m, yards: haversineYards(selectedCenter, m.center) }))
+            .filter((m) => m.yards <= 550)
+            .sort((a, b) => a.yards - b.yards)[0]?.map ?? null;
+          courseMap = byName ?? byDistance ?? null;
+        }
         if (cancelled) return;
         if (!courseMap) {
           setMappedCourseId(null);
@@ -648,7 +681,9 @@ function MapboxCourseView({
             // eslint-disable-next-line no-console
             console.info("[gswing.gps] mapping: no course found near anchor", {
               hole,
-              anchor,
+              selectedCourseId: selectedCourse.id,
+              selectedCourseName: selectedCourse.name,
+              selectedCenter,
             });
           }
           return;
@@ -684,11 +719,10 @@ function MapboxCourseView({
     };
   }, [
     selectedCourse.id,
+    selectedCourse.name,
     selectedCourse.lat,
     selectedCourse.lng,
     hole,
-    // Only the *presence* of a fix should retrigger, not every metre.
-    playerPosition != null,
     mappingRefreshTick,
   ]);
 
@@ -790,12 +824,16 @@ function MapboxCourseView({
     const onClick = (e: mapboxgl.MapMouseEvent) => {
       // Ensure measure layers survive a recent style swap, then drop point.
       try { ensureMeasureLayers(map); } catch { /* ignore */ }
-      setMeasurePoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+      const next = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+      setMeasurePoint(next);
+      setMeasureGeo(map, measureOriginRef.current, next);
     };
     const onTouchEnd = (e: mapboxgl.MapTouchEvent) => {
       if (!e.lngLat) return;
       try { ensureMeasureLayers(map); } catch { /* ignore */ }
-      setMeasurePoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+      const next = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+      setMeasurePoint(next);
+      setMeasureGeo(map, measureOriginRef.current, next);
     };
     map.getCanvas().style.cursor = "crosshair";
     map.on("click", onClick);
@@ -818,8 +856,8 @@ function MapboxCourseView({
     const map = mapRef.current;
     if (!map || !styleLoadedRef.current) return;
     ensureMeasureLayers(map);
-    setMeasureGeo(map, playerPosition, measurePoint);
-  }, [playerPosition?.lat, playerPosition?.lng, measurePoint?.lat, measurePoint?.lng]);
+    setMeasureGeo(map, measureOrigin, measurePoint);
+  }, [measureOrigin?.lat, measureOrigin?.lng, measurePoint?.lat, measurePoint?.lng, mapView, satelliteRetryTick]);
 
   // Floating distance badge anchored at the midpoint of the measure line.
   // Persists across re-renders by stashing the Marker on a ref so we don't
@@ -828,14 +866,14 @@ function MapboxCourseView({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleLoadedRef.current) return;
-    if (!measurePoint || !playerPosition) {
+    if (!measurePoint || !measureOrigin) {
       measureLabelRef.current?.remove();
       measureLabelRef.current = null;
       return;
     }
-    const midLng = (playerPosition.lng + measurePoint.lng) / 2;
-    const midLat = (playerPosition.lat + measurePoint.lat) / 2;
-    const yards = haversineYards(playerPosition, measurePoint);
+    const midLng = (measureOrigin.lng + measurePoint.lng) / 2;
+    const midLat = (measureOrigin.lat + measurePoint.lat) / 2;
+    const yards = haversineYards(measureOrigin, measurePoint);
     const value = Math.round(toDisplayUnit(yards, displayUnit === "m" ? "meters" : "yards"));
     const label = `${value} ${displayUnit === "m" ? "m" : "yd"}`;
     if (!measureLabelRef.current) {
@@ -854,8 +892,8 @@ function MapboxCourseView({
       if (el) el.textContent = label;
     }
   }, [
-    playerPosition?.lat,
-    playerPosition?.lng,
+    measureOrigin?.lat,
+    measureOrigin?.lng,
     measurePoint?.lat,
     measurePoint?.lng,
     displayUnit,
