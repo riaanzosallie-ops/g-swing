@@ -641,9 +641,8 @@ export default function CourseMapper() {
       toast.error("Sharjah course not seeded yet.");
       return;
     }
-    setHoleNumber(1);
-    await onSelectCourse(data.id);
-  }, []);
+    await onSelectCourse(data.id, 1);
+  }, [onSelectCourse]);
 
   // Honest per-hole completeness checklist. Reads the current draft
   // features — does not invent missing data.
