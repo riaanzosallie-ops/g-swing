@@ -49,6 +49,13 @@ export interface PremiumHoleRendererProps {
   isOwner?: boolean;
   onOpenMapper?: () => void;
   onMarkLayerNa?: (layerKey: string) => void | Promise<void>;
+  /**
+   * Optional: when provided, the Premium Mapping Required gate shows a
+   * "Continue with Satellite Only" button that toggles the parent's
+   * map view. Wired by GpsMap so every user (not just owners) can fall
+   * back to the satellite renderer with one tap.
+   */
+  onContinueSatellite?: () => void;
 }
 
 const PADDING = 44;
