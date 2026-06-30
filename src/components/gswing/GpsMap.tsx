@@ -712,7 +712,7 @@ function MapboxCourseView({
     const midLng = (playerPosition.lng + measurePoint.lng) / 2;
     const midLat = (playerPosition.lat + measurePoint.lat) / 2;
     const yards = haversineYards(playerPosition, measurePoint);
-    const value = Math.round(toDisplayUnit(yards, displayUnit === "m" ? "m" : "y"));
+    const value = Math.round(toDisplayUnit(yards, displayUnit === "m" ? "meters" : "yards"));
     const label = `${value} ${displayUnit === "m" ? "m" : "yd"}`;
     if (!measureLabelRef.current) {
       const el = document.createElement("div");
