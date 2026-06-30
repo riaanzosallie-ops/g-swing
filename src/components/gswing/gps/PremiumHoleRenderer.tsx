@@ -41,6 +41,14 @@ export interface PremiumHoleRendererProps {
   measurementTarget: LatLng | null;
   onMapTap: (latlng: LatLng) => void;
   onClearMeasurement?: () => void;
+  /**
+   * Owner-only enhancement: when true, the Premium Mapping Required gate
+   * surfaces "Open Course Mapper" + "Mark layer not applicable" actions.
+   * Hidden completely for non-owner users.
+   */
+  isOwner?: boolean;
+  onOpenMapper?: () => void;
+  onMarkLayerNa?: (layerKey: string) => void | Promise<void>;
 }
 
 const PADDING = 44;
@@ -54,6 +62,9 @@ export function PremiumHoleRenderer({
   isMeasuring,
   measurementTarget,
   onMapTap,
+  isOwner,
+  onOpenMapper,
+  onMarkLayerNa,
 }: PremiumHoleRendererProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -202,6 +213,9 @@ export function PremiumHoleRenderer({
           selectedHoleNumber={selectedHoleNumber}
           missing={missing}
           progress={progress}
+          isOwner={!!isOwner}
+          onOpenMapper={onOpenMapper}
+          onMarkLayerNa={onMarkLayerNa}
         />
       ) : (
         <svg
