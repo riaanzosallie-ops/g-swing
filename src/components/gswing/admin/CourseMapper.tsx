@@ -544,10 +544,21 @@ export default function CourseMapper() {
     if (deepLinkAppliedRef.current) return;
     const courseParam = searchParams.get("course");
     const holeParam = searchParams.get("hole");
-    if (!courseParam && !holeParam) return;
+    const latParam = searchParams.get("lat");
+    const lngParam = searchParams.get("lng");
+    if (!courseParam && !holeParam && !latParam && !lngParam) return;
     const holeNum = holeParam ? Number(holeParam) : NaN;
     if (Number.isFinite(holeNum) && holeNum >= 1 && holeNum <= 18) {
       setHoleNumber(holeNum);
+    }
+    // Center map on the player's real position so the owner does not
+    // have to pan across the world before placing the tee.
+    const latNum = latParam ? Number(latParam) : NaN;
+    const lngNum = lngParam ? Number(lngParam) : NaN;
+    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      setCenterLat(latNum);
+      setCenterLng(lngNum);
+      mapRef.current?.flyTo({ center: [lngNum, latNum], zoom: 17.5 });
     }
     if (!courseParam) {
       deepLinkAppliedRef.current = true;
