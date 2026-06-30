@@ -1473,6 +1473,23 @@ function MapboxCourseView({
                       )
                     : null,
                 measurementSource: measurePoint ? "satellite-mapbox" : null,
+                satellite: {
+                  activeProvider: activeSatProvider,
+                  providerLabel:
+                    SATELLITE_PROVIDERS[activeSatProvider].label,
+                  sampleTileUrl: SATELLITE_PROVIDERS[
+                    activeSatProvider
+                  ].sampleTileUrl({
+                    mapboxToken:
+                      tokenState.status === "ready" ? tokenState.token : null,
+                  }),
+                  mapboxTokenStatus: tokenState.status,
+                  fallbackActive: useEsriFallback,
+                  lastTileError: satDiag.lastTileError,
+                  retryCount: satDiag.retryCount,
+                  attribution:
+                    SATELLITE_PROVIDERS[activeSatProvider].attribution,
+                },
               }
             : undefined
         }
