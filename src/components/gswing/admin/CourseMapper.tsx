@@ -1049,14 +1049,40 @@ export default function CourseMapper() {
           </div>
         )}
 
-        {/* Left tool dock */}
-        <div className="absolute left-2 top-2 flex max-h-[80%] flex-col gap-1 overflow-y-auto rounded-xl border border-gold/30 bg-black/70 p-1 backdrop-blur-md">
+        {/* Mobile toggles — open Tools / Inspector as bottom sheets on small screens */}
+        <div className="absolute left-2 top-2 z-20 flex gap-1 md:hidden">
+          <button
+            type="button"
+            onClick={() => { setMobileToolsOpen((v) => !v); setMobileInspectorOpen(false); }}
+            className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-black/75 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur"
+          >
+            <Wrench className="h-3 w-3" /> Tools
+          </button>
+        </div>
+        <div className="absolute right-2 top-2 z-20 flex gap-1 md:hidden">
+          <button
+            type="button"
+            onClick={() => { setMobileInspectorOpen((v) => !v); setMobileToolsOpen(false); }}
+            className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-black/75 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur"
+          >
+            <Layers className="h-3 w-3" /> Hole {holeNumber}
+            {mobileInspectorOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+          </button>
+        </div>
+
+        {/* Left tool dock — desktop fixed dock, mobile slide-down sheet */}
+        <div
+          className={`absolute left-2 z-10 flex flex-col gap-1 overflow-y-auto rounded-xl border border-gold/30 bg-black/80 p-1 backdrop-blur-md transition-all
+            md:top-2 md:max-h-[80%] md:w-auto md:flex
+            ${mobileToolsOpen ? "top-14 max-h-[60vh] w-[min(70vw,260px)] grid grid-cols-2 gap-1" : "top-14 hidden"}
+            md:!flex md:!max-h-[80%] md:!w-auto md:!grid-cols-none`}
+        >
           {TOOLS.map((t) => (
             <button
               key={t.id}
               type="button"
-              onClick={() => { setTool(t.id); setPolygonPoints([]); }}
-              className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+              onClick={() => { setTool(t.id); setPolygonPoints([]); setMobileToolsOpen(false); }}
+              className={`rounded px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                 tool === t.id ? "bg-gold text-black" : "text-foreground/80 hover:bg-white/10"
               }`}
             >
