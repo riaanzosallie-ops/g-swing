@@ -509,14 +509,41 @@ export default function CourseMapper() {
     };
   }
 
-  const onSelectCourse = async (id: string) => {
-    setCourseMapId(id);
-    const { data } = await supabase
-      .from("gswing_course_maps")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (data) {
+  // Single source of truth: switching a course must wipe every trace of
+  // the previous workspace (features, drawings, selection, hole metadata)
+  // before loading the new one. Otherwise the header updates but the map
+  // still shows the prior course's drawings.
+  const onSelectCourse = useCallback(
+    async (id: string, targetHole?: number) => {
+      if (!id) return;
+      // 1. Reset all per-course state IMMEDIATELY so stale data never leaks.
+      setCourseMapId(id);
+      setFeatures([]);
+      setSelectedId(null);
+      setPolygonPoints([]);
+      setMappedHoleId(null);
+      setPar(null);
+      setHoleHandicap(null);
+      setCourseName("");
+      setLocationLabel("");
+      setExternalProvider(null);
+      setExternalCourseId(null);
+      setLastSynced(null);
+      // Clear any drawn layers immediately on the map.
+      const map = mapRef.current;
+      if (map && styleLoadedRef.current) {
+        setMappedHoleData(map, null);
+      }
+      // 2. Fetch the course record.
+      const { data, error } = await supabase
+        .from("gswing_course_maps")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (error || !data) {
+        toast.error(error?.message || "Course not found");
+        return;
+      }
       setCourseName(data.course_name);
       setLocationLabel(data.location_label ?? "");
       setCenterLat(data.latitude);
@@ -524,10 +551,19 @@ export default function CourseMapper() {
       setExternalProvider(data.external_provider ?? null);
       setExternalCourseId(data.external_course_id ?? null);
       setLastSynced(data.last_synced ?? null);
-      mapRef.current?.flyTo({ center: [data.longitude, data.latitude], zoom: 16.5 });
-      await loadHole(id, holeNumber);
-    }
-  };
+      // 3. Centre the map on the selected course right away.
+      mapRef.current?.flyTo({
+        center: [data.longitude, data.latitude],
+        zoom: 16.5,
+        essential: true,
+      });
+      // 4. Load hole geometry (defaults to Hole 1 for a clean entry).
+      const hole = targetHole ?? 1;
+      setHoleNumber(hole);
+      await loadHole(id, hole);
+    },
+    [loadHole],
+  );
 
   // Auto-load hole when number changes
   useEffect(() => {
@@ -545,22 +581,23 @@ export default function CourseMapper() {
   // hole via `?course=<name>&hole=<n>`. Used by the GPS "Premium Mapping
   // Required" gate to take the owner straight to the missing layer for
   // the hole they were just trying to play.
+  // Reactive deep-link: re-apply whenever the URL params change so
+  // selecting a different course (or arriving via Add Course) always
+  // loads the right workspace — not just on first mount.
   const [searchParams] = useSearchParams();
-  const deepLinkAppliedRef = useRef(false);
+  const appliedKeyRef = useRef<string>("");
   useEffect(() => {
-    if (deepLinkAppliedRef.current) return;
     const courseParam = searchParams.get("course");
     const courseMapIdParam = searchParams.get("courseMapId");
     const holeParam = searchParams.get("hole");
     const latParam = searchParams.get("lat");
     const lngParam = searchParams.get("lng");
+    const key = `${courseMapIdParam ?? ""}|${courseParam ?? ""}|${holeParam ?? ""}|${latParam ?? ""}|${lngParam ?? ""}`;
     if (!courseParam && !courseMapIdParam && !holeParam && !latParam && !lngParam) return;
+    if (key === appliedKeyRef.current) return;
+    appliedKeyRef.current = key;
     const holeNum = holeParam ? Number(holeParam) : NaN;
-    if (Number.isFinite(holeNum) && holeNum >= 1 && holeNum <= 18) {
-      setHoleNumber(holeNum);
-    }
-    // Center map on the player's real position so the owner does not
-    // have to pan across the world before placing the tee.
+    const targetHole = Number.isFinite(holeNum) && holeNum >= 1 && holeNum <= 18 ? holeNum : undefined;
     const latNum = latParam ? Number(latParam) : NaN;
     const lngNum = lngParam ? Number(lngParam) : NaN;
     if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
@@ -569,14 +606,11 @@ export default function CourseMapper() {
       mapRef.current?.flyTo({ center: [lngNum, latNum], zoom: 17.5 });
     }
     if (courseMapIdParam) {
-      (async () => {
-        deepLinkAppliedRef.current = true;
-        await onSelectCourse(courseMapIdParam);
-      })();
+      void onSelectCourse(courseMapIdParam, targetHole);
       return;
     }
     if (!courseParam) {
-      deepLinkAppliedRef.current = true;
+      if (targetHole) setHoleNumber(targetHole);
       return;
     }
     (async () => {
@@ -586,13 +620,11 @@ export default function CourseMapper() {
         .ilike("course_name", courseParam)
         .maybeSingle();
       if (data?.id) {
-        deepLinkAppliedRef.current = true;
-        await onSelectCourse(data.id);
+        await onSelectCourse(data.id, targetHole);
       } else {
         toast.info(
           `"${courseParam}" is not mapped yet — pick or create a course to begin.`,
         );
-        deepLinkAppliedRef.current = true;
       }
     })();
   }, [searchParams, onSelectCourse]);
@@ -1396,9 +1428,11 @@ export default function CourseMapper() {
         courseName={courseName}
         centerLat={centerLat}
         centerLng={centerLng}
-        onCourseMapCreated={(id, name) => {
-          setCourseMapId(id);
-          if (!courseName) setCourseName(name);
+        onCourseMapCreated={(id) => {
+          // Auto-pivot the entire workspace onto the newly added course
+          // and jump straight into Hole 1 — no manual re-selection.
+          setGcaOpen(false);
+          void onSelectCourse(id, 1);
         }}
       />
     </div>
