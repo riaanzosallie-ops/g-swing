@@ -1757,7 +1757,6 @@ function MoreItem({
  * - In `satellite` mode, restores label visibility and full brightness.
  */
 function applyPremiumMapStyle(map: mapboxgl.Map, mode: "premium" | "satellite"): void {
-  void buildEsriSatelliteStyle; // keep helper colocated
   // Skip when the active style is our Esri raster fallback — it has no
   // mapbox symbol layers to scrub and any setPaintProperty on the raster
   // would just no-op.
