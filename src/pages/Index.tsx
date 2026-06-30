@@ -20,6 +20,7 @@ import { RoundChat } from "@/components/gswing/RoundChat";
 import { Roast } from "@/components/gswing/Roast";
 import { FairwayMemories } from "@/components/gswing/FairwayMemories";
 import { Tournaments } from "@/components/gswing/tournament/Tournaments";
+import ManageCourses from "@/components/gswing/admin/ManageCourses";
 import { Home, MapPin, Trophy, Target, User, ChevronLeft, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MembershipGate } from "@/components/gswing/membership/MembershipGate";
@@ -38,7 +39,7 @@ const TITLES: Record<string, string> = {
   swing: "Swing Analysis", pros: "Pros' Bags", news: "Tour News",
   stats: "Performance", profile: "Profile", clublink: "Club-Link",
   arena: "Betting Arena", live: "Live Dashboard", chat: "Round Chat", roast: "ACE Roast",
-  memories: "Fairway Memories", tournament: "Tournaments",
+  memories: "Fairway Memories", tournament: "Tournaments", courses: "Manage Courses",
 };
 
 const Index = () => {
@@ -189,6 +190,7 @@ const Index = () => {
         {view === "tournament" && (
           <MembershipGate featureKey="tournament.create"><Tournaments /></MembershipGate>
         )}
+        {view === "courses" && <ManageCourses go={navigate} />}
       </main>
 
       <AceCaddie />

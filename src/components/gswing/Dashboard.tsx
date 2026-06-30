@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins,
   BarChart3, Swords, MessagesSquare, Film, Radio, Flag, Sparkles,
-  CloudSun, Bot, Award, CircleDot, Dumbbell, Check, Circle,
+  CloudSun, Bot, Award, CircleDot, Dumbbell, Check, Circle, Map as MapIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlayer, useRounds } from "@/lib/gswing-store";
@@ -13,6 +13,7 @@ import { HeroAmbience } from "./HeroAmbience";
 import { useBrowserCoords, useGswingWeather } from "@/lib/use-gswing-weather";
 import { buildGolfWeatherInsight } from "@/lib/gswing-weather";
 import { conditionIcon } from "./WeatherPill";
+import { useGswingAdmin } from "@/lib/use-gswing-admin";
 
 const moreTiles = [
   { id: "gps", label: "Live GPS", icon: MapPin, hint: "Satellite course view" },
@@ -38,6 +39,8 @@ const dock = [
 export const Dashboard = ({ go }: { go: (id: string) => void }) => {
   const [player] = usePlayer();
   const [rounds] = useRounds();
+  const admin = useGswingAdmin();
+  const isAdmin = admin.status === "admin";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
@@ -305,7 +308,12 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
         </p>
 
         <div className="grid grid-cols-2 gap-3">
-          {moreTiles.map((t, i) => (
+          {[
+            ...(isAdmin
+              ? [{ id: "courses", label: "Manage Courses", icon: MapIcon, hint: "Mapping operations hub" }]
+              : []),
+            ...moreTiles,
+          ].map((t, i) => (
             <button
               key={t.id}
               onClick={() => go(t.id)}
