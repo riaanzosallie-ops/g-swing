@@ -156,6 +156,10 @@ export default function CourseMapper() {
   const [locationLabel, setLocationLabel] = useState("");
   const [centerLat, setCenterLat] = useState<number>(25.2048);
   const [centerLng, setCenterLng] = useState<number>(55.2708);
+  const [externalProvider, setExternalProvider] = useState<string | null>(null);
+  const [externalCourseId, setExternalCourseId] = useState<string | null>(null);
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [holeHandicap, setHoleHandicap] = useState<number | null>(null);
 
   const [holeNumber, setHoleNumber] = useState(1);
   const [par, setPar] = useState<number | null>(null);
@@ -517,6 +521,9 @@ export default function CourseMapper() {
       setLocationLabel(data.location_label ?? "");
       setCenterLat(data.latitude);
       setCenterLng(data.longitude);
+      setExternalProvider(data.external_provider ?? null);
+      setExternalCourseId(data.external_course_id ?? null);
+      setLastSynced(data.last_synced ?? null);
       mapRef.current?.flyTo({ center: [data.longitude, data.latitude], zoom: 16.5 });
       await loadHole(id, holeNumber);
     }
@@ -971,10 +978,31 @@ export default function CourseMapper() {
   return (
     <div className="flex h-[100dvh] w-full flex-col bg-black text-foreground">
       {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-gold/20 bg-emerald-950/60 px-3 py-2 backdrop-blur">
-        <div>
+      <header className="flex flex-wrap items-center justify-between gap-y-2 border-b border-gold/20 bg-emerald-950/60 px-3 py-2 backdrop-blur">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] uppercase tracking-[0.3em] text-gold/80">G-Swing · Course Mapper</p>
-          <h1 className="font-serif text-base text-gold">{courseName || "Untitled course"}</h1>
+          <h1 className="truncate font-serif text-base text-gold">{courseName || "Untitled course"}</h1>
+          {(locationLabel || externalProvider) && (
+            <p className="truncate text-[10px] text-foreground/60">
+              {locationLabel || "—"}
+              {externalProvider && (
+                <span className="ml-2 rounded-full border border-gold/30 bg-black/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-gold/80">
+                  {externalProvider}{externalCourseId ? ` · #${externalCourseId}` : ""}
+                </span>
+              )}
+            </p>
+          )}
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-foreground/70">
+            <span><span className="text-gold/70">Hole</span> {holeNumber} of 18</span>
+            <span><span className="text-gold/70">Par</span> {par ?? "—"}</span>
+            <span><span className="text-gold/70">HCP</span> {holeHandicap ?? "—"}</span>
+            {lastSynced && (
+              <span><span className="text-gold/70">Synced</span> {new Date(lastSynced).toLocaleDateString()}</span>
+            )}
+            <span className={features.length > 0 ? "text-emerald-300" : "text-amber-300"}>
+              {features.length > 0 ? `${features.length} feature(s)` : "Not mapped"}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button
