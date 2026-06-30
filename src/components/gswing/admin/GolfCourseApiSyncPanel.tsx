@@ -113,9 +113,31 @@ export function GolfCourseApiSyncPanel({ isOpen, onClose, courseMapId, courseNam
 
   const ensureCourseMap = async (c: NormalisedCourse): Promise<string> => {
     if (activeCourseMapId) return activeCourseMapId;
-    const lat = c.latitude ?? centerLat ?? 25.2048;
-    const lng = c.longitude ?? centerLng ?? 55.2708;
     const name = (c.club_name || c.course_name || courseName || "Untitled course").trim();
+    let lat = c.latitude ?? centerLat ?? null;
+    let lng = c.longitude ?? centerLng ?? null;
+    // Fallback: geocode the course name + address via OpenStreetMap Nominatim
+    // when the provider didn't supply coordinates. Without this the Course
+    // Mapper has nothing to centre on and Live GPS can't show satellite.
+    if (lat == null || lng == null) {
+      try {
+        const q = [name, c.address, c.city, c.country].filter(Boolean).join(", ");
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,
+          { headers: { Accept: "application/json" } },
+        );
+        const hits = (await res.json()) as Array<{ lat: string; lon: string }>;
+        if (hits?.[0]?.lat && hits?.[0]?.lon) {
+          lat = parseFloat(hits[0].lat);
+          lng = parseFloat(hits[0].lon);
+        }
+      } catch { /* swallow — fall through to default */ }
+    }
+    if (lat == null || lng == null) {
+      // Last-resort UAE centre — keeps writes valid; user can re-centre in mapper.
+      lat = 25.2048;
+      lng = 55.2708;
+    }
     const { data, error } = await supabase
       .from("gswing_course_maps")
       .insert({
