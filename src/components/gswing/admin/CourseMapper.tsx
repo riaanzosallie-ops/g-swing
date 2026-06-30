@@ -1358,6 +1358,12 @@ export default function CourseMapper() {
         onClose={() => setGcaOpen(false)}
         courseMapId={courseMapId}
         courseName={courseName}
+        centerLat={centerLat}
+        centerLng={centerLng}
+        onCourseMapCreated={(id, name) => {
+          setCourseMapId(id);
+          if (!courseName) setCourseName(name);
+        }}
       />
     </div>
   );
