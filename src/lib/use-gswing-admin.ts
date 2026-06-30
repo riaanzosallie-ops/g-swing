@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { OWNER_EMAIL } from "@/hooks/useGswingMembership";
 
 export type GswingAdminState =
   | { status: "loading" }
@@ -21,6 +22,13 @@ export function useGswingAdmin(): GswingAdminState {
       const user = sessionData.session?.user ?? null;
       if (!user) {
         if (!cancelled) setState({ status: "anon" });
+        return;
+      }
+      // Owner email override — platform owner always has unlimited admin
+      // access (no role row required, no quotas, no paywall).
+      const email = (user.email ?? "").trim().toLowerCase();
+      if (email === OWNER_EMAIL) {
+        if (!cancelled) setState({ status: "admin", userId: user.id });
         return;
       }
       const { data, error } = await supabase

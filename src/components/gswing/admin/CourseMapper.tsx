@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShieldAlert, Save, Trash2, MapPin, Flag, Crosshair, Pentagon, Layers, Check, X, Globe2 } from "lucide-react";
+import { ShieldAlert, Save, Trash2, MapPin, Flag, Crosshair, Pentagon, Layers, Check, X, Globe2, ChevronDown, ChevronUp, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { loadMapboxToken } from "@/components/gswing/GpsMap";
@@ -169,6 +169,10 @@ export default function CourseMapper() {
   const [osmOpen, setOsmOpen] = useState(false);
   // GolfCourseAPI sync (owner only, comparison + import).
   const [gcaOpen, setGcaOpen] = useState(false);
+  // Mobile UI — collapsible tool dock + inspector. Defaults closed on
+  // narrow viewports so the map stays usable; auto-open on >=md.
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
 
   // Token
   useEffect(() => {
@@ -1045,14 +1049,40 @@ export default function CourseMapper() {
           </div>
         )}
 
-        {/* Left tool dock */}
-        <div className="absolute left-2 top-2 flex max-h-[80%] flex-col gap-1 overflow-y-auto rounded-xl border border-gold/30 bg-black/70 p-1 backdrop-blur-md">
+        {/* Mobile toggles — open Tools / Inspector as bottom sheets on small screens */}
+        <div className="absolute left-2 top-2 z-20 flex gap-1 md:hidden">
+          <button
+            type="button"
+            onClick={() => { setMobileToolsOpen((v) => !v); setMobileInspectorOpen(false); }}
+            className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-black/75 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur"
+          >
+            <Wrench className="h-3 w-3" /> Tools
+          </button>
+        </div>
+        <div className="absolute right-2 top-2 z-20 flex gap-1 md:hidden">
+          <button
+            type="button"
+            onClick={() => { setMobileInspectorOpen((v) => !v); setMobileToolsOpen(false); }}
+            className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-black/75 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur"
+          >
+            <Layers className="h-3 w-3" /> Hole {holeNumber}
+            {mobileInspectorOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+          </button>
+        </div>
+
+        {/* Left tool dock — desktop fixed dock, mobile slide-down sheet */}
+        <div
+          className={`absolute left-2 z-10 flex flex-col gap-1 overflow-y-auto rounded-xl border border-gold/30 bg-black/80 p-1 backdrop-blur-md transition-all
+            md:top-2 md:max-h-[80%] md:w-auto md:flex
+            ${mobileToolsOpen ? "top-14 max-h-[60vh] w-[min(70vw,260px)] grid grid-cols-2 gap-1" : "top-14 hidden"}
+            md:!flex md:!max-h-[80%] md:!w-auto md:!grid-cols-none`}
+        >
           {TOOLS.map((t) => (
             <button
               key={t.id}
               type="button"
-              onClick={() => { setTool(t.id); setPolygonPoints([]); }}
-              className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+              onClick={() => { setTool(t.id); setPolygonPoints([]); setMobileToolsOpen(false); }}
+              className={`rounded px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                 tool === t.id ? "bg-gold text-black" : "text-foreground/80 hover:bg-white/10"
               }`}
             >
@@ -1074,8 +1104,15 @@ export default function CourseMapper() {
           </div>
         )}
 
-        {/* Right inspector */}
-        <aside className="absolute right-2 top-2 w-64 max-h-[88%] overflow-y-auto rounded-xl border border-gold/25 bg-black/80 p-3 backdrop-blur">
+        {/* Right inspector — desktop fixed panel, mobile bottom sheet */}
+        <aside
+          className={`absolute z-10 overflow-y-auto rounded-xl border border-gold/25 bg-black/85 p-3 backdrop-blur transition-all
+            md:right-2 md:top-2 md:w-64 md:max-h-[88%] md:block
+            ${mobileInspectorOpen
+              ? "inset-x-2 bottom-14 max-h-[65vh]"
+              : "hidden"}
+            md:!block md:!inset-auto md:!bottom-auto md:!max-h-[88%]`}
+        >
           <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft">Course</p>
           <div className="mt-1 space-y-2">
             <div>
