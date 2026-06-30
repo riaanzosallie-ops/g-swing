@@ -1104,8 +1104,15 @@ export default function CourseMapper() {
           </div>
         )}
 
-        {/* Right inspector */}
-        <aside className="absolute right-2 top-2 w-64 max-h-[88%] overflow-y-auto rounded-xl border border-gold/25 bg-black/80 p-3 backdrop-blur">
+        {/* Right inspector — desktop fixed panel, mobile bottom sheet */}
+        <aside
+          className={`absolute z-10 overflow-y-auto rounded-xl border border-gold/25 bg-black/85 p-3 backdrop-blur transition-all
+            md:right-2 md:top-2 md:w-64 md:max-h-[88%] md:block
+            ${mobileInspectorOpen
+              ? "inset-x-2 bottom-14 max-h-[65vh]"
+              : "hidden"}
+            md:!block md:!inset-auto md:!bottom-auto md:!max-h-[88%]`}
+        >
           <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft">Course</p>
           <div className="mt-1 space-y-2">
             <div>
