@@ -980,11 +980,56 @@ function MapboxCourseView({
   const navigateToCourseMapper = useNavigate();
   const openMapperForCurrentHole = useCallback(() => {
     if (!membership.isOwner) return;
+    // One-tap launch: hand the mapper *everything* it needs to skip the
+    // course picker and open straight into the missing hole — no menu
+    // hopping. CourseMapper consumes these and (when returnTo=gps) sends
+    // the user back to /?view=gps&refreshMap=1&hole=N after save.
     const params = new URLSearchParams();
     if (selectedCourse?.name) params.set("course", selectedCourse.name);
+    if (selectedCourse?.id) params.set("courseId", String(selectedCourse.id));
     params.set("hole", String(hole));
+    params.set("units", unit);
+    if (playerPosition) {
+      params.set("lat", String(playerPosition.lat));
+      params.set("lng", String(playerPosition.lng));
+    } else if (selectedCourse?.lat && selectedCourse?.lng) {
+      params.set("lat", String(selectedCourse.lat));
+      params.set("lng", String(selectedCourse.lng));
+    }
+    params.set("returnTo", "gps");
     navigateToCourseMapper(`/gswing/course-mapper?${params.toString()}`);
-  }, [membership.isOwner, selectedCourse?.name, hole, navigateToCourseMapper]);
+  }, [
+    membership.isOwner,
+    selectedCourse?.name,
+    selectedCourse?.id,
+    selectedCourse?.lat,
+    selectedCourse?.lng,
+    hole,
+    unit,
+    playerPosition,
+    navigateToCourseMapper,
+  ]);
+
+  // Instant refresh: when the user returns from the Course Mapper with
+  // ?refreshMap=1 (and optionally ?hole=N), invalidate the mapped-hole
+  // cache and strip the params — no full reload, no course re-selection.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const refresh = url.searchParams.get("refreshMap");
+    if (refresh !== "1") return;
+    const holeParam = url.searchParams.get("hole");
+    const holeNum = holeParam ? Number(holeParam) : NaN;
+    if (Number.isFinite(holeNum) && holeNum >= 1 && holeNum <= 18 && onChangeHole) {
+      onChangeHole(holeNum);
+    }
+    setMappingRefreshTick((t) => t + 1);
+    toast.success("Premium mapping refreshed");
+    url.searchParams.delete("refreshMap");
+    url.searchParams.delete("hole");
+    window.history.replaceState({}, "", url.pathname + (url.search || "") + url.hash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const markLayerNotApplicable = useCallback(
     async (layerKey: string) => {
