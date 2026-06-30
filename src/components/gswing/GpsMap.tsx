@@ -1,4 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+/**
+ * Esri World Imagery raster fallback style.
+ * Used automatically when the Mapbox satellite token returns 401/403
+ * (domain restriction, expired token, or quota exceeded). Esri's
+ * World Imagery service is publicly accessible without a token.
+ */
+function buildEsriSatelliteStyle(): mapboxgl.Style {
+  return {
+    version: 8,
+    name: "G-Swing Esri Satellite",
+    sources: {
+      "esri-world-imagery": {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution:
+          "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        maxzoom: 19,
+      },
+    },
+    layers: [
+      {
+        id: "esri-world-imagery",
+        type: "raster",
+        source: "esri-world-imagery",
+        minzoom: 0,
+        maxzoom: 22,
+      },
+    ],
+    glyphs: "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
+  } as unknown as mapboxgl.Style;
+}
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -314,6 +349,10 @@ function MapboxCourseView({
   const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
   const [satelliteError, setSatelliteError] = useState<string | null>(null);
   const [satelliteRetryTick, setSatelliteRetryTick] = useState(0);
+  // When the Mapbox satellite token returns 401/403 (domain restriction,
+  // expired, or quota), we automatically swap the basemap to Esri World
+  // Imagery raster tiles so the user always sees real satellite imagery.
+  const [useEsriFallback, setUseEsriFallback] = useState(false);
 
   // Premium Course Mapping Engine — mapped hole data sourced from
   // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
@@ -415,7 +454,17 @@ function MapboxCourseView({
       const isTile = typeof err.sourceId === "string" || /tile/i.test(msg);
       const isAuth = status === 401 || status === 403 || /access token|unauthor/i.test(msg);
       if (isAuth) {
-        setSatelliteError("Satellite map failed to load (auth). Retry or continue with basic GPS.");
+        // Auto-fallback to Esri World Imagery — no token required, works
+        // on any domain. Clears the error banner once the fallback paints.
+        setUseEsriFallback((prev) => {
+          if (!prev) {
+            try {
+              map.setStyle(buildEsriSatelliteStyle());
+            } catch { /* ignore */ }
+          }
+          return true;
+        });
+        setSatelliteError(null);
       } else if (isTile || (status && status >= 400)) {
         setSatelliteError("Satellite map failed to load. Retry or continue with basic GPS.");
       }
@@ -1743,6 +1792,13 @@ function MoreItem({
  * - In `satellite` mode, restores label visibility and full brightness.
  */
 function applyPremiumMapStyle(map: mapboxgl.Map, mode: "premium" | "satellite"): void {
+  // Skip when the active style is our Esri raster fallback — it has no
+  // mapbox symbol layers to scrub and any setPaintProperty on the raster
+  // would just no-op.
+  try {
+    const s = map.getStyle() as { name?: string } | null;
+    if (s?.name === "G-Swing Esri Satellite") return;
+  } catch { /* ignore */ }
   try {
     const style = map.getStyle();
     const layers = style?.layers ?? [];
