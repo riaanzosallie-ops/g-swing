@@ -1,4 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+/**
+ * Esri World Imagery raster fallback style.
+ * Used automatically when the Mapbox satellite token returns 401/403
+ * (domain restriction, expired token, or quota exceeded). Esri's
+ * World Imagery service is publicly accessible without a token.
+ */
+function buildEsriSatelliteStyle(): mapboxgl.Style {
+  return {
+    version: 8,
+    name: "G-Swing Esri Satellite",
+    sources: {
+      "esri-world-imagery": {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution:
+          "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        maxzoom: 19,
+      },
+    },
+    layers: [
+      {
+        id: "esri-world-imagery",
+        type: "raster",
+        source: "esri-world-imagery",
+        minzoom: 0,
+        maxzoom: 22,
+      },
+    ],
+    glyphs: "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
+  } as unknown as mapboxgl.Style;
+}
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
