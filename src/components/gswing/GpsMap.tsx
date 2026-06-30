@@ -349,6 +349,18 @@ function MapboxCourseView({
   const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
   const [satelliteError, setSatelliteError] = useState<string | null>(null);
   const [satelliteRetryTick, setSatelliteRetryTick] = useState(0);
+  // Tracks whether the user has explicitly chosen a view. If they have NOT
+  // and the current hole has no Premium mapping yet, we auto-switch to
+  // Satellite so the course is always visible and usable — never an empty
+  // screen behind a "premium mapping required" gate.
+  const userPickedViewRef = useRef(false);
+  const handleSetMapView = useCallback((view: "premium" | "satellite") => {
+    userPickedViewRef.current = true;
+    setMapView(view);
+  }, []);
+  // Non-blocking "Premium not mapped yet" banner — user can dismiss it
+  // per session/hole so it stops nagging once acknowledged.
+  const [premiumHintDismissed, setPremiumHintDismissed] = useState(false);
   // When the Mapbox satellite token returns 401/403 (domain restriction,
   // expired, or quota), we automatically swap the basemap to Esri World
   // Imagery raster tiles so the user always sees real satellite imagery.
@@ -368,6 +380,26 @@ function MapboxCourseView({
   // distinguish "no mapped course nearby" from "course found but the
   // current hole has no surveyed geometry yet".
   const [nearestCourseFound, setNearestCourseFound] = useState<boolean | null>(null);
+
+  // Always-visible-course UX: when the selected hole has no Premium mapping
+  // yet, default to Satellite so the user can see, pan, zoom, and measure
+  // immediately. Premium becomes an enhancement, not a prerequisite.
+  useEffect(() => {
+    if (userPickedViewRef.current) return;
+    if (mappingStatus === "missing" && mapView === "premium") {
+      setMapView("satellite");
+    } else if (mappingStatus === "mapped" && mapView === "satellite") {
+      // If user lands on a fully mapped hole and hasn't expressed a
+      // preference, give them Premium (the marquee experience).
+      setMapView("premium");
+    }
+  }, [mappingStatus, mapView]);
+
+  // Reset the dismiss flag whenever hole or course changes so the hint
+  // re-appears once per missing hole, not just once per session.
+  useEffect(() => {
+    setPremiumHintDismissed(false);
+  }, [hole, selectedCourse.id]);
 
   // Live weather for the in-map HUD (real Open-Meteo via existing hook).
   const hudWeather = useGswingWeather(
@@ -1291,7 +1323,7 @@ function MapboxCourseView({
               isOwner={membership.isOwner}
               onOpenMapper={openMapperForCurrentHole}
               onMarkLayerNa={markLayerNotApplicable}
-              onContinueSatellite={() => setMapView("satellite")}
+              onContinueSatellite={() => handleSetMapView("satellite")}
             />
           )}
         </div>
@@ -1306,7 +1338,7 @@ function MapboxCourseView({
           readout={effectiveReadout}
           unit={unit}
           mapView={mapView}
-          onSetMapView={setMapView}
+          onSetMapView={handleSetMapView}
           measureActive={measureActive}
           onToggleMeasure={toggleMeasure}
           showOverlays={showOverlays}
@@ -1353,7 +1385,7 @@ function MapboxCourseView({
             : undefined
         }
         mapView={mapView}
-        onSetMapView={setMapView}
+        onSetMapView={handleSetMapView}
         measureActive={measureActive}
         onToggleMeasure={toggleMeasure}
         showOverlays={showOverlays}
@@ -1449,6 +1481,53 @@ function MapboxCourseView({
             >
               Dismiss
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking "Premium not mapped yet" hint — visible only in
+          Satellite mode for a course/hole whose premium polygons aren't
+          drawn. Satellite imagery and all GPS tools remain fully usable;
+          this card just invites the user to start mapping. */}
+      {mapView === "satellite" && mappingStatus === "missing" && !premiumHintDismissed && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-3 sm:top-4">
+          <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-gold/35 bg-black/75 px-4 py-3 text-white/90 shadow-elegant backdrop-blur-md">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-soft">
+                  Premium GPS not mapped yet
+                </p>
+                <p className="mt-1 text-[12px] leading-snug text-white/80">
+                  {selectedCourse.name} is added and live. Map Hole {hole} to unlock fairway, green and hazard overlays.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {membership.isOwner && (
+                    <button
+                      type="button"
+                      onClick={openMapperForCurrentHole}
+                      className="rounded-lg bg-gold px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-black shadow-[0_0_14px_rgba(245,200,75,0.35)] active:scale-[0.98]"
+                    >
+                      Start Mapping
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPremiumHintDismissed(true)}
+                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80 hover:bg-white/10"
+                  >
+                    Continue with Satellite
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setPremiumHintDismissed(true)}
+                className="-mr-1 -mt-1 rounded-full p-1 text-white/55 hover:bg-white/10 hover:text-white"
+              >
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       )}
