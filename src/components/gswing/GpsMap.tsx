@@ -312,6 +312,8 @@ function MapboxCourseView({
   const [measureActive, setMeasureActive] = useState(false);
   const [measurePoint, setMeasurePoint] = useState<LatLng | null>(null);
   const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
+  const [satelliteError, setSatelliteError] = useState<string | null>(null);
+  const [satelliteRetryTick, setSatelliteRetryTick] = useState(0);
 
   // Premium Course Mapping Engine — mapped hole data sourced from
   // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
@@ -403,9 +405,26 @@ function MapboxCourseView({
       new mapboxgl.NavigationControl({ showCompass: false, showZoom: true }),
       "bottom-right",
     );
+    // Surface tile/style/auth failures so Satellite mode never sits
+    // on a silent black canvas. We classify a few common Mapbox error
+    // shapes and let the user retry without losing GPS overlays.
+    const onMapError = (e: unknown) => {
+      const err = (e as { error?: { status?: number; message?: string }; sourceId?: string }) ?? {};
+      const status = err.error?.status;
+      const msg = err.error?.message ?? "";
+      const isTile = typeof err.sourceId === "string" || /tile/i.test(msg);
+      const isAuth = status === 401 || status === 403 || /access token|unauthor/i.test(msg);
+      if (isAuth) {
+        setSatelliteError("Satellite map failed to load (auth). Retry or continue with basic GPS.");
+      } else if (isTile || (status && status >= 400)) {
+        setSatelliteError("Satellite map failed to load. Retry or continue with basic GPS.");
+      }
+    };
+    map.on("error", onMapError);
     mapRef.current = map;
     return () => {
       styleLoadedRef.current = false;
+      map.off("error", onMapError);
       map.remove();
       mapRef.current = null;
       playerMarkerRef.current = null;
@@ -451,6 +470,20 @@ function MapboxCourseView({
     const map = mapRef.current;
     if (!map || !styleLoadedRef.current) return;
     applyPremiumMapStyle(map, mapView);
+    // When swapping into Satellite, the container's overlay layout
+    // changes (Premium hole renderer unmounts, bottom sheet mounts).
+    // Force a resize + repaint so the WebGL canvas refreshes its
+    // viewport and the raster basemap renders immediately instead of
+    // sitting on a stale black framebuffer.
+    if (mapView === "satellite") {
+      setSatelliteError(null);
+      requestAnimationFrame(() => {
+        try {
+          map.resize();
+          map.triggerRepaint();
+        } catch { /* ignore */ }
+      });
+    }
     // Mapbox loads symbol/icon layers asynchronously, so reapply the
     // premium scrub whenever the style emits new data. Cheap & safe —
     // sets only the layers that already exist.
@@ -461,7 +494,7 @@ function MapboxCourseView({
       map.off("styledata", reapply);
       map.off("idle", reapply);
     };
-  }, [mapView]);
+  }, [mapView, satelliteRetryTick]);
 
   // Load mapped course/hole geometry from Supabase whenever the
   // course, hole, first GPS fix, or manual refresh changes. Never
