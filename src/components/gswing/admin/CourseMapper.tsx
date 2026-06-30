@@ -520,6 +520,43 @@ export default function CourseMapper() {
     });
   }, [saving]);
 
+  // Owner-only enhancement: deep-link directly into a specific course +
+  // hole via `?course=<name>&hole=<n>`. Used by the GPS "Premium Mapping
+  // Required" gate to take the owner straight to the missing layer for
+  // the hole they were just trying to play.
+  const [searchParams] = useSearchParams();
+  const deepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    const courseParam = searchParams.get("course");
+    const holeParam = searchParams.get("hole");
+    if (!courseParam && !holeParam) return;
+    const holeNum = holeParam ? Number(holeParam) : NaN;
+    if (Number.isFinite(holeNum) && holeNum >= 1 && holeNum <= 18) {
+      setHoleNumber(holeNum);
+    }
+    if (!courseParam) {
+      deepLinkAppliedRef.current = true;
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("gswing_course_maps")
+        .select("id, course_name")
+        .ilike("course_name", courseParam)
+        .maybeSingle();
+      if (data?.id) {
+        deepLinkAppliedRef.current = true;
+        await onSelectCourse(data.id);
+      } else {
+        toast.info(
+          `"${courseParam}" is not mapped yet — pick or create a course to begin.`,
+        );
+        deepLinkAppliedRef.current = true;
+      }
+    })();
+  }, [searchParams, onSelectCourse]);
+
   // Sharjah quick-select — finds the seeded course and jumps straight to
   // hole 1. Falls back to a toast if the seed migration was not applied.
   const openSharjah = useCallback(async () => {
