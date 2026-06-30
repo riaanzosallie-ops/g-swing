@@ -314,6 +314,10 @@ function MapboxCourseView({
   const [mapView, setMapView] = useState<"premium" | "satellite">("premium");
   const [satelliteError, setSatelliteError] = useState<string | null>(null);
   const [satelliteRetryTick, setSatelliteRetryTick] = useState(0);
+  // When the Mapbox satellite token returns 401/403 (domain restriction,
+  // expired, or quota), we automatically swap the basemap to Esri World
+  // Imagery raster tiles so the user always sees real satellite imagery.
+  const [useEsriFallback, setUseEsriFallback] = useState(false);
 
   // Premium Course Mapping Engine — mapped hole data sourced from
   // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
@@ -415,7 +419,17 @@ function MapboxCourseView({
       const isTile = typeof err.sourceId === "string" || /tile/i.test(msg);
       const isAuth = status === 401 || status === 403 || /access token|unauthor/i.test(msg);
       if (isAuth) {
-        setSatelliteError("Satellite map failed to load (auth). Retry or continue with basic GPS.");
+        // Auto-fallback to Esri World Imagery — no token required, works
+        // on any domain. Clears the error banner once the fallback paints.
+        setUseEsriFallback((prev) => {
+          if (!prev) {
+            try {
+              map.setStyle(buildEsriSatelliteStyle());
+            } catch { /* ignore */ }
+          }
+          return true;
+        });
+        setSatelliteError(null);
       } else if (isTile || (status && status >= 400)) {
         setSatelliteError("Satellite map failed to load. Retry or continue with basic GPS.");
       }
