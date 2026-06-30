@@ -1,39 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-/**
- * Esri World Imagery raster fallback style.
- * Used automatically when the Mapbox satellite token returns 401/403
- * (domain restriction, expired token, or quota exceeded). Esri's
- * World Imagery service is publicly accessible without a token.
- */
-function buildEsriSatelliteStyle(): mapboxgl.Style {
-  return {
-    version: 8,
-    name: "G-Swing Esri Satellite",
-    sources: {
-      "esri-world-imagery": {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-        attribution:
-          "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-        maxzoom: 19,
-      },
-    },
-    layers: [
-      {
-        id: "esri-world-imagery",
-        type: "raster",
-        source: "esri-world-imagery",
-        minzoom: 0,
-        maxzoom: 22,
-      },
-    ],
-    glyphs: "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
-  } as unknown as mapboxgl.Style;
-}
+import {
+  SATELLITE_PROVIDERS,
+  pickSatelliteProvider,
+  type SatelliteProviderId,
+} from "@/lib/satellite-providers";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -361,10 +331,37 @@ function MapboxCourseView({
   // Non-blocking "Premium not mapped yet" banner — user can dismiss it
   // per session/hole so it stops nagging once acknowledged.
   const [premiumHintDismissed, setPremiumHintDismissed] = useState(false);
-  // When the Mapbox satellite token returns 401/403 (domain restriction,
-  // expired, or quota), we automatically swap the basemap to Esri World
-  // Imagery raster tiles so the user always sees real satellite imagery.
-  const [useEsriFallback, setUseEsriFallback] = useState(false);
+  // ---------------------------------------------------------------
+  // Satellite provider chain (Mapbox → Esri → …). The active provider
+  // is an implementation detail: the user just picks "Satellite" and
+  // we deliver imagery from whichever provider is healthy right now.
+  // See src/lib/satellite-providers.ts to register additional sources.
+  // ---------------------------------------------------------------
+  const [activeSatProvider, setActiveSatProvider] =
+    useState<SatelliteProviderId>("mapbox");
+  // Providers we've tried and seen fail during the current Satellite
+  // session. Reset whenever the user re-enters Satellite (silent
+  // recovery — if Mapbox starts working again we use it).
+  const failedSatProvidersRef = useRef<Set<SatelliteProviderId>>(new Set());
+  const [providerBadgeKey, setProviderBadgeKey] = useState(0);
+  const [satDiag, setSatDiag] = useState<{
+    lastTileError: string | null;
+    retryCount: number;
+    lastErrorAt: number | null;
+  }>({ lastTileError: null, retryCount: 0, lastErrorAt: null });
+  // Legacy alias kept for downstream conditionals — true whenever we're
+  // not on the primary Mapbox provider.
+  const useEsriFallback = activeSatProvider !== "mapbox";
+  // Provider badge visibility — fades after 2.5s. Re-triggered on
+  // every provider switch or Satellite re-entry via providerBadgeKey.
+  const [providerBadgeVisible, setProviderBadgeVisible] = useState(false);
+  useEffect(() => {
+    if (providerBadgeKey === 0) return;
+    if (mapView !== "satellite") return;
+    setProviderBadgeVisible(true);
+    const t = window.setTimeout(() => setProviderBadgeVisible(false), 2500);
+    return () => window.clearTimeout(t);
+  }, [providerBadgeKey, mapView]);
 
   // Premium Course Mapping Engine — mapped hole data sourced from
   // gswing_course_maps / gswing_mapped_holes / gswing_hole_features.
@@ -476,30 +473,50 @@ function MapboxCourseView({
       new mapboxgl.NavigationControl({ showCompass: false, showZoom: true }),
       "bottom-right",
     );
-    // Surface tile/style/auth failures so Satellite mode never sits
-    // on a silent black canvas. We classify a few common Mapbox error
-    // shapes and let the user retry without losing GPS overlays.
+    // Classify and react to tile / auth errors. Auth or tile failure
+    // → advance to the next provider in the chain silently. We only
+    // ever surface a banner once the entire chain is exhausted —
+    // single-provider blips are invisible to the user.
     const onMapError = (e: unknown) => {
-      const err = (e as { error?: { status?: number; message?: string }; sourceId?: string }) ?? {};
+      const err =
+        (e as { error?: { status?: number; message?: string }; sourceId?: string }) ?? {};
       const status = err.error?.status;
       const msg = err.error?.message ?? "";
       const isTile = typeof err.sourceId === "string" || /tile/i.test(msg);
-      const isAuth = status === 401 || status === 403 || /access token|unauthor/i.test(msg);
-      if (isAuth) {
-        // Auto-fallback to Esri World Imagery — no token required, works
-        // on any domain. Clears the error banner once the fallback paints.
-        setUseEsriFallback((prev) => {
-          if (!prev) {
-            try {
-              map.setStyle(buildEsriSatelliteStyle());
-            } catch { /* ignore */ }
-          }
-          return true;
-        });
-        setSatelliteError(null);
-      } else if (isTile || (status && status >= 400)) {
-        setSatelliteError("Satellite map failed to load. Retry or continue with basic GPS.");
-      }
+      const isAuth =
+        status === 401 || status === 403 || /access token|unauthor/i.test(msg);
+      if (!isAuth && !isTile && !(status && status >= 400)) return;
+      setSatDiag((d) => ({
+        lastTileError: `${status ?? "?"} ${msg || (isAuth ? "unauthorized" : "tile error")}`,
+        retryCount: d.retryCount + 1,
+        lastErrorAt: Date.now(),
+      }));
+      // Mark the current provider failed for this session and try the
+      // next one. If nothing else is available, surface the banner.
+      setActiveSatProvider((current) => {
+        failedSatProvidersRef.current.add(current);
+        const next = pickSatelliteProvider(
+          { mapboxToken: tokenState.token },
+          failedSatProvidersRef.current,
+        );
+        if (!next || next === current) {
+          setSatelliteError(
+            "Satellite imagery is temporarily unavailable. GPS, distances and measurement still work.",
+          );
+          return current;
+        }
+        try {
+          const style = SATELLITE_PROVIDERS[next].buildStyle({
+            mapboxToken: tokenState.token,
+          });
+          map.setStyle(style as never);
+          setProviderBadgeKey((k) => k + 1);
+          setSatelliteError(null);
+        } catch {
+          /* ignore — error handler will fire again if the next provider also fails */
+        }
+        return next;
+      });
     };
     map.on("error", onMapError);
     mapRef.current = map;
@@ -540,8 +557,14 @@ function MapboxCourseView({
     };
     if (map.isStyleLoaded()) onLoad();
     else map.on("load", onLoad);
+    // CRITICAL: fires after every map.setStyle(...) too — without this,
+    // swapping providers (Mapbox ↔ Esri) would drop all our custom
+    // sources/layers (markers stay because they're DOM elements; the
+    // mapped fairway/green/hazard overlays would not).
+    map.on("style.load", onLoad);
     return () => {
       map.off("load", onLoad);
+      map.off("style.load", onLoad);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -558,6 +581,26 @@ function MapboxCourseView({
     // sitting on a stale black framebuffer.
     if (mapView === "satellite") {
       setSatelliteError(null);
+      // Silent recovery: when the user re-enters Satellite, forget
+      // any previously-failed providers and try the chain from the
+      // top. If Mapbox's token has been fixed in the meantime, we
+      // silently switch back to it — the user never has to think
+      // about provider state.
+      failedSatProvidersRef.current.clear();
+      const ctx = {
+        mapboxToken:
+          tokenState.status === "ready" ? tokenState.token : null,
+      };
+      const preferred = pickSatelliteProvider(ctx) ?? "esri";
+      if (preferred !== activeSatProvider) {
+        try {
+          const style = SATELLITE_PROVIDERS[preferred].buildStyle(ctx);
+          map.setStyle(style as never);
+          setActiveSatProvider(preferred);
+        } catch { /* error handler will catch and chain forward */ }
+      }
+      // Show the provider badge for ~2.5s on every Satellite entry.
+      setProviderBadgeKey((k) => k + 1);
       requestAnimationFrame(() => {
         try {
           map.resize();
@@ -1430,6 +1473,23 @@ function MapboxCourseView({
                       )
                     : null,
                 measurementSource: measurePoint ? "satellite-mapbox" : null,
+                satellite: {
+                  activeProvider: activeSatProvider,
+                  providerLabel:
+                    SATELLITE_PROVIDERS[activeSatProvider].label,
+                  sampleTileUrl: SATELLITE_PROVIDERS[
+                    activeSatProvider
+                  ].sampleTileUrl({
+                    mapboxToken:
+                      tokenState.status === "ready" ? tokenState.token : null,
+                  }),
+                  mapboxTokenStatus: tokenState.status,
+                  fallbackActive: useEsriFallback,
+                  lastTileError: satDiag.lastTileError,
+                  retryCount: satDiag.retryCount,
+                  attribution:
+                    SATELLITE_PROVIDERS[activeSatProvider].attribution,
+                },
               }
             : undefined
         }
@@ -1462,9 +1522,22 @@ function MapboxCourseView({
               onClick={() => {
                 setSatelliteError(null);
                 setSatelliteRetryTick((t) => t + 1);
+                // Full chain retry — let Mapbox have another go.
+                failedSatProvidersRef.current.clear();
+                setActiveSatProvider("mapbox");
                 const map = mapRef.current;
                 if (map) {
                   try {
+                    const ctx = {
+                      mapboxToken:
+                        tokenState.status === "ready" ? tokenState.token : null,
+                    };
+                    const next = pickSatelliteProvider(ctx) ?? "esri";
+                    map.setStyle(
+                      SATELLITE_PROVIDERS[next].buildStyle(ctx) as never,
+                    );
+                    setActiveSatProvider(next);
+                    setProviderBadgeKey((k) => k + 1);
                     map.resize();
                     map.triggerRepaint();
                   } catch { /* ignore */ }
@@ -1481,6 +1554,27 @@ function MapboxCourseView({
             >
               Dismiss
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Satellite provider badge — small, non-intrusive, auto-fades.
+          Tells the user which imagery source is active without leaking
+          technical errors. Hidden in Premium mode. */}
+      {mapView === "satellite" && (
+        <div
+          className={`pointer-events-none absolute right-3 top-16 z-30 transition-opacity duration-500 ${
+            providerBadgeVisible ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 rounded-full border border-gold/30 bg-black/65 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-gold-soft shadow-elegant backdrop-blur-md">
+            <span aria-hidden>🛰️</span>
+            <span>{SATELLITE_PROVIDERS[activeSatProvider].label}</span>
+            {SATELLITE_PROVIDERS[activeSatProvider].badgeSuffix && (
+              <span className="text-white/55">
+                · {SATELLITE_PROVIDERS[activeSatProvider].badgeSuffix}
+              </span>
+            )}
           </div>
         </div>
       )}
