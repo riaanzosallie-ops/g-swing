@@ -224,6 +224,7 @@ export function PremiumHoleRenderer({
           isOwner={!!isOwner}
           onOpenMapper={onOpenMapper}
           onMarkLayerNa={onMarkLayerNa}
+          onContinueSatellite={onContinueSatellite}
         />
       ) : (
         <svg
