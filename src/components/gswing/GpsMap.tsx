@@ -571,6 +571,26 @@ function MapboxCourseView({
     // sitting on a stale black framebuffer.
     if (mapView === "satellite") {
       setSatelliteError(null);
+      // Silent recovery: when the user re-enters Satellite, forget
+      // any previously-failed providers and try the chain from the
+      // top. If Mapbox's token has been fixed in the meantime, we
+      // silently switch back to it — the user never has to think
+      // about provider state.
+      failedSatProvidersRef.current.clear();
+      const ctx = {
+        mapboxToken:
+          tokenState.status === "ready" ? tokenState.token : null,
+      };
+      const preferred = pickSatelliteProvider(ctx) ?? "esri";
+      if (preferred !== activeSatProvider) {
+        try {
+          const style = SATELLITE_PROVIDERS[preferred].buildStyle(ctx);
+          map.setStyle(style as never);
+          setActiveSatProvider(preferred);
+        } catch { /* error handler will catch and chain forward */ }
+      }
+      // Show the provider badge for ~2.5s on every Satellite entry.
+      setProviderBadgeKey((k) => k + 1);
       requestAnimationFrame(() => {
         try {
           map.resize();
