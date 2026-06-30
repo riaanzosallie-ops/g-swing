@@ -994,13 +994,20 @@ function MapboxCourseView({
         return;
       }
       try {
-        const next = Array.from(
-          new Set([...(mappedHole.naLayers ?? []), layerKey]),
-        );
+        if ((mappedHole.naLayers ?? []).includes(layerKey)) {
+          toast.info(`"${layerKey}" already marked not applicable.`);
+          return;
+        }
+        // NA layers are stored as `na_marker` feature rows where the
+        // `name` column holds the premium layer key (see course-map-loader).
         const { error } = await supabase
-          .from("gswing_mapped_holes")
-          .update({ na_layers: next })
-          .eq("id", mappedHole.id);
+          .from("gswing_hole_features")
+          .insert({
+            mapped_hole_id: mappedHole.id,
+            feature_type: "na_marker",
+            name: layerKey,
+            notes: "Marked NA from GPS gate by owner",
+          });
         if (error) throw error;
         toast.success(`Marked "${layerKey}" not applicable.`);
         setMappingRefreshTick((t) => t + 1);
