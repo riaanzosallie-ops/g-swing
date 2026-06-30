@@ -31,6 +31,17 @@ export interface MappingDebugPanelProps {
   measurementTarget?: LatLng | null;
   measurementDistance?: number | null;
   measurementSource?: "premium-projected" | "satellite-mapbox" | null;
+  /** Satellite provider diagnostics (owner-only). */
+  satellite?: {
+    activeProvider: string;
+    providerLabel: string;
+    sampleTileUrl: string;
+    mapboxTokenStatus: "ready" | "loading" | "missing" | "error";
+    fallbackActive: boolean;
+    lastTileError: string | null;
+    retryCount: number;
+    attribution: string;
+  };
 }
 
 function yn(v: boolean) {
@@ -141,6 +152,21 @@ export function MappingDebugPanel(props: MappingDebugPanelProps) {
       )}
       {props.measurementSource && (
         <Row k="Measurement src" v={props.measurementSource} />
+      )}
+      {props.satellite && (
+        <>
+          <div className="mt-2 mb-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-gold">
+            Satellite · diagnostics
+          </div>
+          <Row k="Provider" v={props.satellite.providerLabel} />
+          <Row k="Provider id" v={props.satellite.activeProvider} mono />
+          <Row k="Fallback active" v={yn(props.satellite.fallbackActive)} />
+          <Row k="Mapbox token" v={props.satellite.mapboxTokenStatus} />
+          <Row k="Retry count" v={String(props.satellite.retryCount)} />
+          <Row k="Last tile error" v={props.satellite.lastTileError ?? "—"} />
+          <Row k="Sample tile" v={props.satellite.sampleTileUrl} mono />
+          <Row k="Attribution" v={props.satellite.attribution} />
+        </>
       )}
       {props.externalProvider && (
         <>
