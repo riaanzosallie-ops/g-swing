@@ -463,30 +463,50 @@ function MapboxCourseView({
       new mapboxgl.NavigationControl({ showCompass: false, showZoom: true }),
       "bottom-right",
     );
-    // Surface tile/style/auth failures so Satellite mode never sits
-    // on a silent black canvas. We classify a few common Mapbox error
-    // shapes and let the user retry without losing GPS overlays.
+    // Classify and react to tile / auth errors. Auth or tile failure
+    // → advance to the next provider in the chain silently. We only
+    // ever surface a banner once the entire chain is exhausted —
+    // single-provider blips are invisible to the user.
     const onMapError = (e: unknown) => {
-      const err = (e as { error?: { status?: number; message?: string }; sourceId?: string }) ?? {};
+      const err =
+        (e as { error?: { status?: number; message?: string }; sourceId?: string }) ?? {};
       const status = err.error?.status;
       const msg = err.error?.message ?? "";
       const isTile = typeof err.sourceId === "string" || /tile/i.test(msg);
-      const isAuth = status === 401 || status === 403 || /access token|unauthor/i.test(msg);
-      if (isAuth) {
-        // Auto-fallback to Esri World Imagery — no token required, works
-        // on any domain. Clears the error banner once the fallback paints.
-        setUseEsriFallback((prev) => {
-          if (!prev) {
-            try {
-              map.setStyle(buildEsriSatelliteStyle());
-            } catch { /* ignore */ }
-          }
-          return true;
-        });
-        setSatelliteError(null);
-      } else if (isTile || (status && status >= 400)) {
-        setSatelliteError("Satellite map failed to load. Retry or continue with basic GPS.");
-      }
+      const isAuth =
+        status === 401 || status === 403 || /access token|unauthor/i.test(msg);
+      if (!isAuth && !isTile && !(status && status >= 400)) return;
+      setSatDiag((d) => ({
+        lastTileError: `${status ?? "?"} ${msg || (isAuth ? "unauthorized" : "tile error")}`,
+        retryCount: d.retryCount + 1,
+        lastErrorAt: Date.now(),
+      }));
+      // Mark the current provider failed for this session and try the
+      // next one. If nothing else is available, surface the banner.
+      setActiveSatProvider((current) => {
+        failedSatProvidersRef.current.add(current);
+        const next = pickSatelliteProvider(
+          { mapboxToken: tokenState.token },
+          failedSatProvidersRef.current,
+        );
+        if (!next || next === current) {
+          setSatelliteError(
+            "Satellite imagery is temporarily unavailable. GPS, distances and measurement still work.",
+          );
+          return current;
+        }
+        try {
+          const style = SATELLITE_PROVIDERS[next].buildStyle({
+            mapboxToken: tokenState.token,
+          });
+          map.setStyle(style as never);
+          setProviderBadgeKey((k) => k + 1);
+          setSatelliteError(null);
+        } catch {
+          /* ignore — error handler will fire again if the next provider also fails */
+        }
+        return next;
+      });
     };
     map.on("error", onMapError);
     mapRef.current = map;
@@ -527,8 +547,14 @@ function MapboxCourseView({
     };
     if (map.isStyleLoaded()) onLoad();
     else map.on("load", onLoad);
+    // CRITICAL: fires after every map.setStyle(...) too — without this,
+    // swapping providers (Mapbox ↔ Esri) would drop all our custom
+    // sources/layers (markers stay because they're DOM elements; the
+    // mapped fairway/green/hazard overlays would not).
+    map.on("style.load", onLoad);
     return () => {
       map.off("load", onLoad);
+      map.off("style.load", onLoad);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
