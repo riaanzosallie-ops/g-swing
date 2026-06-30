@@ -108,9 +108,18 @@ export const golfCourseApiProvider: CourseDataProvider = {
   },
   async getCourse(externalId) {
     const data = await invoke("get", { id: externalId });
-    const course = (data as { course?: RawCourse })?.course;
-    if (!course) throw new Error("Course not found");
-    return normaliseCourse(course);
+    // GolfCourseAPI returns `{ course: {...} }` from /courses/{id}. Our edge
+    // function wraps the raw payload as `{ course: r.data }`, so the actual
+    // course object lives at `data.course.course`. Older callers / cached
+    // responses may already be flat — accept either shape.
+    const wrapper = (data as { course?: unknown })?.course;
+    const inner = wrapper && typeof wrapper === "object" && "course" in (wrapper as Record<string, unknown>)
+      ? (wrapper as { course: RawCourse }).course
+      : (wrapper as RawCourse | undefined);
+    if (!inner || (inner.id === undefined && !inner.club_name)) {
+      throw new Error("Course not found");
+    }
+    return normaliseCourse(inner);
   },
 };
 
