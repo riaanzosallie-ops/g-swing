@@ -758,7 +758,11 @@ function HoleGeometryLayer({
 
       {/* Green — uses mapped polygon when available, organic shape */}
       {greenPolygon && greenPolygon.length >= 3 ? (
-        <GreenPolygon polygon={greenPolygon} project={project} />
+        <GreenPolygon
+          polygon={greenPolygon}
+          project={project}
+          greenDirId={greenDirId}
+        />
       ) : (
         greenCenter && (
           <GreenFallback
