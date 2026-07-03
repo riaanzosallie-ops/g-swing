@@ -31,6 +31,39 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Detect vendor quota / rate-limit style errors so we can surface a graceful
+// fallback signal to the client instead of a raw 401/429 that the UI treats
+// as an auth failure (blank screen).
+function isQuotaError(status: number, error: string | undefined): boolean {
+  if (status === 429) return true;
+  const msg = (error ?? "").toLowerCase();
+  return (
+    msg.includes("api request limit") ||
+    msg.includes("rate limit") ||
+    msg.includes("quota") ||
+    msg.includes("too many requests")
+  );
+}
+
+function vendorFail(r: { status: number; error: string }) {
+  if (isQuotaError(r.status, r.error)) {
+    return json(
+      {
+        error: "API_RATE_LIMIT_EXCEEDED",
+        message: r.error,
+        fallback: true,
+        reason: "quota_exceeded",
+        vendorStatus: r.status,
+      },
+      200,
+    );
+  }
+  // Never leak a raw 401 from the vendor — remap to 502 so the frontend
+  // doesn't mistake it for a Supabase auth problem.
+  const safeStatus = r.status === 401 || r.status === 403 ? 502 : r.status || 502;
+  return json({ error: r.error, vendorStatus: r.status }, safeStatus);
+}
+
 async function currentUserId(req: Request): Promise<string | null> {
   const auth = req.headers.get("Authorization");
   if (!auth?.startsWith("Bearer ")) return null;
@@ -236,7 +269,7 @@ Deno.serve(async (req) => {
   if (action === "search") {
     const { name, city, state, country, lat, lng, measureUnit, page } = body as Record<string, string | number | undefined>;
     const r = await callVendor("/clubs", { name, city, state, country, lat, lng, measureUnit, page }, userId);
-    if (!r.ok) return json({ error: r.error }, r.status || 502);
+    if (!r.ok) return vendorFail(r);
     // Opportunistically cache each club (light payload).
     const clubs = Array.isArray((r.data as { clubs?: unknown[] }).clubs) ? (r.data as { clubs: Record<string, unknown>[] }).clubs : [];
     for (const c of clubs) await cacheClub(c);
@@ -246,7 +279,7 @@ Deno.serve(async (req) => {
   if (action === "courses") {
     const { name, city, state, country, lat, lng, measureUnit, page } = body as Record<string, string | number | undefined>;
     const r = await callVendor("/courses", { name, city, state, country, lat, lng, measureUnit, page }, userId);
-    if (!r.ok) return json({ error: r.error }, r.status || 502);
+    if (!r.ok) return vendorFail(r);
     return json(r.data);
   }
 
@@ -254,7 +287,7 @@ Deno.serve(async (req) => {
     const id = String(body.id ?? "");
     if (!id) return json({ error: "id is required" }, 400);
     const r = await callVendor(`/clubs/${encodeURIComponent(id)}`, {}, userId);
-    if (!r.ok) return json({ error: r.error }, r.status || 502);
+    if (!r.ok) return vendorFail(r);
     await cacheClub(r.data as Record<string, unknown>);
     return json(r.data);
   }
@@ -263,7 +296,7 @@ Deno.serve(async (req) => {
     const id = String(body.id ?? "");
     if (!id) return json({ error: "id is required" }, 400);
     const r = await callVendor(`/courses/${encodeURIComponent(id)}`, {}, userId);
-    if (!r.ok) return json({ error: r.error }, r.status || 502);
+    if (!r.ok) return vendorFail(r);
     const raw = r.data as Record<string, unknown>;
     await cacheCourse(raw);
     return json(raw);
@@ -273,7 +306,7 @@ Deno.serve(async (req) => {
     const id = String(body.id ?? "");
     if (!id) return json({ error: "id is required" }, 400);
     const r = await callVendor(`/coordinates/${encodeURIComponent(id)}`, {}, userId);
-    if (!r.ok) return json({ error: r.error }, r.status || 502);
+    if (!r.ok) return vendorFail(r);
     const raw = r.data as Record<string, unknown>;
     await cacheCoordinates(id, raw);
     return json(raw);
