@@ -12,7 +12,14 @@
 // finer illustration". They are NEVER persisted to Supabase.
 
 import type { LatLng } from "@/lib/gps-utils";
-import type { GreenData, HoleGpsResponse, TeeBox } from "@/lib/golf-gps-api";
+import type {
+  GeoJsonLineString,
+  GeoJsonPolygon,
+  GreenData,
+  Hazard,
+  HoleGpsResponse,
+  TeeBox,
+} from "@/lib/golf-gps-api";
 import type {
   HazardGeometry,
   MappedHole,
@@ -60,6 +67,168 @@ function meters(a: LatLng, b: LatLng): number {
 
 /** [lng, lat] tuple used by Mapbox / our polygon rings. */
 function toRing(pt: LatLng): [number, number] { return [pt.lng, pt.lat]; }
+
+// ── Deterministic PRNG (mulberry32) ────────────────────────────────────
+function hashSeed(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function makeRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ── Convert GeoJSON polygon coords → outer ring [lng, lat][] ───────────
+function geoJsonPolygonToRing(
+  poly: GeoJsonPolygon | GeoJsonLineString | null | undefined,
+): Array<[number, number]> | null {
+  if (!poly) return null;
+  if (poly.type === "Polygon") {
+    const outer = poly.coordinates?.[0];
+    if (!outer || outer.length < 3) return null;
+    const ring = outer.map(([lng, lat]) => [lng, lat] as [number, number]);
+    if (
+      ring[0][0] !== ring[ring.length - 1][0] ||
+      ring[0][1] !== ring[ring.length - 1][1]
+    ) ring.push(ring[0]);
+    return ring;
+  }
+  return null;
+}
+
+// ── Catmull-Rom smoothing + resampling of a centerline ─────────────────
+function catmullRom(p0: LatLng, p1: LatLng, p2: LatLng, p3: LatLng, t: number): LatLng {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const lat = 0.5 * (
+    2 * p1.lat +
+    (-p0.lat + p2.lat) * t +
+    (2 * p0.lat - 5 * p1.lat + 4 * p2.lat - p3.lat) * t2 +
+    (-p0.lat + 3 * p1.lat - 3 * p2.lat + p3.lat) * t3
+  );
+  const lng = 0.5 * (
+    2 * p1.lng +
+    (-p0.lng + p2.lng) * t +
+    (2 * p0.lng - 5 * p1.lng + 4 * p2.lng - p3.lng) * t2 +
+    (-p0.lng + 3 * p1.lng - 3 * p2.lng + p3.lng) * t3
+  );
+  return { lat, lng };
+}
+function smoothCenterline(controls: LatLng[], samples = 24): LatLng[] {
+  if (controls.length < 2) return controls.slice();
+  if (controls.length === 2) {
+    const out: LatLng[] = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      out.push({
+        lat: controls[0].lat + (controls[1].lat - controls[0].lat) * t,
+        lng: controls[0].lng + (controls[1].lng - controls[0].lng) * t,
+      });
+    }
+    return out;
+  }
+  const pts = [controls[0], ...controls, controls[controls.length - 1]];
+  const out: LatLng[] = [];
+  const segCount = pts.length - 3;
+  const perSeg = Math.max(2, Math.round(samples / segCount));
+  for (let i = 0; i < segCount; i++) {
+    for (let j = 0; j < perSeg; j++) {
+      out.push(catmullRom(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], j / perSeg));
+    }
+  }
+  out.push(controls[controls.length - 1]);
+  return out;
+}
+
+function centerlineBearingAt(line: LatLng[], i: number): number {
+  const a = line[Math.max(0, i - 1)];
+  const b = line[Math.min(line.length - 1, i + 1)];
+  return bearing(a, b);
+}
+
+/** Build an organic variable-width polygon around a centerline. */
+function organicBufferPolygon(
+  line: LatLng[],
+  widthAt: (t: number) => number,
+  rand: () => number,
+  noiseFrac: number,
+): Array<[number, number]> {
+  const n = line.length;
+  if (n < 2) return [];
+  const left: Array<[number, number]> = [];
+  const right: Array<[number, number]> = [];
+  // Low-frequency noise via pre-baked control values, interpolated.
+  const controlCount = Math.max(4, Math.round(n / 4));
+  const noiseL: number[] = Array.from({ length: controlCount }, () => (rand() * 2 - 1) * noiseFrac);
+  const noiseR: number[] = Array.from({ length: controlCount }, () => (rand() * 2 - 1) * noiseFrac);
+  const sampleNoise = (arr: number[], t: number): number => {
+    const x = t * (arr.length - 1);
+    const i = Math.floor(x);
+    const f = x - i;
+    const a = arr[i];
+    const b = arr[Math.min(arr.length - 1, i + 1)];
+    return a + (b - a) * f;
+  };
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const brg = centerlineBearingAt(line, i);
+    const w = widthAt(t);
+    const wl = Math.max(2, w * (1 + sampleNoise(noiseL, t)));
+    const wr = Math.max(2, w * (1 + sampleNoise(noiseR, t)));
+    left.push(toRing(destination(line[i], (brg + 270) % 360, wl)));
+    right.push(toRing(destination(line[i], (brg + 90) % 360, wr)));
+  }
+  const ring = [...left, ...right.reverse(), left[0]];
+  return ring;
+}
+
+/** Organic blob polygon around a point. */
+function organicBlob(
+  center: LatLng,
+  baseRadiusM: number,
+  rand: () => number,
+  vertices = 14,
+): Array<[number, number]> {
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i < vertices; i++) {
+    const ang = (i / vertices) * 360;
+    const r = baseRadiusM * (0.75 + rand() * 0.5);
+    pts.push(toRing(destination(center, ang, r)));
+  }
+  pts.push(pts[0]);
+  return pts;
+}
+
+/** Project a point onto the nearest centerline segment; return
+ *  { index, param, projected, side (+1 left / -1 right) }. */
+function projectOntoCenterline(
+  line: LatLng[],
+  p: LatLng,
+): { index: number; projected: LatLng; side: 1 | -1; bearingDeg: number } {
+  // Cheap: pick nearest sample, then decide side using cross product.
+  let bestI = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < line.length; i++) {
+    const d = meters(line[i], p);
+    if (d < bestD) { bestD = d; bestI = i; }
+  }
+  const brg = centerlineBearingAt(line, bestI);
+  // Bearing from line point to p; side by signed angle diff.
+  const brgToP = bearing(line[bestI], p);
+  let diff = ((brgToP - brg + 540) % 360) - 180; // -180..180
+  const side: 1 | -1 = diff >= 0 ? -1 : 1; // right of travel = +90 => diff positive
+  return { index: bestI, projected: line[bestI], side, bearingDeg: brg };
+}
 
 /**
  * Rectangle corridor along a centreline (start → end) with a half-width
@@ -114,10 +283,6 @@ function ellipsePolygon(
   return pts;
 }
 
-function circlePolygon(center: LatLng, radiusM: number, segments = 20): Array<[number, number]> {
-  return ellipsePolygon(center, radiusM, radiusM, 0, segments);
-}
-
 function pickBestTee(tees: TeeBox[]): TeeBox | null {
   if (!tees.length) return null;
   // Prefer white/regular, then any tee with coords.
@@ -152,59 +317,93 @@ export function synthesizePremiumHole(
 
   const teeToGreenBearing = bearing(tee, centerG);
   const holeLengthM = meters(tee, centerG);
+  const isPar3 = (gps.par ?? 4) === 3;
+  const rng = makeRng(hashSeed(`${gps.course_id}:${holeNumber}`));
 
-  // ---- Green polygon ---------------------------------------------------
-  // Prefer real depth/width from GolfAPI; fall back to sensible defaults.
+  // ---- Green polygon (real geometry first) ----------------------------
   const depthM = green.depth_yards && green.depth_yards > 0
     ? green.depth_yards / YARDS_PER_M
     : (frontG && backG ? Math.max(12, meters(frontG, backG)) : 22);
   const widthM = green.width_yards && green.width_yards > 0
     ? green.width_yards / YARDS_PER_M
     : Math.max(depthM * 0.85, 18);
-  const greenPolygon = ellipsePolygon(
-    centerG,
-    depthM / 2,
-    widthM / 2,
-    teeToGreenBearing,
-  );
+  const realGreen = geoJsonPolygonToRing(green.polygon);
+  const greenPolygon = realGreen
+    ?? ellipsePolygon(centerG, depthM / 2, widthM / 2, teeToGreenBearing);
 
-  // ---- Fairway corridor ------------------------------------------------
-  // Width scales gently with hole length. Stops short of the green so
-  // the green shape is visually distinct.
-  const halfW = Math.min(28, Math.max(14, holeLengthM * 0.04));
-  const cutoff = destination(centerG, (teeToGreenBearing + 180) % 360, depthM * 0.55 + 6);
-  const fairwayPolygon = corridorPolygon(tee, cutoff, halfW, 0, 0);
+  // ---- Centerline: tee → doglegs → green -------------------------------
+  const doglegPts: LatLng[] = (gps.hazards ?? [])
+    .filter((h) => h.type === "dogleg" && h.lat != null && h.lng != null)
+    .map((h) => ({ lat: h.lat as number, lng: h.lng as number }))
+    .sort((a, b) => meters(tee, a) - meters(tee, b));
+  const centerline = smoothCenterline([tee, ...doglegPts, centerG], 24);
 
-  // ---- Tee polygon (small rectangle around the tee marker) -------------
+  // ---- Fairway (organic buffer around centerline) ----------------------
+  const fullHalf = Math.min(32, Math.max(16, holeLengthM * 0.045));
+  const greenCutT = 1 - Math.min(0.35, (depthM * 0.6) / Math.max(holeLengthM, 1));
+  const fairwayWidth = (t: number) => {
+    if (t >= greenCutT) return 0.0001; // effectively stop just before green
+    if (t < 0.2) return 10 + (fullHalf - 10) * (t / 0.2);
+    if (t < 0.75) return fullHalf;
+    // taper 0.75 → greenCutT down to 60% width
+    const span = Math.max(0.0001, greenCutT - 0.75);
+    const k = Math.min(1, (t - 0.75) / span);
+    return fullHalf * (1 - k * 0.4);
+  };
+  const fairwayPolygon = isPar3
+    ? null
+    : organicBufferPolygon(
+        // trim tail so it stops short of the green
+        centerline.slice(0, Math.max(2, Math.floor(centerline.length * greenCutT))),
+        (t) => fairwayWidth(t * greenCutT),
+        rng,
+        0.12,
+      );
+
+  // ---- Tee polygon -----------------------------------------------------
   const teePolygon = corridorPolygon(
     destination(tee, (teeToGreenBearing + 180) % 360, 4),
     destination(tee, teeToGreenBearing, 6),
     5,
   );
 
-  // ---- Hole boundary (generous rough buffer around the corridor) -------
-  const boundaryHalf = halfW + Math.max(20, holeLengthM * 0.05);
-  const holeBoundary = corridorPolygon(tee, centerG, boundaryHalf, 12, depthM);
+  // ---- Hole boundary (wider organic rough mass) ------------------------
+  const boundaryPad = Math.max(18, Math.min(30, holeLengthM * 0.06));
+  const boundaryCenterline = (() => {
+    const first = centerline[0];
+    const last = centerline[centerline.length - 1];
+    const b0 = centerlineBearingAt(centerline, 0);
+    const bN = centerlineBearingAt(centerline, centerline.length - 1);
+    const start = destination(first, (b0 + 180) % 360, 15);
+    const end = destination(last, bN, depthM);
+    return [start, ...centerline, end];
+  })();
+  const holeBoundary = organicBufferPolygon(
+    boundaryCenterline,
+    () => fullHalf + boundaryPad,
+    rng,
+    0.20,
+  );
 
-  // ---- Hazards from GolfAPI (only the ones with real coords) -----------
+  // ---- Hazards ---------------------------------------------------------
   const hazards: HazardGeometry[] = [];
-  for (const h of gps.hazards ?? []) {
-    if (h.lat == null || h.lng == null) continue;
-    if (h.type === "dogleg" || h.type === "layup") continue;
-    const c: LatLng = { lat: h.lat, lng: h.lng };
-    // Estimate radius by hazard type — bunkers small, water bigger.
-    const rM = h.type === "water" ? 22 : h.type === "trees" ? 26 : 10;
-    const poly = circlePolygon(c, rM);
-    hazards.push({
-      id: `auto-${holeNumber}-${hazards.length}`,
-      name: h.label ?? h.type,
-      type: h.type === "water"
+  const pushHazard = (
+    h: Hazard | { type: Hazard["type"]; label?: string | null },
+    c: LatLng,
+    poly: Array<[number, number]>,
+  ) => {
+    const type =
+      h.type === "water"
         ? "water"
         : h.type === "trees"
           ? "trees"
           : h.type === "ob"
             ? "out_of_bounds"
-            : "bunker",
+            : "bunker";
+    hazards.push({
+      id: `auto-${holeNumber}-${hazards.length}`,
+      name: (h as Hazard).label ?? h.type,
+      type,
       side: null,
       polygon: poly,
       front: null,
@@ -212,6 +411,63 @@ export function synthesizePremiumHole(
       center: c,
       notes: null,
     });
+  };
+
+  for (const h of gps.hazards ?? []) {
+    if (h.type === "dogleg" || h.type === "layup") continue;
+    // Real geometry from API → use it directly.
+    const realPoly = geoJsonPolygonToRing(h.geometry as GeoJsonPolygon | null);
+    if (realPoly) {
+      // Centroid = mean of ring points.
+      let sx = 0, sy = 0;
+      for (let i = 0; i < realPoly.length - 1; i++) {
+        sx += realPoly[i][0]; sy += realPoly[i][1];
+      }
+      const n = Math.max(1, realPoly.length - 1);
+      pushHazard(h, { lng: sx / n, lat: sy / n } as LatLng, realPoly);
+      continue;
+    }
+    if (h.lat == null || h.lng == null) continue;
+    let c: LatLng = { lat: h.lat, lng: h.lng };
+    let rM: number;
+    if (h.type === "water") rM = 30;
+    else if (h.type === "trees") rM = 26;
+    else if (h.type === "ob") rM = 14;
+    else rM = 9 + rng() * 4; // bunker 9..13
+
+    // Bunkers: nudge toward the fairway edge so they hug it.
+    if (h.type === "bunker" && !isPar3) {
+      const proj = projectOntoCenterline(centerline, c);
+      const t = proj.index / (centerline.length - 1);
+      const w = fairwayWidth(t);
+      const off = w + rM * 0.6;
+      const sideBearing = (proj.bearingDeg + (proj.side === 1 ? 270 : 90)) % 360;
+      c = destination(proj.projected, sideBearing, off);
+    }
+    pushHazard(h, c, organicBlob(c, rM, rng));
+  }
+
+  // ---- Tree clusters along the outer edge of the boundary --------------
+  if (holeBoundary && holeBoundary.length > 4) {
+    // Approximate perimeter sampling: step through ring vertices and place
+    // a cluster roughly every ~25m, skipping ends near tee/green.
+    const ringLL: LatLng[] = holeBoundary.map(([lng, lat]) => ({ lat, lng }));
+    const teeAvoid = 30;
+    const greenAvoid = Math.max(25, depthM);
+    let acc = 0;
+    const step = 25;
+    for (let i = 1; i < ringLL.length; i++) {
+      const seg = meters(ringLL[i - 1], ringLL[i]);
+      acc += seg;
+      if (acc < step) continue;
+      acc = 0;
+      const p = ringLL[i];
+      if (meters(p, tee) < teeAvoid) continue;
+      if (meters(p, centerG) < greenAvoid) continue;
+      if (rng() > 0.6) continue; // ~60% density
+      const r = 6 + rng() * 5;
+      pushHazard({ type: "trees", label: null }, p, organicBlob(p, r, rng, 12));
+    }
   }
 
   const tees: TeeBoxMarker[] = (gps.tee_boxes ?? [])
