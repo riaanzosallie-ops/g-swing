@@ -9,6 +9,7 @@ import GswingCourseMapperPage from "./pages/GswingCourseMapper.tsx";
 import AuthPage from "./pages/Auth.tsx";
 import GswingMembershipAdminPage from "./pages/GswingMembershipAdmin.tsx";
 import GolfApiSettingsPage from "./pages/GolfApiSettings.tsx";
+import { AppErrorBoundary } from "./components/gswing/AppErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -20,10 +21,24 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/gswing/course-mapper" element={<GswingCourseMapperPage />} />
+          <Route
+            path="/gswing/course-mapper"
+            element={
+              <AppErrorBoundary label="Course Mapper">
+                <GswingCourseMapperPage />
+              </AppErrorBoundary>
+            }
+          />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/gswing/membership-admin" element={<GswingMembershipAdminPage />} />
-          <Route path="/gswing/golf-api" element={<GolfApiSettingsPage />} />
+          <Route
+            path="/gswing/golf-api"
+            element={
+              <AppErrorBoundary label="Golf API">
+                <GolfApiSettingsPage />
+              </AppErrorBoundary>
+            }
+          />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
