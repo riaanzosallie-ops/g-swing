@@ -23,6 +23,7 @@ import {
 import { listCachedCourses, type CachedCourseSummary } from "@/lib/golfapi/client";
 import { CourseDetailsDialog, type CourseDetailsInput } from "./CourseDetailsDialog";
 import { getActiveCourse, setActiveCourse, subscribeActiveCourse, type ActiveCourse } from "@/lib/active-course";
+import { CourseHealthDashboard } from "./CourseHealthDashboard";
 
 const FILTERS: Array<{ id: CourseStatus | "all"; label: string }> = [
   { id: "all", label: "All" },
@@ -250,6 +251,13 @@ export default function ManageCourses({ go }: { go?: (view: string) => void }) {
 
       {error && (
         <Card className="border-red-500/30 bg-red-950/30 p-3 text-xs text-red-100">{error}</Card>
+      )}
+
+      {isAdmin && courses && courses.length > 0 && (
+        <CourseHealthDashboard
+          courses={courses}
+          onOpenMapper={(id) => openMapper(id, 1)}
+        />
       )}
 
       {courses === null && (
