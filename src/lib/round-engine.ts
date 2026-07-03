@@ -1,52 +1,67 @@
 // Round Engine — the shared state container for a live G-Swing round.
-// Phase 1 focus: persist saved measurements + club recommendations per
-// hole so the Shot Planning panel can offer instant recall. Designed as
-// a foundation for later phases (auto-hole-detect, strokes gained,
-// post-round analytics, Fairway Memories), so all writes flow through a
-// single `saveMeasurement()` API.
+// v2 adds: hole visit timeline, GPS breadcrumb path, resume detection,
+// and a stable data shape the Stats + Fairway Memories foundations
+// consume. All writes still flow through this module so a future
+// Lovable Cloud migration is a one-file swap.
 //
-// Storage: localStorage-only for now (matches the rest of gswing-store).
-// The shape is stable and versioned so Phase 4 can migrate to Lovable
-// Cloud without a client rewrite.
+// Storage: localStorage only (matches the rest of gswing-store).
+// Versioned; v1 payloads are auto-migrated on read.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface SavedMeasurement {
   id: string;
   holeNumber: number;
-  /** Target coordinate. */
   lat: number;
   lng: number;
-  /** Distance in the unit stored below (already display-rounded). */
   distance: number;
   unit: "yards" | "meters";
-  /** Optional carry-over hazard distance in the same unit. */
   carry?: number | null;
-  /** Chosen target category if the user picked from the quick chips. */
   targetKind?: "pin" | "front" | "center" | "back" | "layup" | "hazard" | "tap";
   targetLabel?: string;
-  /** Snapshot of the club suggestion at save time. */
   clubName?: string | null;
   clubConfidence?: number | null;
   savedAt: number;
 }
 
+/** A hole the player has visited during this round. */
+export interface HoleVisit {
+  holeNumber: number;
+  enteredAt: number;
+  exitedAt: number | null;
+}
+
+/** A single GPS breadcrumb — used by Fairway Memories / walking distance. */
+export interface PathPoint {
+  holeNumber: number | null;
+  lat: number;
+  lng: number;
+  ts: number;
+}
+
 export interface RoundState {
-  version: 1;
+  version: 2;
   roundId: string;
   courseId: string | null;
   courseName: string | null;
   startedAt: number;
   endedAt: number | null;
   measurements: SavedMeasurement[];
+  holeVisits: HoleVisit[];
+  path: PathPoint[];
+  lastPlayerPosition: PathPoint | null;
 }
 
-const STORAGE_KEY = "gswing.round.v1";
+const STORAGE_KEY = "gswing.round.v2";
+const LEGACY_STORAGE_KEY = "gswing.round.v1";
 const MAX_MEASUREMENTS_PER_HOLE = 8;
+const MAX_PATH_POINTS = 720; // ~4h at 1 sample per 20s
+/** Minimum meters between breadcrumbs. Keeps path storage sane. */
+const PATH_MIN_METERS = 8;
 
 function emptyRound(courseId: string | null, courseName: string | null): RoundState {
   return {
-    version: 1,
+    version: 2,
     roundId: (typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `r-${Date.now()}`),
@@ -55,16 +70,35 @@ function emptyRound(courseId: string | null, courseName: string | null): RoundSt
     startedAt: Date.now(),
     endedAt: null,
     measurements: [],
+    holeVisits: [],
+    path: [],
+    lastPlayerPosition: null,
   };
+}
+
+function migrate(raw: unknown): RoundState | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<RoundState> & { version?: number };
+  if (r.version === 2) return r as RoundState;
+  if (r.version === 1) {
+    return {
+      ...emptyRound(r.courseId ?? null, r.courseName ?? null),
+      roundId: r.roundId ?? emptyRound(null, null).roundId,
+      startedAt: r.startedAt ?? Date.now(),
+      endedAt: r.endedAt ?? null,
+      measurements: Array.isArray(r.measurements) ? r.measurements : [],
+    };
+  }
+  return null;
 }
 
 function readRound(): RoundState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as RoundState;
-    if (parsed?.version !== 1) return null;
-    return parsed;
+    if (raw) return migrate(JSON.parse(raw));
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy) return migrate(JSON.parse(legacy));
+    return null;
   } catch {
     return null;
   }
@@ -78,10 +112,21 @@ function writeRound(round: RoundState): void {
   }
 }
 
+function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
 /**
  * Hook the GPS surface uses to persist and recall shot-planning data.
  * Automatically starts a new round when the active course changes so
- * saved measurements never bleed between courses.
+ * saved data never bleeds between courses. Resumes an existing round
+ * if the last saved state is unfinished and targets the same course.
  */
 export function useRound(courseId: string | null, courseName: string | null) {
   const [round, setRound] = useState<RoundState>(() => {
@@ -112,7 +157,6 @@ export function useRound(courseId: string | null, courseName: string | null) {
             ? crypto.randomUUID()
             : `m-${Date.now()}`;
         const entry: SavedMeasurement = { ...m, id, savedAt: Date.now() };
-        // Cap per-hole history so the sidebar never overwhelms the HUD.
         const perHole = prev.measurements.filter((x) => x.holeNumber === m.holeNumber);
         const others = prev.measurements.filter((x) => x.holeNumber !== m.holeNumber);
         const trimmed = [entry, ...perHole].slice(0, MAX_MEASUREMENTS_PER_HOLE);
@@ -133,12 +177,73 @@ export function useRound(courseId: string | null, courseName: string | null) {
     setRound((prev) => ({
       ...prev,
       measurements: prev.measurements.filter((m) => m.holeNumber !== holeNumber),
+      holeVisits: prev.holeVisits.filter((v) => v.holeNumber !== holeNumber),
+      path: prev.path.filter((p) => p.holeNumber !== holeNumber),
     }));
   }, []);
 
-  const endRound = useCallback(() => {
-    setRound((prev) => ({ ...prev, endedAt: Date.now() }));
+  /** Mark a hole as entered. Closes the previous open visit. */
+  const visitHole = useCallback((holeNumber: number) => {
+    setRound((prev) => {
+      const now = Date.now();
+      const closed = prev.holeVisits.map((v) =>
+        v.exitedAt == null && v.holeNumber !== holeNumber
+          ? { ...v, exitedAt: now }
+          : v,
+      );
+      const alreadyOpen = closed.find(
+        (v) => v.holeNumber === holeNumber && v.exitedAt == null,
+      );
+      if (alreadyOpen) return { ...prev, holeVisits: closed };
+      return {
+        ...prev,
+        holeVisits: [...closed, { holeNumber, enteredAt: now, exitedAt: null }],
+      };
+    });
   }, []);
+
+  /** Append a breadcrumb — dedupes tiny movements so storage stays bounded. */
+  const logPosition = useCallback(
+    (pos: { lat: number; lng: number }, holeNumber: number | null) => {
+      setRound((prev) => {
+        if (prev.endedAt != null) return prev;
+        const last = prev.lastPlayerPosition;
+        if (
+          last &&
+          last.holeNumber === holeNumber &&
+          haversineMeters(last, pos) < PATH_MIN_METERS
+        ) {
+          return prev;
+        }
+        const point: PathPoint = {
+          holeNumber,
+          lat: pos.lat,
+          lng: pos.lng,
+          ts: Date.now(),
+        };
+        const path = [...prev.path, point].slice(-MAX_PATH_POINTS);
+        return { ...prev, path, lastPlayerPosition: point };
+      });
+    },
+    [],
+  );
+
+  const endRound = useCallback(() => {
+    setRound((prev) => {
+      const now = Date.now();
+      const closed = prev.holeVisits.map((v) =>
+        v.exitedAt == null ? { ...v, exitedAt: now } : v,
+      );
+      return { ...prev, holeVisits: closed, endedAt: now };
+    });
+  }, []);
+
+  /** Start a brand-new round for the current course, discarding drafts. */
+  const resetRound = useCallback(() => {
+    const fresh = emptyRound(courseId, courseName);
+    setRound(fresh);
+    writeRound(fresh);
+  }, [courseId, courseName]);
 
   const measurementsForHole = useCallback(
     (holeNumber: number) =>
@@ -161,7 +266,10 @@ export function useRound(courseId: string | null, courseName: string | null) {
     saveMeasurement,
     removeMeasurement,
     clearHole,
+    visitHole,
+    logPosition,
     endRound,
+    resetRound,
     measurementsForHole,
     stats,
   };

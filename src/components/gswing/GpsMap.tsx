@@ -128,6 +128,10 @@ import { suggestClub } from "@/lib/club-recommender";
 import { useRound } from "@/lib/round-engine";
 import type { SavedMeasurement } from "@/lib/round-engine";
 import { ShotPlanPanel } from "@/components/gswing/gps/ShotPlanPanel";
+import { EndRoundDialog } from "@/components/gswing/gps/EndRoundDialog";
+import { OfflineBanner } from "@/components/gswing/gps/OfflineBanner";
+import { OwnerDebugPanel } from "@/components/gswing/gps/OwnerDebugPanel";
+import { evaluateHoleQuality, sourceLabel } from "@/lib/gswing-hole-quality";
 import { MappingDebugPanel } from "@/components/gswing/gps/MappingDebugPanel";
 import type { MappingDebugPanelProps } from "@/components/gswing/gps/MappingDebugPanel";
 import { PremiumHoleRenderer } from "@/components/gswing/gps/PremiumHoleRenderer";
@@ -1484,6 +1488,25 @@ function MapboxCourseView({
     [round, hole],
   );
 
+  // Auto-visit hole whenever the active hole changes so the timeline is
+  // populated even if the golfer never saves a measurement on it.
+  useEffect(() => {
+    round.visitHole(hole);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hole, selectedCourse.id]);
+
+  // Log GPS breadcrumbs (bounded + deduped inside the engine). Drives
+  // walking distance + Fairway Memories path replay.
+  useEffect(() => {
+    if (!playerPosition) return;
+    round.logPosition(playerPosition, hole);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerPosition?.lat, playerPosition?.lng, hole]);
+
+  // End Round UI — plain dialog. Uses the same round engine so state
+  // survives refresh + reopen without any extra plumbing.
+  const [endRoundOpen, setEndRoundOpen] = useState(false);
+
   // Live shot metrics — everything downstream consumes these so both
   // Premium and Satellite modes show the same numbers.
   const shotDistanceDisplay = useMemo(() => {
@@ -1788,6 +1811,51 @@ function MapboxCourseView({
           renderer={activeSatProvider === "mapbox" ? "Mapbox" : "Esri"}
         />
       )}
+
+      {/* Non-intrusive offline chip — never blocks play. */}
+      <OfflineBanner />
+
+      {/* End Round pill — visible but subtle, right side under the top HUD. */}
+      <div className="pointer-events-none absolute right-3 top-3 z-30 flex flex-col items-end gap-1">
+        <button
+          type="button"
+          onClick={() => setEndRoundOpen(true)}
+          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold backdrop-blur-md transition-all active:scale-95"
+        >
+          {round.round.endedAt != null ? "Round summary" : "End round"}
+        </button>
+      </div>
+
+      {/* Owner-only debug/status. Collapsed by default; never leaks to
+          normal users. */}
+      {membership.isOwner && (
+        <OwnerDebugPanel
+          courseName={selectedCourse.name}
+          courseId={selectedCourse.id}
+          source={sourceLabel(evaluateHoleQuality(mappedHole).source)}
+          qualityScore={evaluateHoleQuality(mappedHole).score}
+          qualityLabel={evaluateHoleQuality(mappedHole).badge.label}
+          cached={!!mappedHole}
+          round={round.round}
+          gpsAccuracyMeters={playerAccuracy}
+          mapView={mapView}
+        />
+      )}
+
+      {/* End-of-round summary. Also acts as a resume prompt after refresh. */}
+      <EndRoundDialog
+        open={endRoundOpen}
+        round={round.round}
+        unit={displayUnit === "m" ? "meters" : "yards"}
+        ended={round.round.endedAt != null}
+        onEndRound={() => round.endRound()}
+        onResume={() => setEndRoundOpen(false)}
+        onStartNew={() => {
+          round.resetRound();
+          setEndRoundOpen(false);
+        }}
+        onClose={() => setEndRoundOpen(false)}
+      />
 
       {mapView === "satellite" && satelliteError && (
         <div className="pointer-events-none absolute inset-x-0 top-16 z-30 flex justify-center px-4">
