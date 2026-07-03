@@ -17,6 +17,11 @@ import {
   missingPremiumLayers,
   premiumProgress,
 } from "@/lib/gswing-premium-readiness";
+import {
+  badgeToneClasses,
+  evaluateHoleQuality,
+  sourceLabel,
+} from "@/lib/gswing-hole-quality";
 
 /**
  * G-Swing Premium Hole Renderer
@@ -117,6 +122,7 @@ export function PremiumHoleRenderer({
   const premiumReady = useMemo(() => isPremiumReady(mappedHole), [mappedHole]);
   const missing = useMemo(() => missingPremiumLayers(mappedHole), [mappedHole]);
   const progress = useMemo(() => premiumProgress(mappedHole), [mappedHole]);
+  const quality = useMemo(() => evaluateHoleQuality(mappedHole), [mappedHole]);
   const bounds = useMemo(
     () => buildHoleBounds(mappedHole, playerPosition),
     [mappedHole, playerPosition?.lat, playerPosition?.lng],
@@ -183,7 +189,7 @@ export function PremiumHoleRenderer({
   }, [premiumReady, projection, mappedHole]);
 
   const handleTap = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
-    if (!isMeasuring || !projection || !svgRef.current || !premiumReady) return;
+    if (!isMeasuring || !projection || !svgRef.current || !usable) return;
     const rect = svgRef.current.getBoundingClientRect();
     const t = "touches" in e ? e.changedTouches[0] : e;
     if (!t) return;
@@ -216,16 +222,6 @@ export function PremiumHoleRenderer({
             </p>
           </div>
         </div>
-      ) : !premiumReady ? (
-        <PremiumMappingRequired
-          selectedHoleNumber={selectedHoleNumber}
-          missing={missing}
-          progress={progress}
-          isOwner={!!isOwner}
-          onOpenMapper={onOpenMapper}
-          onMarkLayerNa={onMarkLayerNa}
-          onContinueSatellite={onContinueSatellite}
-        />
       ) : (
         <svg
           ref={svgRef}
@@ -263,9 +259,39 @@ export function PremiumHoleRenderer({
         </svg>
       )}
 
+      {/* Hole Quality + Source badge — always visible when a hole renders.
+          Non-blocking: never interrupts play. */}
+      {usable && (
+        <div className="pointer-events-none absolute left-3 top-3 flex max-w-[70%] flex-col gap-1">
+          <div className={`pointer-events-auto inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] backdrop-blur-md ${badgeToneClasses(quality.badge.tone)}`}>
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+            {quality.badge.label}
+            <span className="opacity-70">· {quality.score}%</span>
+          </div>
+          <div className="pointer-events-auto inline-flex w-fit items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-white/70 backdrop-blur-md">
+            {sourceLabel(quality.source)}
+          </div>
+        </div>
+      )}
+
+      {/* Subtle Enhance CTA — only when score < 90 and there is a mapper hook. */}
+      {usable && quality.badge.shouldEnhance && onOpenMapper && (
+        <button
+          type="button"
+          onClick={() => onOpenMapper()}
+          className={`absolute right-3 top-3 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] backdrop-blur-md transition-all active:scale-95 ${
+            quality.badge.stronglyRecommend
+              ? "border-amber-400/60 bg-amber-500/15 text-amber-100 shadow-[0_0_14px_rgba(245,200,75,0.35)]"
+              : "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+          }`}
+        >
+          {quality.badge.stronglyRecommend ? "Enhance in Mapper" : "Enhance Course"}
+        </button>
+      )}
+
       {/* Hint chip when measuring with no GPS / no target */}
-      {isMeasuring && usable && premiumReady && (
-        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-gold/35 bg-black/65 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-gold backdrop-blur-md">
+      {isMeasuring && usable && (
+        <div className="pointer-events-none absolute left-1/2 bottom-3 -translate-x-1/2 rounded-full border border-gold/35 bg-black/65 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-gold backdrop-blur-md">
           {!playerPosition
             ? "GPS location required to measure"
             : measurementTarget
