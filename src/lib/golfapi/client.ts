@@ -81,6 +81,13 @@ async function invoke<T>(action: string, params: Record<string, unknown> = {}): 
   });
   if (error) throw new Error(error.message || `golf-api ${action} failed`);
   if (data && typeof data === "object" && "error" in data) {
+    // Graceful fallback signal from the edge function (e.g. vendor quota
+    // exceeded). Callers can catch and use cached data instead of crashing.
+    if ((data as { fallback?: boolean }).fallback) {
+      const err = new Error(String((data as { error: unknown }).error));
+      (err as Error & { fallback?: boolean }).fallback = true;
+      throw err;
+    }
     throw new Error(String((data as { error: unknown }).error));
   }
   return data as T;
@@ -201,7 +208,15 @@ export async function getCourse(courseId: string, opts: { force?: boolean } = {}
     const cached = await loadCachedCourse(courseId);
     if (cached && !isStale(cached.cachedAt)) return cached;
   }
-  await invoke("course", { id: courseId });
+  try {
+    await invoke("course", { id: courseId });
+  } catch (e) {
+    // Vendor unavailable (quota, network) — fall back to any cached copy,
+    // even if stale, so the app keeps working instead of blank-screening.
+    const stale = await loadCachedCourse(courseId);
+    if (stale) return stale;
+    throw e;
+  }
   const fresh = await loadCachedCourse(courseId);
   if (!fresh) throw new Error("Course not found after sync");
   return fresh;
@@ -237,7 +252,17 @@ export async function getCoordinates(courseId: string, opts: { force?: boolean }
       .order("hole");
     if (data && data.length) return data.map((r) => normaliseCoord(r as Record<string, unknown>));
   }
-  await invoke("coordinates", { id: courseId });
+  try {
+    await invoke("coordinates", { id: courseId });
+  } catch (e) {
+    const { data } = await supabase
+      .from("golfapi_coordinates")
+      .select("*")
+      .eq("course_id", courseId)
+      .order("hole");
+    if (data && data.length) return data.map((r) => normaliseCoord(r as Record<string, unknown>));
+    throw e;
+  }
   const { data } = await supabase
     .from("golfapi_coordinates")
     .select("*")
