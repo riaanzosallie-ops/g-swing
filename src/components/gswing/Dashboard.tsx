@@ -310,13 +310,19 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
         <div className="grid grid-cols-2 gap-3">
           {[
             ...(isAdmin
-              ? [{ id: "courses", label: "Manage Courses", icon: MapIcon, hint: "Mapping operations hub" }]
+              ? [
+                  { id: "courses", label: "Manage Courses", icon: MapIcon, hint: "Mapping operations hub" },
+                  { id: "golfapi", label: "Golf API", icon: Globe2 as any, hint: "GolfAPI.io · sole data source" },
+                ]
               : []),
             ...moreTiles,
           ].map((t, i) => (
             <button
               key={t.id}
-              onClick={() => go(t.id)}
+              onClick={() => {
+                if (t.id === "golfapi") { window.location.href = "/gswing/golf-api"; return; }
+                go(t.id);
+              }}
               className="group glass-chip tactile-card relative flex flex-col items-start gap-2 rounded-2xl p-4 text-left"
               style={{ animation: `hero-rise 0.5s ease-out ${i * 40}ms both` }}
             >

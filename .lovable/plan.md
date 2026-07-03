@@ -1,91 +1,85 @@
-## Goal
 
-Make Course Mapping feel like a natural extension of Live GPS. A golfer who lands on an unmapped course (or hole) starts mapping in one tap, completes a hole, and is returned to Live GPS with the new Premium hole already rendered — no menu hopping, no re-selection.
+# GolfAPI.io Sole-Provider Migration
 
-## Scope & decisions to confirm
+Goal: GolfAPI.io becomes the only course-data source. Key stays in Supabase. Frontend never calls the vendor. Mapbox/Esri basemap tiles are removed; OSM owner-only assist stays.
 
-1. **Who can map?** The current build restricts the Course Mapper to the owner email (via `MembershipGate featureKey="course.mapper"` + owner-only buttons in `GpsMap.tsx` / `PremiumHoleRenderer.tsx`). The "community-driven mapping ecosystem" line in your brief implies opening this up. Two options:
-   - **A. Owner-only (current)** — wire the integrated workflow but keep the gate. Safer, no abuse risk.
-   - **B. Any signed-in user** — drop the `MembershipGate` on `/gswing/course-mapper`, drop the `isOwner` checks on the Premium prompts. Adds a moderation/verification surface later.
-   I'll default to **A** unless you say otherwise.
+---
 
-2. **Hole-level vs course-level detection.** I'll treat a hole as "mapped" when `gswing_mapped_holes` has a row AND `gswing_premium-readiness` reports the hole has tee + green + (fairway OR `na_marker`). The course is "fully mapped" when every hole in `golf_holes` for that course has a mapped row.
+## 1. Backend — Edge Function proxy (`golf-api`)
 
-## What changes
+Replace the existing `golfcourse-api` function with a new `golf-api` proxy:
 
-### 1. Detection & state (Live GPS)
+- Reads `GOLF_API_KEY` from `Deno.env`. Sends `Authorization: Key <GOLF_API_KEY>` to `https://api.golfapi.io/v2.3` (base per docs).
+- Actions (single POST, `{action, ...params}`):
+  - `search` → `GET /clubs` with `name`/`country`/`state`/`city`.
+  - `club`   → `GET /clubs/{id}` (returns club + courses list).
+  - `course` → `GET /courses/{id}` (full course incl. holes + tees + coords).
+  - `health` → HEAD/GET `/clubs?name=test` for the admin Test Connection button.
+- Every call is logged to `golf_api_logs` (endpoint, params, status, latency, error).
+- Course responses are upserted into cache tables before returning.
+- Response shape normalised so the frontend receives one consistent schema.
 
-`src/components/gswing/GpsMap.tsx`
-- Add a `useMemo`/effect that produces:
-  ```ts
-  { courseMapped: boolean; holeMapped: boolean; mappedCount: number; totalHoles: number; missingHoles: number[] }
-  ```
-  derived from `mappedHole` (current hole), the existing course-map loader, and `golf_holes` count.
-- Pass this down as a single `mappingStatus` prop to the Premium overlay and renderer.
+## 2. Database migration
 
-### 2. "Course Mapping Required" premium overlay
+Wipe legacy course cache, add clean tables:
 
-New component `src/components/gswing/gps/MappingRequiredOverlay.tsx`
-- Rendered inside `PremiumHoleRenderer` (replaces the current owner-only `OwnerMappingActions` block) when `holeMapped === false` AND `mapView === "premium"`.
-- Shows: title, subtitle (course vs hole missing), two buttons:
-  - **Start Mapping** → calls `onStartMapping(hole)`
-  - **Continue with Satellite Only** → calls `onSetMapView("satellite")`
-- Glass-morphism styling matching `PremiumGpsOverlay` (Sora/Manrope, gold gradient).
+- Truncate: `gswing_course_maps`, `gswing_mapped_holes`, `gswing_hole_features`, `golf_courses`, `golf_holes`, `golf_hazards`, `golf_green_polygons`, `golf_fairway_polygons`, `golf_hole_points`, `golf_daily_pins`, `course_sync_history`.
+- New tables (all with GRANTs + RLS):
+  - `golfapi_clubs` — cached club metadata (id, name, city, country, coords, raw).
+  - `golfapi_courses` — cached course (club_id, name, num_holes, coords, raw, cached_at, ttl).
+  - `golfapi_holes` — per-hole par/index/distances/coords.
+  - `golfapi_tees` — per-tee name/gender/rating/slope/total.
+  - `golfapi_green_coords` / `golfapi_hazards` — populated only when supplied.
+  - `golf_api_logs` — request log (owner-read via `has_role admin`).
+  - `golf_api_cache_meta` — key/value cache stats.
+- RLS: read = authenticated; write = service_role only (edge function).
 
-### 3. One-tap launch with full context
+## 3. Frontend — provider layer
 
-`GpsMap.tsx` — extend the existing `navigateToCourseMapper` helper:
-- Build query string with `courseId`, `course` (name), `hole`, `lat`, `lng`, `units`, `returnTo=gps`.
-- Drop the `if (!membership.isOwner) return` guard if option **B** is chosen.
+- New `src/lib/golfapi/client.ts`: thin wrapper around `supabase.functions.invoke("golf-api", …)`. Handles cache-first read from Supabase, then live fetch when stale.
+- Replace all imports of `@/lib/golfcourse-api` and `@/lib/course-providers/*` with the new client.
+- Delete:
+  - `src/lib/course-providers/` (whole folder)
+  - `src/lib/golfcourse-api.ts`
+  - `src/lib/satellite-providers.ts`
+  - `src/lib/mapbox-course-layers.ts`, `mapbox-mapped-layers.ts`, `mapbox-shot-overlay.ts`, `mapbox-static.ts`
+  - `supabase/functions/golfcourse-api/`
+  - `supabase/functions/mapbox-token/`
+- Uninstall `mapbox-gl`.
+- Keep `src/lib/gswing-osm-overpass.ts` + `OsmScanPanel` (owner-only assist, per your choice).
 
-`src/pages/GswingCourseMapper.tsx`
-- Read query params; pass them as initial props to `CourseMapper`.
-- (Option **B**: remove `MembershipGate`.)
+## 4. Map surface — no basemap tiles
 
-`src/components/gswing/admin/CourseMapper.tsx`
-- Accept new optional props: `initialCourseId`, `initialCourseName`, `initialHole`, `initialLat/Lng`, `initialUnits`, `returnTo`.
-- On mount, if `initialCourseId` is set, skip the course-picker step and jump straight into the workspace at the requested hole.
-- After a successful `Save Hole` (existing save handler), if `returnTo === "gps"` → `navigate("/?view=gps&hole=<n>&refreshMap=1")` instead of staying in the mapper.
+`GpsMap.tsx` is rebuilt around the existing `PremiumHoleRenderer` (SVG on emerald canvas):
 
-### 4. Instant refresh in Live GPS
+- Removes Mapbox init, style swaps, provider chain, satellite/premium toggle, tap-to-measure on tiles.
+- Premium SVG hole rendering + real-world haversine tap-to-measure using projected coords.
+- Course Mapper keeps its Esri fallback removed too — it becomes an emerald grid canvas with manual placement using GPS coords from GolfAPI.io. (Confirming this in the technical notes since it's a meaningful UX change.)
 
-`GpsMap.tsx`
-- On mount / location change, if URL has `refreshMap=1`, invalidate the course-map cache for the current course and re-fetch only the affected hole, then strip the param via `replaceState`. No full reload.
-- The existing `mappedHole` query already drives the Premium renderer — a single re-fetch is enough for it to repaint.
+## 5. Admin — Settings → Golf API
 
-### 5. Floating "Map Course" FAB + progress chip
+New page `src/pages/GolfApiSettings.tsx` + route `/gswing/golf-api`, owner-only:
 
-`src/components/gswing/gps/PremiumGpsOverlay.tsx`
-- New floating chip top-right (under the top status rail) shown when `mappingStatus.courseMapped === false`:
-  ```
-  ✨ Premium Mapping   16 / 18
-  ```
-  Tapping it opens the same Start Mapping flow scoped to the **next missing hole** (or current hole if it is missing).
-- Hide the chip when `courseMapped === true`; briefly show a "Premium GPS Ready ✓ 18/18" toast on the transition.
+- Connection status, Test Connection, Last Sync, Search Club, Sync Club, Sync Course, Sync All Cached, API Response viewer, Cache Stats, Force Refresh, log viewer (last 100 calls).
 
-### 6. Hole skip prompt
+Replaces `GolfCourseApiSyncPanel` + `ManageCourses` GolfCourseAPI bits.
 
-When the *current* hole is mapped but *some other* hole is missing AND the user just arrived from Course Mapper, show a small bottom sheet: "Hole N still needs mapping — Map now / Skip". Reuses the same overlay buttons.
+## 6. Cleanup & validation
 
-### 7. Smart "you're on an unmapped course" prompt
+- Remove all references to `GolfCourseAPI`, `iGolf`, `GolfIntelligence`, `SATELLITE_PROVIDER_CHAIN`, `mapbox-token` edge fn, `VITE_MAPBOX_ACCESS_TOKEN`.
+- Update `useGswingMembership` feature keys if any name changes.
+- `tsgo` + `eslint` clean.
+- Manual smoke: search a club → open course → see holes → open Live GPS → tap measure works.
 
-In `GpsMap.tsx`, when course resolution via nearest-course detection succeeds but no `golf_courses` row + no `gswing_course_maps` exists, surface a one-time toast (sonner) with action: "Map this course" → routes to `/gswing/course-mapper?lat=…&lng=…&new=1`. `CourseMapper` already supports creating a new course; we'll just wire the `new=1` shortcut to land on its create-course screen.
+---
 
-## Files touched
+## Technical notes
 
-- `src/components/gswing/GpsMap.tsx` — detection, query param plumbing, refresh-on-return, smart toast.
-- `src/components/gswing/gps/PremiumHoleRenderer.tsx` — wire `MappingRequiredOverlay`, remove owner-only fork.
-- `src/components/gswing/gps/PremiumGpsOverlay.tsx` — progress chip / FAB.
-- `src/components/gswing/gps/MappingRequiredOverlay.tsx` — NEW.
-- `src/components/gswing/admin/CourseMapper.tsx` — accept initial context props, skip picker, post-save return-to-GPS.
-- `src/pages/GswingCourseMapper.tsx` — pass query params, optionally drop `MembershipGate`.
-- `src/lib/gswing-premium-readiness.ts` — small helper `courseReadinessSummary(courseId)` if not already present.
+- Base URL & response schema will be read from https://golfapi.io/docs; if a documented field is missing (e.g. hazards), it's stored as null and marked "unavailable" in the admin panel — no fabricated data.
+- Cache TTL default: 30 days for courses, 7 days for club search. Overridable per row.
+- The GOLF_API_KEY secret is already saved and only readable from the edge function; the anon/publishable keys stay client-side (safe by design).
+- Removing Mapbox means the Live GPS view no longer shows real satellite imagery. The Premium SVG hole renderer becomes the sole map surface. Course Mapper loses its satellite drawing aid — geometry will be drawn on the emerald canvas using GolfAPI.io GPS coordinates as anchors. If you want satellite imagery back later, we can reintroduce a single tile provider without changing this migration.
 
-No DB schema changes. No edge function changes.
+## Deliverables report (produced after implementation)
 
-## Open questions
-
-1. **Option A (owner-only) or Option B (any signed-in user) for mapping access?** Defaulting to A.
-2. **"Smart detection" toast** — only when GPS accuracy ≤ 50 m, or always when a nearby unmapped course is detected? Defaulting to ≤ 50 m to avoid noise.
-
-Reply "go" to build with the defaults, or tell me which to flip.
+Files deleted, files modified, new edge functions, migrations run, providers removed, dead-code sweep summary, and an architecture diagram confirming GolfAPI.io → Edge Function → Supabase Cache → Frontend is the only data path.
