@@ -1623,32 +1623,43 @@ function MapboxCourseView({
           this card just invites the user to start mapping. */}
       {mapView === "satellite" && mappingStatus === "missing" && !premiumHintDismissed && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-3 sm:top-4">
-          <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-gold/35 bg-black/75 px-4 py-3 text-white/90 shadow-elegant backdrop-blur-md">
+          <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-emerald-400/30 bg-black/80 px-4 py-3.5 text-white/90 shadow-elegant backdrop-blur-md">
             <div className="flex items-start gap-3">
               <div className="flex-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-soft">
-                  Premium GPS not mapped yet
+                <div className="flex items-center gap-2">
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-400/20 text-emerald-300">✓</span>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300">
+                    Course Loaded Successfully
+                  </p>
+                </div>
+                <p className="mt-1.5 text-[13px] font-semibold text-white">
+                  {selectedCourse.name}
                 </p>
-                <p className="mt-1 text-[12px] leading-snug text-white/80">
-                  {selectedCourse.name} is added and live. Map Hole {hole} to unlock fairway, green and hazard overlays.
+                <ul className="mt-2 space-y-0.5 text-[11px] leading-snug text-white/75">
+                  <li>✓ Course Data: GolfAPI.io</li>
+                  <li>✓ Satellite Map: Mapbox</li>
+                  <li>✓ GPS Ready · Hole & Tee Data Loaded</li>
+                </ul>
+                <p className="mt-2 text-[11px] leading-snug text-white/70">
+                  You can <span className="text-emerald-300 font-semibold">start your round immediately</span> using Satellite GPS. Mapping is optional and only enhances the premium visual overlays (fairways, greens, bunkers, hazards).
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPremiumHintDismissed(true)}
+                    className="rounded-lg bg-gold px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-black shadow-[0_0_14px_rgba(245,200,75,0.35)] active:scale-[0.98]"
+                  >
+                    Start Round
+                  </button>
                   {membership.isOwner && (
                     <button
                       type="button"
                       onClick={openMapperForCurrentHole}
-                      className="rounded-lg bg-gold px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-black shadow-[0_0_14px_rgba(245,200,75,0.35)] active:scale-[0.98]"
+                      className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80 hover:bg-white/10"
                     >
-                      Start Mapping
+                      Map Course (Optional)
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setPremiumHintDismissed(true)}
-                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80 hover:bg-white/10"
-                  >
-                    Continue with Satellite
-                  </button>
                 </div>
               </div>
               <button
