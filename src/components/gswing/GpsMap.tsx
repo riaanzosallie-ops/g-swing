@@ -3231,17 +3231,20 @@ export const GpsMap = () => {
         });
         setCourses(merged);
         setCourseId((current) => {
-          if (merged.some((course) => course.id === current)) return current;
-          // Auto-repair: if the persisted active course id doesn't
-          // resolve but its name matches a cached GolfAPI course, bind
-          // to the real provider id and update the persisted record.
+          // Auto-repair: prefer a real cached GolfAPI course over the
+          // demo/placeholder UUID when their names match, so activated
+          // courses actually bind to real coordinates.
           const active = readActiveCourse();
-          if (active?.name) {
+          const currentEntry = merged.find((c) => c.id === current);
+          const isCurrentDemoPlaceholder =
+            currentEntry && !isGolfApiCourseId(currentEntry.id);
+          const nameForRepair = (active?.name ?? currentEntry?.name)?.trim().toLowerCase();
+          if (nameForRepair) {
             const norm = active.name.trim().toLowerCase();
             const hit = golfApiCourses.find(
-              (c) => c.name.trim().toLowerCase() === norm,
+              (c) => c.name.trim().toLowerCase() === nameForRepair,
             );
-            if (hit) {
+            if (hit && (isCurrentDemoPlaceholder || !currentEntry)) {
               writeActiveCourse({
                 id: hit.id,
                 name: hit.name,
@@ -3253,6 +3256,7 @@ export const GpsMap = () => {
               return hit.id;
             }
           }
+          if (currentEntry) return current;
           // Keep the user's current selection if it looks like a
           // GolfAPI id — the cached list may not have loaded yet.
           if (isGolfApiCourseId(current)) return current;
