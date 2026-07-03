@@ -17,6 +17,7 @@ import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { getActiveCourse, subscribeActiveCourse, type ActiveCourse } from "@/lib/active-course";
 
 const moreTiles = [
+  { id: "courses", label: "My Courses", icon: MapIcon, hint: "Activate a course to play" },
   { id: "gps", label: "Live GPS", icon: MapPin, hint: "Satellite course view" },
   { id: "arena", label: "Betting Arena", icon: Swords, hint: "Stake & compete" },
   { id: "live", label: "Live Dashboard", icon: Activity, hint: "Match leaderboard" },
@@ -321,7 +322,6 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
           {[
             ...(isAdmin
               ? [
-                  { id: "courses", label: "Manage Courses", icon: MapIcon, hint: "Mapping operations hub" },
                   { id: "golfapi", label: "Golf API", icon: Globe2 as any, hint: "GolfAPI.io · sole data source" },
                 ]
               : []),
