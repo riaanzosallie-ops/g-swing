@@ -75,7 +75,14 @@ export default function ManageCourses({ go }: { go?: (view: string) => void }) {
         ? { id: courses[0].id, name: courses[0].course_name, source: "mapped" as const }
         : null) ??
       (cached.length === 1 && courses.length === 0
-        ? { id: cached[0].courseID, name: cached[0].courseName, source: "golfapi" as const }
+        ? {
+            id: cached[0].courseID,
+            name:
+              cached[0].courseName?.trim() ||
+              cached[0].clubName?.trim() ||
+              "Cached course",
+            source: "golfapi" as const,
+          }
         : null);
     if (combined) {
       setActiveCourse(combined);
