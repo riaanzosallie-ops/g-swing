@@ -15,7 +15,8 @@ import { toast } from "sonner";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import {
   deleteCachedCourse, getCoordinates, getCourse, listCachedCourses, ping,
-  recentLogs, searchClubs, stats, type CachedCourseSummary,
+  recentLogs, searchClubs, stats, isRateLimited, rateLimitInfo, clearRateLimit,
+  type CachedCourseSummary,
   type GolfApiClubHit, type LogRow,
 } from "@/lib/golfapi/client";
 
@@ -37,6 +38,17 @@ export default function GolfApiSettingsPage() {
   const [searchResults, setSearchResults] = useState<GolfApiClubHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [rawResponse, setRawResponse] = useState<unknown>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [rateLimited, setRateLimited] = useState(isRateLimited());
+
+  // Poll rate-limit status so the UI unlocks itself when the lockout expires.
+  useEffect(() => {
+    const t = setInterval(() => setRateLimited(isRateLimited()), 5_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const busy = searching || syncingAll || syncingId !== null || health === "checking" || loadingCache;
 
   const refreshAll = useCallback(async () => {
     setLoadingCache(true);
@@ -57,6 +69,7 @@ export default function GolfApiSettingsPage() {
   }, [admin.status, refreshAll]);
 
   const runHealth = async () => {
+    if (busy) return;
     setHealth("checking");
     setHealthMsg(null);
     try {
@@ -71,12 +84,18 @@ export default function GolfApiSettingsPage() {
     } catch (e) {
       setHealth("error");
       setHealthMsg(e instanceof Error ? e.message : "Unknown error");
+      setRateLimited(isRateLimited());
     }
   };
 
   const runSearch = async () => {
+    if (busy) return;
     const q = query.trim();
     if (!q) return;
+    if (isRateLimited()) {
+      toast.error(rateLimitInfo().message || "Rate limit reached. Use cached courses.");
+      return;
+    }
     setSearching(true);
     setSearchResults(null);
     try {
@@ -86,16 +105,23 @@ export default function GolfApiSettingsPage() {
       setRawResponse(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Search failed");
+      setRateLimited(isRateLimited());
     } finally {
       setSearching(false);
     }
   };
 
   const syncCourse = async (courseId: string, force = true) => {
+    if (syncingId) return;
+    if (force && isRateLimited()) {
+      toast.error(rateLimitInfo().message || "Rate limit reached.");
+      return;
+    }
+    setSyncingId(courseId);
     try {
       const c = await getCourse(courseId, { force });
       // Also pull GPS coordinates if the course has them.
-      if (c.hasGPS) {
+      if (c.hasGPS && force && !isRateLimited()) {
         try { await getCoordinates(courseId, { force: true }); } catch { /* soft */ }
       }
       toast.success(`Synced ${c.courseName}`);
@@ -103,17 +129,37 @@ export default function GolfApiSettingsPage() {
       await refreshAll();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Sync failed");
+      setRateLimited(isRateLimited());
+    } finally {
+      setSyncingId(null);
     }
   };
 
   const syncAll = async () => {
-    if (!cached.length) return;
+    if (!cached.length || syncingAll) return;
+    if (isRateLimited()) {
+      toast.error(rateLimitInfo().message || "Rate limit reached.");
+      return;
+    }
+    setSyncingAll(true);
     toast.info(`Refreshing ${cached.length} cached courses…`);
     for (const c of cached) {
+      if (isRateLimited()) break;
       try { await getCourse(c.courseID, { force: true }); } catch { /* keep going */ }
     }
-    toast.success("Cache refresh complete");
+    toast.success(isRateLimited() ? "Stopped — rate limit reached" : "Cache refresh complete");
     await refreshAll();
+    setSyncingAll(false);
+  };
+
+  const useCached = async (courseId: string) => {
+    try {
+      const c = await getCourse(courseId, { force: false });
+      toast.success(`Loaded cached ${c.courseName}`);
+      setRawResponse(c.raw);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No cached copy");
+    }
   };
 
   const deleteOne = async (courseId: string) => {
@@ -159,6 +205,23 @@ export default function GolfApiSettingsPage() {
         </p>
       </header>
 
+      {rateLimited && (
+        <Card className="border-red-500/40 bg-red-950/40 p-3 text-xs text-red-100">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-semibold">
+              <ShieldAlert className="h-4 w-4" /> GolfAPI.io trial limit reached
+            </div>
+            <Button size="sm" variant="outline" onClick={() => { clearRateLimit(); setRateLimited(false); }} className="h-7 border-red-300/40 text-red-100">
+              Clear
+            </Button>
+          </div>
+          <p className="mt-1 text-red-200/80">
+            All live GolfAPI.io calls are paused. Cached courses continue to work.
+            {rateLimitInfo().retryAt ? ` Retry after ${new Date(rateLimitInfo().retryAt).toLocaleTimeString()}.` : ""}
+          </p>
+        </Card>
+      )}
+
       {/* Connection status */}
       <Card className="border-gold/20 bg-black/40 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -177,7 +240,9 @@ export default function GolfApiSettingsPage() {
               </p>
             </div>
           </div>
-          <Button size="sm" onClick={runHealth} className="bg-gold text-black hover:bg-gold/85">Test connection</Button>
+          <Button size="sm" onClick={runHealth} disabled={busy || rateLimited} className="bg-gold text-black hover:bg-gold/85">
+            {health === "checking" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Test connection"}
+          </Button>
         </div>
         {lastSync && (
           <p className="mt-2 text-[11px] text-foreground/60">Last cache write: {new Date(lastSync).toLocaleString()}</p>
@@ -189,11 +254,11 @@ export default function GolfApiSettingsPage() {
         <div className="flex items-center justify-between">
           <h2 className="font-serif text-lg text-gold">Cache</h2>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={refreshAll} disabled={loadingCache} className="gap-1 border-gold/40 text-gold">
+            <Button size="sm" variant="outline" onClick={refreshAll} disabled={busy} className="gap-1 border-gold/40 text-gold">
               <RefreshCw className={`h-3.5 w-3.5 ${loadingCache ? "animate-spin" : ""}`} /> Refresh
             </Button>
-            <Button size="sm" onClick={syncAll} disabled={!cached.length} className="gap-1 bg-gold text-black hover:bg-gold/85">
-              <CloudDownload className="h-3.5 w-3.5" /> Sync all
+            <Button size="sm" onClick={syncAll} disabled={!cached.length || busy || rateLimited} className="gap-1 bg-gold text-black hover:bg-gold/85">
+              {syncingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudDownload className="h-3.5 w-3.5" />} Sync all
             </Button>
           </div>
         </div>
@@ -218,7 +283,7 @@ export default function GolfApiSettingsPage() {
               className="h-10 border-gold/30 bg-black/60 pl-8 text-sm"
             />
           </div>
-          <Button onClick={runSearch} disabled={searching} className="bg-gold text-black hover:bg-gold/85">
+          <Button onClick={runSearch} disabled={busy || rateLimited} className="bg-gold text-black hover:bg-gold/85">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
           </Button>
         </div>
@@ -240,8 +305,8 @@ export default function GolfApiSettingsPage() {
                           {c.numHoles} holes · {c.hasGPS ? "GPS available" : "No GPS"} · #{c.courseID}
                         </p>
                       </div>
-                      <Button size="sm" onClick={() => void syncCourse(c.courseID)} className="h-7 bg-gold text-black hover:bg-gold/85">
-                        Sync
+                      <Button size="sm" onClick={() => void syncCourse(c.courseID)} disabled={busy || rateLimited} className="h-7 bg-gold text-black hover:bg-gold/85">
+                        {syncingId === c.courseID ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sync"}
                       </Button>
                     </div>
                   ))}
@@ -259,7 +324,9 @@ export default function GolfApiSettingsPage() {
         </h2>
         {cached.length === 0 && <p className="text-xs text-foreground/60">Nothing cached yet. Search above to sync a course.</p>}
         <div className="space-y-1.5">
-          {cached.map((c) => (
+          {cached.map((c) => {
+            const isSharjah = /sharjah/i.test(c.clubName) || /sharjah/i.test(c.courseName);
+            return (
             <div key={c.courseID} className="flex items-center justify-between gap-2 rounded border border-gold/10 bg-emerald-950/30 px-3 py-2 text-xs">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-gold">{c.courseName}</p>
@@ -269,14 +336,20 @@ export default function GolfApiSettingsPage() {
                   {c.cachedAt ? ` · cached ${new Date(c.cachedAt).toLocaleDateString()}` : ""}
                 </p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => void syncCourse(c.courseID)} className="h-7 border-gold/40 text-gold">
-                <RefreshCw className="h-3 w-3" />
+              {isSharjah && c.hasCoordinates && (
+                <Button size="sm" variant="outline" onClick={() => void useCached(c.courseID)} disabled={busy} className="h-7 border-emerald-400/50 text-emerald-200">
+                  Use cached
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => void syncCourse(c.courseID)} disabled={busy || rateLimited} className="h-7 border-gold/40 text-gold" title="Manual refresh (live)">
+                {syncingId === c.courseID ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => void deleteOne(c.courseID)} className="h-7 text-red-300 hover:bg-red-500/10">
+              <Button size="sm" variant="ghost" onClick={() => void deleteOne(c.courseID)} disabled={busy} className="h-7 text-red-300 hover:bg-red-500/10">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 

@@ -6,6 +6,37 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+// ---- Request control (trial-quota protection) -----------------------------
+// The GolfAPI.io trial is small, so every live call is gated by:
+//   • cache-first reads (always try Supabase before hitting the vendor);
+//   • in-flight deduplication (same key → same promise);
+//   • a per-key cooldown (repeated taps become no-ops);
+//   • a global rate-limit lockout when the vendor reports quota exhausted.
+
+const COOLDOWN_MS = 15_000; // per-action cooldown between live calls
+const RATE_LIMIT_LOCKOUT_MS = 10 * 60_000; // stop retrying for 10 min
+
+const inflight = new Map<string, Promise<unknown>>();
+const lastCallAt = new Map<string, number>();
+let rateLimitedUntil = 0;
+let rateLimitMessage = "";
+
+export function isRateLimited(): boolean {
+  return Date.now() < rateLimitedUntil;
+}
+export function rateLimitInfo(): { limited: boolean; message: string; retryAt: number } {
+  return { limited: isRateLimited(), message: rateLimitMessage, retryAt: rateLimitedUntil };
+}
+export function clearRateLimit() {
+  rateLimitedUntil = 0;
+  rateLimitMessage = "";
+}
+
+function logSource(source: "CACHE" | "LIVE API" | "COOLDOWN" | "RATE-LIMIT", label: string) {
+  // eslint-disable-next-line no-console
+  console.info(`[golf-api][${source}] ${label}`);
+}
+
 // ---- Vendor types (normalised where useful) -------------------------------
 
 export interface GolfApiClubHit {
@@ -76,21 +107,61 @@ export interface GolfApiCoordinate {
 // ---- Low-level invoke -----------------------------------------------------
 
 async function invoke<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("golf-api", {
-    body: { action, ...params },
-  });
-  if (error) throw new Error(error.message || `golf-api ${action} failed`);
-  if (data && typeof data === "object" && "error" in data) {
-    // Graceful fallback signal from the edge function (e.g. vendor quota
-    // exceeded). Callers can catch and use cached data instead of crashing.
-    if ((data as { fallback?: boolean }).fallback) {
-      const err = new Error(String((data as { error: unknown }).error));
-      (err as Error & { fallback?: boolean }).fallback = true;
+  const key = `${action}:${JSON.stringify(params)}`;
+
+  // Hard stop if the vendor has told us quota is exhausted.
+  if (isRateLimited()) {
+    logSource("RATE-LIMIT", key);
+    const err = new Error(rateLimitMessage || "API_RATE_LIMIT_EXCEEDED");
+    (err as Error & { fallback?: boolean }).fallback = true;
+    throw err;
+  }
+
+  // Cooldown: don't repeat the same live call within the window.
+  const last = lastCallAt.get(key) ?? 0;
+  if (Date.now() - last < COOLDOWN_MS && !inflight.has(key)) {
+    logSource("COOLDOWN", key);
+    const err = new Error("Please wait before repeating this request.");
+    (err as Error & { cooldown?: boolean }).cooldown = true;
+    throw err;
+  }
+
+  // In-flight dedup: same key → same promise.
+  const existing = inflight.get(key);
+  if (existing) {
+    logSource("LIVE API", `${key} (dedup)`);
+    return existing as Promise<T>;
+  }
+
+  logSource("LIVE API", key);
+  const promise = (async () => {
+    const { data, error } = await supabase.functions.invoke("golf-api", {
+      body: { action, ...params },
+    });
+    if (error) throw new Error(error.message || `golf-api ${action} failed`);
+    if (data && typeof data === "object" && "error" in data) {
+      const payload = data as { error: unknown; fallback?: boolean; message?: string };
+      const msg = String(payload.message ?? payload.error);
+      // Vendor quota exhausted — set a global lockout so nothing else fires.
+      if (payload.fallback && /rate.?limit|quota|limit exceeded/i.test(msg + " " + String(payload.error))) {
+        rateLimitedUntil = Date.now() + RATE_LIMIT_LOCKOUT_MS;
+        rateLimitMessage = "GolfAPI.io trial limit reached — using cached data.";
+      }
+      const err = new Error(msg);
+      (err as Error & { fallback?: boolean }).fallback = !!payload.fallback;
       throw err;
     }
-    throw new Error(String((data as { error: unknown }).error));
+    return data as T;
+  })();
+
+  inflight.set(key, promise);
+  try {
+    const result = await promise;
+    lastCallAt.set(key, Date.now());
+    return result;
+  } finally {
+    inflight.delete(key);
   }
-  return data as T;
 }
 
 // ---- Health / stats -------------------------------------------------------
@@ -206,7 +277,15 @@ function isStale(cachedAt: string | null): boolean {
 export async function getCourse(courseId: string, opts: { force?: boolean } = {}): Promise<GolfApiCourse> {
   if (!opts.force) {
     const cached = await loadCachedCourse(courseId);
-    if (cached && !isStale(cached.cachedAt)) return cached;
+    if (cached && !isStale(cached.cachedAt)) {
+      logSource("CACHE", `course:${courseId}`);
+      return cached;
+    }
+    // If we're rate-limited, don't try live — return stale cache if any.
+    if (isRateLimited() && cached) {
+      logSource("CACHE", `course:${courseId} (stale, rate-limited)`);
+      return cached;
+    }
   }
   try {
     await invoke("course", { id: courseId });
@@ -214,7 +293,10 @@ export async function getCourse(courseId: string, opts: { force?: boolean } = {}
     // Vendor unavailable (quota, network) — fall back to any cached copy,
     // even if stale, so the app keeps working instead of blank-screening.
     const stale = await loadCachedCourse(courseId);
-    if (stale) return stale;
+    if (stale) {
+      logSource("CACHE", `course:${courseId} (fallback after ${(e as Error).message})`);
+      return stale;
+    }
     throw e;
   }
   const fresh = await loadCachedCourse(courseId);
@@ -250,7 +332,14 @@ export async function getCoordinates(courseId: string, opts: { force?: boolean }
       .select("*")
       .eq("course_id", courseId)
       .order("hole");
-    if (data && data.length) return data.map((r) => normaliseCoord(r as Record<string, unknown>));
+    if (data && data.length) {
+      logSource("CACHE", `coordinates:${courseId} (${data.length})`);
+      return data.map((r) => normaliseCoord(r as Record<string, unknown>));
+    }
+    if (isRateLimited()) {
+      logSource("CACHE", `coordinates:${courseId} (empty, rate-limited)`);
+      return [];
+    }
   }
   try {
     await invoke("coordinates", { id: courseId });
@@ -260,7 +349,10 @@ export async function getCoordinates(courseId: string, opts: { force?: boolean }
       .select("*")
       .eq("course_id", courseId)
       .order("hole");
-    if (data && data.length) return data.map((r) => normaliseCoord(r as Record<string, unknown>));
+    if (data && data.length) {
+      logSource("CACHE", `coordinates:${courseId} (fallback after ${(e as Error).message})`);
+      return data.map((r) => normaliseCoord(r as Record<string, unknown>));
+    }
     throw e;
   }
   const { data } = await supabase
