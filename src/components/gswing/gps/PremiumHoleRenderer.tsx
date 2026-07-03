@@ -169,6 +169,7 @@ export function PremiumHoleRenderer({
       width: size.w,
       height: size.h,
       paddingPx: PADDING,
+      paddingBottomPx: PADDING + 280,
     });
   }, [bounds, size.w, size.h]);
 
