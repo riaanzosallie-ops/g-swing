@@ -2052,27 +2052,7 @@ function PremiumGpsChrome(props: {
                   </span>
                 </div>
               )}
-              <div className="mt-1 text-[9px] uppercase tracking-wider text-gold-soft/70">
-                Mapping ·{" "}
-                {mappingStatus === "mapped"
-                  ? "ready"
-                  : mappingStatus === "loading"
-                    ? "loading…"
-                    : "required"}
-              </div>
             </div>
-            {debug && (
-              <>
-                <div className="my-1 h-px bg-gold/15" />
-                <div className="px-1 pb-1">
-                  <MappingDebugPanel
-                    {...debug}
-                    playerPosition={playerPosition}
-                    playerAccuracy={playerAccuracy}
-                  />
-                </div>
-              </>
-            )}
           </PopoverContent>
         </Popover>
       </div>
