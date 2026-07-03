@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,23 +95,9 @@ export default function Auth() {
     localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(next));
   }
 
-  async function handleGoogle() {
-    persistPlan(plan);
-    setBusy(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/auth",
-    });
-    setBusy(false);
-    if (result.error) toast({ title: "Google sign-in failed", description: String(result.error.message ?? result.error) });
-    if (result.redirected) return;
-    // popup success — refresh user.
-    if (plan.code === "free") {
-      localStorage.removeItem(PLAN_STORAGE_KEY);
-      navigate("/", { replace: true });
-    } else {
-      setPhase("pay");
-    }
-  }
+  // NOTE: Google / Apple OAuth are intentionally hidden from the UI to
+  // simplify onboarding. Backend providers stay enabled — re-add the
+  // buttons here to restore social login.
 
   async function handleEmailSignup() {
     persistPlan(plan);
@@ -284,18 +269,6 @@ export default function Auth() {
 
         {phase === "auth" && (
           <div className="space-y-4 rounded-2xl border border-gold/25 bg-black/60 p-4 backdrop-blur-md">
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={handleGoogle}
-              className="w-full border-gold/40 bg-white text-black hover:bg-white/90"
-            >
-              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Continue with Google
-            </Button>
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-white/40">
-              <span className="h-px flex-1 bg-white/10" /> or <span className="h-px flex-1 bg-white/10" />
-            </div>
             <Tabs defaultValue="signin">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="signin">Sign in</TabsTrigger>
