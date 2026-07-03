@@ -2419,6 +2419,8 @@ function GpsLockBanner({
 }
 
 const DEFAULT_POSITION: LatLng = { lat: 25.3536, lng: 55.4881 };
+// Generic 18-hole offline fallback par sequence (not course-specific).
+// The authoritative par for any real course comes from golfapi pars_men[] via Supabase.
 const DEMO_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 3, 4, 4, 5, 4, 3, 4, 4];
 
 // All previous Sharjah Hole 1 placeholder geometry has been removed.

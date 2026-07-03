@@ -229,7 +229,22 @@ export function PremiumHoleRenderer({
       <div className="absolute inset-0 bg-[radial-gradient(70%_45%_at_70%_15%,rgba(245,200,75,0.10)_0%,transparent_70%)] mix-blend-screen" />
       <div className="absolute inset-0 bg-[radial-gradient(45%_30%_at_15%_90%,rgba(0,0,0,0.55)_0%,transparent_70%)]" />
 
-      {!usable ? null : (
+      {/* When a MappedHole exists but has no usable tee/green geometry
+           (e.g. auto-synth returned a shell with no GolfAPI coordinates),
+           show the mapping-required gate instead of a blank green screen.
+           This satisfies the "Premium must never display an empty screen
+           when geometry exists" acceptance criterion. */}
+      {!usable && mappedHole ? (
+        <PremiumMappingRequired
+          selectedHoleNumber={selectedHoleNumber}
+          missing={missing}
+          progress={progress}
+          isOwner={isOwner ?? false}
+          onOpenMapper={onOpenMapper}
+          onMarkLayerNa={onMarkLayerNa}
+          onContinueSatellite={onContinueSatellite}
+        />
+      ) : !usable ? null : (
         <svg
           ref={svgRef}
           width={size.w || 1}
