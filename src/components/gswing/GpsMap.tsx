@@ -3273,30 +3273,6 @@ export const GpsMap = () => {
     loadHole();
   }, [loadHole]);
 
-  // Recompute cached-course health whenever the bound course changes.
-  useEffect(() => {
-    let cancelled = false;
-    if (!isGolfApiCourseId(courseId)) {
-      setGolfApiHealth({ cached: false, quality: 0, holesWithCoords: 0 });
-      return;
-    }
-    computeGolfApiCourseQuality(courseId)
-      .then((h) => {
-        if (cancelled) return;
-        setGolfApiHealth({
-          cached: h.holesWithCoords > 0,
-          quality: h.score,
-          holesWithCoords: h.holesWithCoords,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setGolfApiHealth({ cached: false, quality: 0, holesWithCoords: 0 });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [courseId]);
-
   // Persist the last course locally for convenience defaulting.
   useEffect(() => {
     try {
