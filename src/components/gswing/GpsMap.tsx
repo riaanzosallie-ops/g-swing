@@ -1424,7 +1424,15 @@ function MapboxCourseView({
     }
     // Mapped-hole extras (layup rings drawn in Course Mapper).
     for (const pt of mappedHole?.layups ?? []) {
-      if (pt?.latlng) push({ id: `mh-layup-${pt.yards ?? "?"}`, label: pt.label ?? `Layup ${pt.yards ?? ""}`.trim(), latlng: pt.latlng, kind: "layup" });
+      const c = pt?.coordinate;
+      if (!c) continue;
+      const yd = pt.targetYardageFromGreen;
+      push({
+        id: `mh-layup-${pt.id}`,
+        label: pt.name?.trim() || (yd != null ? `Layup ${yd}` : "Layup"),
+        latlng: { lat: c.lat, lng: c.lng },
+        kind: "layup",
+      });
     }
     return list.slice(0, 8);
   }, [gps, pinFromGps, mappedHole]);
