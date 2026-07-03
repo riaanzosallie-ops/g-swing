@@ -1584,6 +1584,10 @@ function MapboxCourseView({
     onClear: () => setMeasurePoint(null),
   };
 
+  // Show the token loading/error blocker without early-returning above
+  // the hook chain. This preserves a stable hook count across renders.
+  if (tokenBlockerElement) return tokenBlockerElement;
+
   return (
     <div
       className={`gswing-map relative overflow-hidden rounded-[28px] border border-gold/25 bg-black shadow-elegant ${
