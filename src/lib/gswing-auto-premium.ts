@@ -30,6 +30,10 @@ import {
   extractOsmHoleGeometry,
   fetchOsmCourseGeometry,
 } from "@/lib/osm-course-geometry";
+import {
+  getBundledCourseGeometry,
+  mergeCourseGeometry,
+} from "@/lib/bundled-course-geometry";
 
 const EARTH_R = 6371000;
 const YARDS_PER_M = 1.09361;
@@ -648,7 +652,11 @@ export async function synthesizePremiumHoleWithOsm(
   const greenCenter = gps.green?.center ?? null;
   if (bestTee && greenCenter) {
     try {
-      const course = await fetchOsmCourseGeometry(courseCenter);
+      const [bundled, fetched] = [
+        getBundledCourseGeometry(courseCenter),
+        await fetchOsmCourseGeometry(courseCenter),
+      ];
+      const course = mergeCourseGeometry(bundled, fetched);
       if (course) {
         osm = extractOsmHoleGeometry(
           course,

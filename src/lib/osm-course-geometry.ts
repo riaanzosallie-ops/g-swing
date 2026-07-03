@@ -295,6 +295,15 @@ function ringToPolylineMeters(ring: Ring, line: LatLng[], origin: LatLng): numbe
   return best;
 }
 
+/** Max distance (m) from any ring vertex to the corridor polyline. */
+function ringMaxToPolylineMeters(ring: Ring, line: LatLng[], origin: LatLng): number {
+  let worst = 0;
+  for (const [lng, lat] of ring) {
+    worst = Math.max(worst, pointToPolylineMeters({ lat, lng }, line, origin));
+  }
+  return worst;
+}
+
 /**
  * Slice course geometry down to a single hole. `tee` and `greenCenter`
  * come from GolfAPI — they anchor the corridor features are matched to.
@@ -323,6 +332,25 @@ export function extractOsmHoleGeometry(
       ) { holeLine = h.line.slice().reverse(); break; }
     }
   }
+  // Sub-path match: a merged/course-long centreline that passes near both
+  // this tee and this green contributes just the segment between them.
+  if (!holeLine) {
+    for (const h of course.holeLines) {
+      let iT = -1, dT = 80, iG = -1, dG = 80;
+      for (let i = 0; i < h.line.length; i++) {
+        const dt = metersBetween(h.line[i], tee);
+        const dg = metersBetween(h.line[i], greenCenter);
+        if (dt < dT) { dT = dt; iT = i; }
+        if (dg < dG) { dG = dg; iG = i; }
+      }
+      if (iT >= 0 && iG >= 0 && Math.abs(iT - iG) >= 2) {
+        holeLine = iT < iG
+          ? h.line.slice(iT, iG + 1)
+          : h.line.slice(iG, iT + 1).reverse();
+        break;
+      }
+    }
+  }
   // Orient a ref-matched line tee → green.
   if (holeLine && holeLine.length >= 2) {
     const first = holeLine[0];
@@ -344,12 +372,20 @@ export function extractOsmHoleGeometry(
     if (d < bestGreenD) { bestGreenD = d; green = g; }
   }
 
-  // Fairway: the polygon nearest the corridor (any vertex within 45m).
+  // Fairway: the polygon nearest the corridor (any vertex within 45m),
+  // but ONLY if it is single-hole sized — every vertex must stay near
+  // this hole's corridor. Merged multi-hole turf blobs (common in
+  // imagery-derived data) fail this test and are dropped so the buffer
+  // synthesis around the real centreline takes over instead of a
+  // sprawling cross-hole polygon.
   let fairway: Ring | null = null;
   let bestFairwayD = 45;
   for (const f of course.fairways) {
     const d = ringToPolylineMeters(f, corridor, origin);
     if (d < bestFairwayD) { bestFairwayD = d; fairway = f; }
+  }
+  if (fairway && ringMaxToPolylineMeters(fairway, corridor, origin) > 90) {
+    fairway = null;
   }
 
   const near = (rings: Ring[], maxM: number): Ring[] =>

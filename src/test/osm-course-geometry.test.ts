@@ -133,4 +133,44 @@ describe("extractOsmHoleGeometry", () => {
     expect(out.green).toBeNull();
     expect(out.bunkers).toHaveLength(0);
   });
+
+  it("extracts a sub-path from a merged multi-hole centreline", () => {
+    // A long line that passes near this hole's tee and green mid-way,
+    // then continues far beyond both.
+    const line = [
+      { lat: 25.351, lng: 55.484 }, // far before
+      { lat: 25.3541, lng: 55.4881 }, // ≈ tee
+      { lat: 25.3555, lng: 55.49 },
+      { lat: 25.3569, lng: 55.4919 }, // ≈ green
+      { lat: 25.360, lng: 55.496 }, // far after
+    ];
+    const out = extractOsmHoleGeometry(
+      course({ holeLines: [{ ref: null, line }] }),
+      tee,
+      greenC,
+      1,
+    );
+    expect(out.holeLine).not.toBeNull();
+    expect(out.holeLine).toHaveLength(3);
+    expect(out.holeLine![0].lat).toBeCloseTo(25.3541, 4);
+    expect(out.holeLine![2].lat).toBeCloseTo(25.3569, 4);
+  });
+
+  it("drops a fairway polygon that sprawls across multiple holes", () => {
+    // Ring hugging the corridor but with a far-away lobe (merged blob).
+    const sprawling: Array<[number, number]> = [
+      [55.488, 25.354],
+      [55.49, 25.3555],
+      [55.492, 25.357],
+      [55.499, 25.362], // ~700m off-corridor lobe
+      [55.488, 25.354],
+    ];
+    const out = extractOsmHoleGeometry(
+      course({ fairways: [sprawling] }),
+      tee,
+      greenC,
+      1,
+    );
+    expect(out.fairway).toBeNull();
+  });
 });

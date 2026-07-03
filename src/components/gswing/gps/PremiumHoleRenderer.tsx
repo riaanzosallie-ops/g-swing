@@ -1085,8 +1085,14 @@ function TreeFeature({
     return inside;
   };
 
-  // Scatter 5–9 trees inside the cluster polygon.
-  const target = 5 + Math.floor(rand() * 5);
+  // Scatter trees inside the cluster polygon — count scales with the
+  // polygon's on-screen area so large imagery-derived tree masses stay
+  // dense while small clusters keep 5–9 trees.
+  const bboxArea = Math.max(1, (maxX - minX) * (maxY - minY));
+  const target = Math.max(
+    5 + Math.floor(rand() * 5),
+    Math.min(42, Math.round((bboxArea * 0.62) / 260)),
+  );
   const scattered: Array<{ x: number; y: number; r: number }> = [];
   let attempts = 0;
   while (scattered.length < target && attempts < target * 40) {
