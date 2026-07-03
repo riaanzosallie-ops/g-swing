@@ -37,7 +37,22 @@ export interface ProjectedPoint {
   y: number;
 }
 
-/** Collect every mapped coordinate that should influence the renderer bounds. */
+/**
+ * Collect every mapped coordinate that should influence the viewport
+ * fit. This is intentionally restricted to the *playable hole corridor*
+ * — tees, greens, pin, fairway, layups, doglegs, landing zones — and
+ * deliberately excludes broad scenery layers such as:
+ *
+ *   - hole.holeBoundary  (course/hole-wide outline)
+ *   - hole.roughPolygon  (huge rough mass)
+ *   - hole.cartPath      (can span multiple holes)
+ *   - hazard polygons    (trees/water can sprawl beyond the corridor;
+ *                         hazard center/front/carry points still count)
+ *
+ * Those layers still RENDER — they just don't get to control zoom. This
+ * keeps the Premium camera centered on tee→green, not on tree bands or
+ * course-wide masks that would otherwise force us to zoom out.
+ */
 function collectHolePoints(
   hole: MappedHole | null,
   player: LatLng | null,
@@ -49,25 +64,28 @@ function collectHolePoints(
     [g.front, g.center, g.back].forEach((p) => p && pts.push(p));
     if (g.polygon) for (const [lng, lat] of g.polygon) pts.push({ lat, lng });
     if (hole.pin) pts.push(hole.pin.coordinate);
+    // Hazards: only their key points (reach/carry/center), NOT their
+    // full polygons — a tree cluster polygon can extend far outside the
+    // corridor and would blow up the fit.
     for (const h of hole.hazards) {
       pts.push(h.center);
       if (h.front) pts.push(h.front);
       if (h.carry) pts.push(h.carry);
-      if (h.polygon) for (const [lng, lat] of h.polygon) pts.push({ lat, lng });
     }
     for (const l of hole.layups) pts.push(l.coordinate);
     for (const d of hole.doglegs) pts.push(d.coordinate);
     for (const z of hole.landingZones) pts.push(z.coordinate);
-    const polyLists: Array<Array<[number, number]> | null | undefined> = [
+    // Playable corridor polygons only. teePolygon is tight/local so it
+    // stays; fairwayPolygon defines the corridor itself.
+    const corridorPolys: Array<Array<[number, number]> | null | undefined> = [
       hole.fairwayPolygon,
       hole.teePolygon,
-      hole.holeBoundary,
-      hole.roughPolygon,
-      hole.cartPath,
     ];
-    for (const poly of polyLists) {
+    for (const poly of corridorPolys) {
       if (poly) for (const [lng, lat] of poly) pts.push({ lat, lng });
     }
+    // Intentionally excluded from bounds (still rendered):
+    //   hole.holeBoundary, hole.roughPolygon, hole.cartPath
   }
   if (player) pts.push({ lat: player.lat, lng: player.lng });
   return pts;
