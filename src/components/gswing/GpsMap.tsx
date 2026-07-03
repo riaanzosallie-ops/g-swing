@@ -1278,7 +1278,15 @@ function MapboxCourseView({
   // currently-selected course + hole, or mark a missing premium visual
   // layer as "not applicable" for this hole. Strictly gated behind
   // membership.isOwner — non-owner users never see these affordances.
-  const navigateToCourseMapper = useNavigate();
+  // NOTE: intentionally NOT using react-router's useNavigate here.
+  // useNavigate contains a conditional internal branch
+  // (`isDataRoute ? useNavigateStable() : useNavigateUnstable()`),
+  // which can flip the number of hooks it invokes across renders
+  // during router bootstrap and cause React error #310 ("Rendered
+  // more hooks than during the previous render") inside this very
+  // large component. We only need a straight cross-page navigation
+  // to the Course Mapper URL, so window.location.assign is both
+  // sufficient and hook-free.
   const openMapperForCurrentHole = useCallback(() => {
     if (!membership.isOwner) return;
     // One-tap launch: hand the mapper *everything* it needs to skip the
@@ -1298,7 +1306,9 @@ function MapboxCourseView({
       params.set("lng", String(selectedCourse.lng));
     }
     params.set("returnTo", "gps");
-    navigateToCourseMapper(`/gswing/course-mapper?${params.toString()}`);
+    if (typeof window !== "undefined") {
+      window.location.assign(`/gswing/course-mapper?${params.toString()}`);
+    }
   }, [
     membership.isOwner,
     selectedCourse?.name,
@@ -1308,7 +1318,6 @@ function MapboxCourseView({
     hole,
     unit,
     playerPosition,
-    navigateToCourseMapper,
   ]);
 
   // Instant refresh: when the user returns from the Course Mapper with
