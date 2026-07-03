@@ -2617,15 +2617,31 @@ export const GpsMap = () => {
   const [courses, setCourses] = useState<GolfCourse[]>(UAE_COURSES);
   const [courseId, setCourseId] = useState<string>(() => {
     try {
+      // Prefer the persisted active course (new flow), fall back to
+      // the legacy "last course" key, then the demo default.
+      const active = localStorage.getItem("gswing.activeCourse");
+      if (active) {
+        try {
+          const parsed = JSON.parse(active) as { id?: string };
+          if (parsed?.id) return parsed.id;
+        } catch { /* fall through */ }
+      }
       return localStorage.getItem("gswing.lastCourseId") || MAIN_COURSE_ID;
     } catch {
       return MAIN_COURSE_ID;
     }
   });
-  // Course selection gate — open on mount so the player always sees the
-  // picker before a new round. The previously-used course is remembered
-  // and shown as the default selection, but never silently auto-started.
-  const [courseGateOpen, setCourseGateOpen] = useState(true);
+  // Course selection gate — only opens on mount when there's no active
+  // course yet. Once the user has activated a course (via Manage Courses
+  // or a prior GPS pick) we skip the picker and load Hole 1 immediately.
+  const [courseGateOpen, setCourseGateOpen] = useState(() => {
+    try {
+      return !localStorage.getItem("gswing.activeCourse")
+        && !localStorage.getItem("gswing.lastCourseId");
+    } catch {
+      return true;
+    }
+  });
   const [pendingCourse, setPendingCourse] = useState<GolfCourse | null>(null);
   const adminState = useGswingAdmin();
   const isOwner = adminState.status === "admin";
