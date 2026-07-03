@@ -3240,7 +3240,6 @@ export const GpsMap = () => {
             currentEntry && !isGolfApiCourseId(currentEntry.id);
           const nameForRepair = (active?.name ?? currentEntry?.name)?.trim().toLowerCase();
           if (nameForRepair) {
-            const norm = active.name.trim().toLowerCase();
             const hit = golfApiCourses.find(
               (c) => c.name.trim().toLowerCase() === nameForRepair,
             );
