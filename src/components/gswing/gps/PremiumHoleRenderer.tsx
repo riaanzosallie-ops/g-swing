@@ -255,10 +255,16 @@ export function PremiumHoleRenderer({
               accuracy={gpsAccuracy}
             />
           )}
-          {projection && playerPosition && includePlayer && measurementTarget && (
+          {projection && measurementTarget && (playerPosition && includePlayer
+            ? true
+            : !!mappedHole?.tees?.[0]?.coordinate) && (
             <MeasurementLineLayer
               projection={projection}
-              from={playerPosition}
+              from={
+                playerPosition && includePlayer
+                  ? playerPosition
+                  : (mappedHole!.tees[0].coordinate as LatLng)
+              }
               to={measurementTarget}
               unit={unit}
             />
@@ -269,8 +275,10 @@ export function PremiumHoleRenderer({
       {/* Hint chip when measuring with no GPS / no target */}
       {isMeasuring && usable && (
         <div className="pointer-events-none absolute left-1/2 bottom-3 -translate-x-1/2 rounded-full border border-gold/35 bg-black/65 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-gold backdrop-blur-md">
-          {!playerPosition
-            ? "GPS location required to measure"
+          {!playerPosition || !includePlayer
+            ? measurementTarget
+              ? "Measuring from tee"
+              : "Tap the hole to measure (from tee)"
             : measurementTarget
               ? "Tap to update target"
               : "Tap the hole to measure"}

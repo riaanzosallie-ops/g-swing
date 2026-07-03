@@ -201,8 +201,10 @@ function organicBufferPolygon(
     radius: number,
     segments: number,
   ): Array<[number, number]> => {
-    // Sweep the shortest way from `fromBearing` → `toBearing`.
-    let delta = ((toBearing - fromBearing + 540) % 360) - 180;
+    // Always sweep the positive (outward) direction — with the from/to
+    // bearings the caller passes, this hits +180° through the outward
+    // side and avoids the exact-semicircle sign flip.
+    const delta = (((toBearing - fromBearing) % 360) + 360) % 360;
     const out: Array<[number, number]> = [];
     for (let i = 1; i < segments; i++) {
       const b = (fromBearing + delta * (i / segments) + 360) % 360;
