@@ -1857,19 +1857,19 @@ function MapboxCourseView({
       {membership.isOwner && (
         <OwnerDebugPanel
           courseName={selectedCourse.name}
-          courseId={courseId}
+          courseId={selectedCourse.id}
           source={
-            isGolfApiCourseId(courseId)
+            isGolfApiCourseId(selectedCourse.id)
               ? "GolfAPI.io Auto"
               : sourceLabel(evaluateHoleQuality(mappedHole).source)
           }
           qualityScore={
-            isGolfApiCourseId(courseId)
+            isGolfApiCourseId(selectedCourse.id)
               ? golfApiHealth.quality
               : evaluateHoleQuality(mappedHole).score
           }
           qualityLabel={
-            isGolfApiCourseId(courseId)
+            isGolfApiCourseId(selectedCourse.id)
               ? (golfApiHealth.quality >= 90
                   ? "Premium Ready"
                   : golfApiHealth.quality >= 75
@@ -1880,7 +1880,7 @@ function MapboxCourseView({
               : evaluateHoleQuality(mappedHole).badge.label
           }
           cached={
-            isGolfApiCourseId(courseId) ? golfApiHealth.cached : !!mappedHole
+            isGolfApiCourseId(selectedCourse.id) ? golfApiHealth.cached : !!mappedHole
           }
           round={round.round}
           gpsAccuracyMeters={playerAccuracy}
