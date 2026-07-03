@@ -921,7 +921,7 @@ function HazardShape({
     case "bunker":
       return <BunkerFeature points={polyPts} center={c} />;
     case "trees":
-      return <TreeFeature points={polyPts} center={c} />;
+      return <TreeFeature points={polyPts} center={c} projection={projection} />;
     case "rough":
       return <RoughFeature points={polyPts} center={c} />;
     case "out_of_bounds":
