@@ -1689,11 +1689,6 @@ function MapboxCourseView({
               onMarkLayerNa={markLayerNotApplicable}
               onContinueSatellite={() => handleSetMapView("satellite")}
             />
-            {mappedIsAuto && mappedHole && (
-              <div className="pointer-events-none absolute left-3 bottom-3 z-30 rounded-full border border-emerald-400/30 bg-black/65 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-emerald-200 backdrop-blur-md">
-                Auto · GolfAPI.io
-              </div>
-            )}
             </>
           )}
         </div>
