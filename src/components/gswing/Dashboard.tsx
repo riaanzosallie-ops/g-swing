@@ -14,8 +14,10 @@ import { useBrowserCoords, useGswingWeather } from "@/lib/use-gswing-weather";
 import { buildGolfWeatherInsight } from "@/lib/gswing-weather";
 import { conditionIcon } from "./WeatherPill";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
+import { getActiveCourse, subscribeActiveCourse, type ActiveCourse } from "@/lib/active-course";
 
 const moreTiles = [
+  { id: "courses", label: "My Courses", icon: MapIcon, hint: "Activate a course to play" },
   { id: "gps", label: "Live GPS", icon: MapPin, hint: "Satellite course view" },
   { id: "arena", label: "Betting Arena", icon: Swords, hint: "Stake & compete" },
   { id: "live", label: "Live Dashboard", icon: Activity, hint: "Match leaderboard" },
@@ -41,6 +43,8 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
   const [rounds] = useRounds();
   const admin = useGswingAdmin();
   const isAdmin = admin.status === "admin";
+  const [activeCourse, setActiveCourseState] = useState<ActiveCourse | null>(() => getActiveCourse());
+  useEffect(() => subscribeActiveCourse(setActiveCourseState), []);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
@@ -197,6 +201,32 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
 
       {/* ===== PRIMARY CTA + DOCK ===== */}
       <section className="hero-rise space-y-3" style={{ animationDelay: "180ms" }}>
+        <div className="glass-panel flex items-center justify-between gap-3 rounded-2xl border border-gold/25 p-4">
+          <div className="min-w-0">
+            <p className="text-[9px] uppercase tracking-[0.35em] text-gold/70">Active Course</p>
+            {activeCourse ? (
+              <>
+                <p className="truncate font-serif text-base text-foreground">{activeCourse.name}</p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {[activeCourse.city, activeCourse.country].filter(Boolean).join(" · ") || `${activeCourse.holes ?? 18} holes`}
+                </p>
+              </>
+            ) : (
+              <p className="mt-0.5 text-xs text-muted-foreground">No course activated yet.</p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            {activeCourse ? (
+              <>
+                <Button size="sm" onClick={() => go("gps")} className="h-7 bg-gold text-black hover:bg-gold/85">Open GPS</Button>
+                <button onClick={() => go("courses")} className="text-[10px] text-gold/80 underline underline-offset-2">Change</button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => go("courses")} className="h-7 bg-gold text-black hover:bg-gold/85">Choose course</Button>
+            )}
+          </div>
+        </div>
+
         <button
           onClick={() => go("scorecard")}
           className="cta-glow gradient-gold tactile-card group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-3xl px-6 py-5 text-primary-foreground"
@@ -292,7 +322,6 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
           {[
             ...(isAdmin
               ? [
-                  { id: "courses", label: "Manage Courses", icon: MapIcon, hint: "Mapping operations hub" },
                   { id: "golfapi", label: "Golf API", icon: Globe2 as any, hint: "GolfAPI.io · sole data source" },
                 ]
               : []),
