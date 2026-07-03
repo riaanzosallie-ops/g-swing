@@ -12,15 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShieldAlert, Save, Trash2, MapPin, Flag, Crosshair, Pentagon, Layers, Check, X, Globe2, ChevronDown, ChevronUp, Wrench } from "lucide-react";
+import { ShieldAlert, Save, Trash2, MapPin, Flag, Crosshair, Pentagon, Layers, Check, X, ChevronDown, ChevronUp, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { loadMapboxToken } from "@/components/gswing/GpsMap";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { ensureMappedLayers, setMappedHoleData } from "@/lib/mapbox-mapped-layers";
 import { buildMappedHoleFromRows, loadMappedHole } from "@/lib/gswing-course-map-loader";
-import { OsmScanPanel } from "@/components/gswing/admin/OsmScanPanel";
-import type { OsmImportPreviewItem } from "@/lib/gswing-osm-overpass";
 import {
   evaluatePremiumLayers,
   type PremiumLayerKey,
@@ -169,9 +167,7 @@ export default function CourseMapper() {
   const [saving, setSaving] = useState(false);
   const [loadingHole, setLoadingHole] = useState(false);
 
-  // OSM (Overpass) assist — preview only, never auto-saved.
-  const [osmOpen, setOsmOpen] = useState(false);
-  // GolfCourseAPI sync (owner only, comparison + import).
+  // Golf API admin (owner only) — opens the GolfAPI.io console.
   // Mobile UI — collapsible tool dock + inspector. Defaults closed on
   // narrow viewports so the map stays usable; auto-open on >=md.
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
@@ -753,90 +749,6 @@ export default function CourseMapper() {
     });
   }, []);
 
-  // Snapshot of current draft for OSM comparison. Manual mapping wins, so we
-  // measure against what is *currently* saved/drafted for this hole.
-  const gswingSnapshot = useMemo(() => {
-    const find = (t: FeatureType) => features.find((f) => f.feature_type === t);
-    const tee = find("tee");
-    const gc = find("green_center");
-    const pin = find("pin");
-    const bunkerCount = features.filter((f) => f.feature_type === "bunker").length;
-    const waterCount = features.filter(
-      (f) => f.feature_type === "water" || f.feature_type === "penalty",
-    ).length;
-    return {
-      holeNumber,
-      tee: tee?.center_lat != null && tee.center_lng != null ? { lat: tee.center_lat, lng: tee.center_lng } : null,
-      greenCenter:
-        gc?.center_lat != null && gc.center_lng != null ? { lat: gc.center_lat, lng: gc.center_lng } : null,
-      pin: pin?.center_lat != null && pin.center_lng != null ? { lat: pin.center_lat, lng: pin.center_lng } : null,
-      bunkerCount,
-      waterCount,
-    };
-  }, [features, holeNumber]);
-
-  // Map OSM types onto G-Swing FeatureType drafts. Skip course-level and
-  // metadata-only types — those are not draft features.
-  function osmTypeToDraft(type: OsmImportPreviewItem["type"]): FeatureType | null {
-    switch (type) {
-      case "tee": return "tee";
-      case "green": return "green_center";
-      case "pin": return "pin";
-      case "bunker": return "bunker";
-      case "water_hazard": return "water";
-      default: return null; // hole, fairway, rough, golf_course → not imported as drafts
-    }
-  }
-
-  function importOsmFeatures(items: OsmImportPreviewItem[]) {
-    setFeatures((prev) => {
-      const next = [...prev];
-      let imported = 0;
-      let skipped = 0;
-      for (const it of items) {
-        const ft = osmTypeToDraft(it.type);
-        if (!ft || it.centerLat == null || it.centerLng == null) {
-          skipped++;
-          continue;
-        }
-        // Manual G-Swing mapping always wins: skip if a verified (non-OSM)
-        // singleton feature of this type already exists for tee/green/pin.
-        const singleton = ft === "tee" || ft === "green_center" || ft === "pin";
-        if (singleton) {
-          const existing = next.find((f) => f.feature_type === ft);
-          if (existing && existing.source !== "osm_preview") {
-            skipped++;
-            continue;
-          }
-          if (existing && existing.source === "osm_preview") {
-            // replace older OSM preview with the newer pick
-            const idx = next.indexOf(existing);
-            next.splice(idx, 1);
-          }
-        }
-        next.push({
-          id: uid(),
-          feature_type: ft,
-          name: `[OSM] ${it.label}`,
-          side_label: null,
-          center_lat: it.centerLat,
-          center_lng: it.centerLng,
-          polygon_json: it.polygon,
-          notes: `Imported from OpenStreetMap (${it.osmId}). Unverified — review before saving.`,
-          source: "osm_preview",
-          verified: false,
-          needs_review: true,
-        });
-        imported++;
-      }
-      if (skipped > 0) {
-        toast.message(`Imported ${imported}, skipped ${skipped} (manual mapping wins).`);
-      }
-      return next;
-    });
-    setOsmOpen(false);
-  }
-
   const save = async () => {
     if (admin.status !== "admin") {
       toast.error("Admin role required to save.");
@@ -1050,16 +962,6 @@ export default function CourseMapper() {
             className="h-7 border-gold/40 bg-black/40 px-2 text-[10px] uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
           >
             Sharjah
-          </Button>
-          <Button
-            type="button"
-            onClick={() => setOsmOpen(true)}
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1 border-gold/40 bg-black/40 px-2 text-[10px] uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
-            title="Scan OpenStreetMap nearby (preview only)"
-          >
-            <Globe2 className="h-3 w-3" /> OSM
           </Button>
           <Button
             type="button"
@@ -1409,15 +1311,6 @@ export default function CourseMapper() {
         </div>
       </div>
 
-      <OsmScanPanel
-        isOpen={osmOpen}
-        onClose={() => setOsmOpen(false)}
-        centerLat={centerLat}
-        centerLng={centerLng}
-        holeNumber={holeNumber}
-        gswingSnapshot={gswingSnapshot}
-        onImport={importOsmFeatures}
-      />
     </div>
   );
 }

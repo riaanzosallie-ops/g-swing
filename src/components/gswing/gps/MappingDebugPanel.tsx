@@ -56,7 +56,7 @@ function source(
   status: MappingDebugPanelProps["mappingStatus"],
   provider?: string | null,
 ): string {
-  // Distance priority: G-Swing mapping → GolfCourseAPI → OSM Preview → Missing.
+  // Distance priority: G-Swing mapping → GolfAPI.io metadata → Missing.
   // We only return a single source — sources are never mixed for one hole.
   if (status === "mapped") return "G-Swing Mapping";
   if (status === "missing") {
