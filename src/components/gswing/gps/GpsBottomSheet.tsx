@@ -159,7 +159,7 @@ export function GpsBottomSheet({
 
           {center == null && (
             <p className="mt-2 text-center text-[11px] font-medium tracking-wide text-gold-soft">
-              Mapping required
+              Distances syncing…
             </p>
           )}
           {center != null && readout.pin != null && (

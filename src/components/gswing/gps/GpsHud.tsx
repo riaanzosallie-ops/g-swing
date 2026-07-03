@@ -275,7 +275,7 @@ export function GpsHud(props: GpsHudProps) {
             <div className="px-4 py-3">
               <div className="text-center">
                 <span className="text-[9px] uppercase tracking-[0.25em] text-gold-soft">Yardages</span>
-                <div className="mt-0.5 font-serif text-base text-gold">Green mapping required</div>
+                <div className="mt-0.5 font-serif text-base text-gold">Distances loading…</div>
               </div>
               <div className="mt-2 flex items-stretch">
                 {(["Front", "Center", "Back"] as const).map((label, i) => (
@@ -291,7 +291,7 @@ export function GpsHud(props: GpsHudProps) {
                 ))}
               </div>
               <p className="mt-1 text-center text-[9px] text-white/55">
-                Professional green mapping is required for front, center and back distances.
+                Front, center and back distances appear once GPS locks on the green.
               </p>
             </div>
           ) : (
