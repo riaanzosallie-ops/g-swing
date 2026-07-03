@@ -12,7 +12,14 @@
 // finer illustration". They are NEVER persisted to Supabase.
 
 import type { LatLng } from "@/lib/gps-utils";
-import type { GreenData, HoleGpsResponse, TeeBox } from "@/lib/golf-gps-api";
+import type {
+  GeoJsonLineString,
+  GeoJsonPolygon,
+  GreenData,
+  Hazard,
+  HoleGpsResponse,
+  TeeBox,
+} from "@/lib/golf-gps-api";
 import type {
   HazardGeometry,
   MappedHole,
@@ -60,6 +67,168 @@ function meters(a: LatLng, b: LatLng): number {
 
 /** [lng, lat] tuple used by Mapbox / our polygon rings. */
 function toRing(pt: LatLng): [number, number] { return [pt.lng, pt.lat]; }
+
+// ── Deterministic PRNG (mulberry32) ────────────────────────────────────
+function hashSeed(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function makeRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ── Convert GeoJSON polygon coords → outer ring [lng, lat][] ───────────
+function geoJsonPolygonToRing(
+  poly: GeoJsonPolygon | GeoJsonLineString | null | undefined,
+): Array<[number, number]> | null {
+  if (!poly) return null;
+  if (poly.type === "Polygon") {
+    const outer = poly.coordinates?.[0];
+    if (!outer || outer.length < 3) return null;
+    const ring = outer.map(([lng, lat]) => [lng, lat] as [number, number]);
+    if (
+      ring[0][0] !== ring[ring.length - 1][0] ||
+      ring[0][1] !== ring[ring.length - 1][1]
+    ) ring.push(ring[0]);
+    return ring;
+  }
+  return null;
+}
+
+// ── Catmull-Rom smoothing + resampling of a centerline ─────────────────
+function catmullRom(p0: LatLng, p1: LatLng, p2: LatLng, p3: LatLng, t: number): LatLng {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const lat = 0.5 * (
+    2 * p1.lat +
+    (-p0.lat + p2.lat) * t +
+    (2 * p0.lat - 5 * p1.lat + 4 * p2.lat - p3.lat) * t2 +
+    (-p0.lat + 3 * p1.lat - 3 * p2.lat + p3.lat) * t3
+  );
+  const lng = 0.5 * (
+    2 * p1.lng +
+    (-p0.lng + p2.lng) * t +
+    (2 * p0.lng - 5 * p1.lng + 4 * p2.lng - p3.lng) * t2 +
+    (-p0.lng + 3 * p1.lng - 3 * p2.lng + p3.lng) * t3
+  );
+  return { lat, lng };
+}
+function smoothCenterline(controls: LatLng[], samples = 24): LatLng[] {
+  if (controls.length < 2) return controls.slice();
+  if (controls.length === 2) {
+    const out: LatLng[] = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      out.push({
+        lat: controls[0].lat + (controls[1].lat - controls[0].lat) * t,
+        lng: controls[0].lng + (controls[1].lng - controls[0].lng) * t,
+      });
+    }
+    return out;
+  }
+  const pts = [controls[0], ...controls, controls[controls.length - 1]];
+  const out: LatLng[] = [];
+  const segCount = pts.length - 3;
+  const perSeg = Math.max(2, Math.round(samples / segCount));
+  for (let i = 0; i < segCount; i++) {
+    for (let j = 0; j < perSeg; j++) {
+      out.push(catmullRom(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], j / perSeg));
+    }
+  }
+  out.push(controls[controls.length - 1]);
+  return out;
+}
+
+function centerlineBearingAt(line: LatLng[], i: number): number {
+  const a = line[Math.max(0, i - 1)];
+  const b = line[Math.min(line.length - 1, i + 1)];
+  return bearing(a, b);
+}
+
+/** Build an organic variable-width polygon around a centerline. */
+function organicBufferPolygon(
+  line: LatLng[],
+  widthAt: (t: number) => number,
+  rand: () => number,
+  noiseFrac: number,
+): Array<[number, number]> {
+  const n = line.length;
+  if (n < 2) return [];
+  const left: Array<[number, number]> = [];
+  const right: Array<[number, number]> = [];
+  // Low-frequency noise via pre-baked control values, interpolated.
+  const controlCount = Math.max(4, Math.round(n / 4));
+  const noiseL: number[] = Array.from({ length: controlCount }, () => (rand() * 2 - 1) * noiseFrac);
+  const noiseR: number[] = Array.from({ length: controlCount }, () => (rand() * 2 - 1) * noiseFrac);
+  const sampleNoise = (arr: number[], t: number): number => {
+    const x = t * (arr.length - 1);
+    const i = Math.floor(x);
+    const f = x - i;
+    const a = arr[i];
+    const b = arr[Math.min(arr.length - 1, i + 1)];
+    return a + (b - a) * f;
+  };
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const brg = centerlineBearingAt(line, i);
+    const w = widthAt(t);
+    const wl = Math.max(2, w * (1 + sampleNoise(noiseL, t)));
+    const wr = Math.max(2, w * (1 + sampleNoise(noiseR, t)));
+    left.push(toRing(destination(line[i], (brg + 270) % 360, wl)));
+    right.push(toRing(destination(line[i], (brg + 90) % 360, wr)));
+  }
+  const ring = [...left, ...right.reverse(), left[0]];
+  return ring;
+}
+
+/** Organic blob polygon around a point. */
+function organicBlob(
+  center: LatLng,
+  baseRadiusM: number,
+  rand: () => number,
+  vertices = 14,
+): Array<[number, number]> {
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i < vertices; i++) {
+    const ang = (i / vertices) * 360;
+    const r = baseRadiusM * (0.75 + rand() * 0.5);
+    pts.push(toRing(destination(center, ang, r)));
+  }
+  pts.push(pts[0]);
+  return pts;
+}
+
+/** Project a point onto the nearest centerline segment; return
+ *  { index, param, projected, side (+1 left / -1 right) }. */
+function projectOntoCenterline(
+  line: LatLng[],
+  p: LatLng,
+): { index: number; projected: LatLng; side: 1 | -1; bearingDeg: number } {
+  // Cheap: pick nearest sample, then decide side using cross product.
+  let bestI = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < line.length; i++) {
+    const d = meters(line[i], p);
+    if (d < bestD) { bestD = d; bestI = i; }
+  }
+  const brg = centerlineBearingAt(line, bestI);
+  // Bearing from line point to p; side by signed angle diff.
+  const brgToP = bearing(line[bestI], p);
+  let diff = ((brgToP - brg + 540) % 360) - 180; // -180..180
+  const side: 1 | -1 = diff >= 0 ? -1 : 1; // right of travel = +90 => diff positive
+  return { index: bestI, projected: line[bestI], side, bearingDeg: brg };
+}
 
 /**
  * Rectangle corridor along a centreline (start → end) with a half-width
@@ -112,10 +281,6 @@ function ellipsePolygon(
   }
   pts.push(pts[0]);
   return pts;
-}
-
-function circlePolygon(center: LatLng, radiusM: number, segments = 20): Array<[number, number]> {
-  return ellipsePolygon(center, radiusM, radiusM, 0, segments);
 }
 
 function pickBestTee(tees: TeeBox[]): TeeBox | null {
