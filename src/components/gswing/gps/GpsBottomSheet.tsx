@@ -7,17 +7,26 @@ import {
   Ruler,
   Sparkles,
   Mountain,
+  Target as TargetIcon,
   X as XIcon,
 } from "lucide-react";
 import type { CarryTarget, Unit, YardageReadout } from "@/lib/yardage-engine";
 import type { LatLng } from "@/lib/gps-utils";
 import { measureBetween } from "@/lib/gswing-gps";
+import type { ClubSuggestion } from "@/lib/club-recommender";
 
 type SectionKey = "hazards" | "ace" | "yardages";
 
 const fmt = (v: number | null | undefined) =>
   v == null || !Number.isFinite(v) ? "—" : Math.round(v).toString();
 const unitShort = (u: Unit) => (u === "meters" ? "m" : "yd");
+
+export interface MeasureTarget {
+  id: string;
+  label: string;
+  latlng: LatLng;
+  kind: "pin" | "front" | "center" | "back" | "layup" | "hazard";
+}
 
 export interface GpsBottomSheetProps {
   unit: Unit;
@@ -29,6 +38,12 @@ export interface GpsBottomSheetProps {
   measurePoint: LatLng | null;
   onClearMeasure: () => void;
   playerPosition: LatLng | null;
+  /** Quick-tap targets (Pin, Green front/center/back, Layup, Hazard). */
+  targets?: MeasureTarget[];
+  /** Called when the user picks a quick target chip. */
+  onPickTarget?: (t: MeasureTarget) => void;
+  /** Recommended club for the current measurement, from My Bag. */
+  clubSuggestion?: ClubSuggestion | null;
 }
 
 /**
@@ -48,6 +63,9 @@ export function GpsBottomSheet({
   measurePoint,
   onClearMeasure,
   playerPosition,
+  targets = [],
+  onPickTarget,
+  clubSuggestion = null,
 }: GpsBottomSheetProps) {
   const [expanded, setExpanded] = useState(false);
   const [minimized, setMinimized] = useState(true);
@@ -189,6 +207,32 @@ export function GpsBottomSheet({
                   </button>
                 </div>
               )}
+              {measurement && clubSuggestion && (
+                <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-white/70">
+                  <span className="text-gold">{clubSuggestion.club.name}</span>
+                  <span className="mx-1 text-white/40">·</span>
+                  <span className="text-white/60">{clubSuggestion.note}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {measureActive && targets.length > 0 && onPickTarget && (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+              <span className="mr-0.5 text-[9px] uppercase tracking-[0.22em] text-gold-soft/80">
+                <TargetIcon className="mr-1 inline h-2.5 w-2.5" />
+                Targets
+              </span>
+              {targets.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onPickTarget(t)}
+                  className="rounded-full border border-gold/35 bg-black/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-soft hover:border-gold hover:text-gold"
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
           )}
         </div>
