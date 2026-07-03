@@ -282,25 +282,6 @@ export const Dashboard = ({ go }: { go: (id: string) => void }) => {
         </div>
       </section>
 
-      {/* ===== SIGNATURE CLUB IDENTITY ===== */}
-      <section
-        className="hero-rise glass-panel tactile-card rounded-3xl p-7 text-center"
-        style={{ animationDelay: "340ms" }}
-      >
-        <div className="gold-hairline mx-auto w-1/2" />
-        <p className="mt-4 font-serif text-3xl tracking-[0.25em] text-gradient-gold">G·SWING</p>
-        <p className="mt-1 text-[10px] uppercase tracking-[0.5em] text-gold/70">
-          Private Members Club
-        </p>
-        <Sparkles className="mx-auto mt-4 h-3.5 w-3.5 text-gold/80" />
-        <p className="mt-3 font-serif text-base leading-relaxed text-foreground/90">
-          Play Smarter.<br />
-          Compete Live.<br />
-          Improve Every Round.
-        </p>
-        <div className="gold-hairline mx-auto mt-5 w-1/2" />
-      </section>
-
       {/* ===== MORE FROM YOUR CLUB ===== */}
       <section>
         <p className="mb-3 px-1 text-[10px] uppercase tracking-[0.35em] text-gold/70">
