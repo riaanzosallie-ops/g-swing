@@ -138,6 +138,17 @@ import { PremiumHoleRenderer } from "@/components/gswing/gps/PremiumHoleRenderer
 import { PremiumGpsOverlay } from "@/components/gswing/gps/PremiumGpsOverlay";
 import { CourseSelectorSheet } from "@/components/gswing/gps/CourseSelectorSheet";
 import { useGswingMembership } from "@/hooks/useGswingMembership";
+import {
+  loadGolfApiHoleGps,
+  golfApiToGolfCourse,
+  isGolfApiCourseId,
+  computeGolfApiCourseQuality,
+} from "@/lib/golfapi/gps-adapter";
+import { listCachedCourses } from "@/lib/golfapi/client";
+import {
+  getActiveCourse as readActiveCourse,
+  setActiveCourse as writeActiveCourse,
+} from "@/lib/active-course";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
@@ -393,6 +404,36 @@ function MapboxCourseView({
   // distinguish "no mapped course nearby" from "course found but the
   // current hole has no surveyed geometry yet".
   const [nearestCourseFound, setNearestCourseFound] = useState<boolean | null>(null);
+
+  // GolfAPI cached-course health (owner debug + quality badge).
+  const [golfApiHealth, setGolfApiHealth] = useState<{
+    cached: boolean;
+    quality: number;
+    holesWithCoords: number;
+  }>({ cached: false, quality: 0, holesWithCoords: 0 });
+  useEffect(() => {
+    let cancelled = false;
+    if (!isGolfApiCourseId(selectedCourse.id)) {
+      setGolfApiHealth({ cached: false, quality: 0, holesWithCoords: 0 });
+      return;
+    }
+    computeGolfApiCourseQuality(selectedCourse.id)
+      .then((h) => {
+        if (cancelled) return;
+        setGolfApiHealth({
+          cached: h.holesWithCoords > 0,
+          quality: h.score,
+          holesWithCoords: h.holesWithCoords,
+        });
+      })
+      .catch(() => {
+        if (!cancelled)
+          setGolfApiHealth({ cached: false, quality: 0, holesWithCoords: 0 });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCourse.id]);
 
   // Always-visible-course UX: when the selected hole has no Premium mapping
   // yet, default to Satellite so the user can see, pan, zoom, and measure
@@ -1847,10 +1888,30 @@ function MapboxCourseView({
         <OwnerDebugPanel
           courseName={selectedCourse.name}
           courseId={selectedCourse.id}
-          source={sourceLabel(evaluateHoleQuality(mappedHole).source)}
-          qualityScore={evaluateHoleQuality(mappedHole).score}
-          qualityLabel={evaluateHoleQuality(mappedHole).badge.label}
-          cached={!!mappedHole}
+          source={
+            isGolfApiCourseId(selectedCourse.id)
+              ? "GolfAPI.io Auto"
+              : sourceLabel(evaluateHoleQuality(mappedHole).source)
+          }
+          qualityScore={
+            isGolfApiCourseId(selectedCourse.id)
+              ? golfApiHealth.quality
+              : evaluateHoleQuality(mappedHole).score
+          }
+          qualityLabel={
+            isGolfApiCourseId(selectedCourse.id)
+              ? (golfApiHealth.quality >= 90
+                  ? "Premium Ready"
+                  : golfApiHealth.quality >= 75
+                    ? "Premium Ready · Can Enhance"
+                    : golfApiHealth.holesWithCoords > 0
+                      ? "Enhancement Recommended"
+                      : "Coordinates unavailable")
+              : evaluateHoleQuality(mappedHole).badge.label
+          }
+          cached={
+            isGolfApiCourseId(selectedCourse.id) ? golfApiHealth.cached : !!mappedHole
+          }
           round={round.round}
           gpsAccuracyMeters={playerAccuracy}
           mapView={mapView}
@@ -3078,6 +3139,31 @@ export const GpsMap = () => {
       console.info("[GSWING][5] Loading Course/Hole", { courseId, hole });
     }
     try {
+      // 0. GolfAPI cached course? Bind directly from provider tables so
+      //    tee / green / pin / hazard distances come from the real
+      //    cached coordinates instead of demo geometry.
+      if (isGolfApiCourseId(courseId)) {
+        try {
+          const golfApi = await loadGolfApiHoleGps(courseId, hole, unit, playerPos);
+          if (golfApi) {
+            setGeometryPayload(null);
+            setGps(golfApi);
+            if (import.meta.env.DEV) {
+              // eslint-disable-next-line no-console
+              console.info(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (golfapi cache)`, {
+                courseId,
+                status: golfApi.status,
+                tees: golfApi.tee_boxes.length,
+                hasGreen: !!golfApi.green,
+              });
+            }
+            return;
+          }
+        } catch {
+          // fall through to other loaders
+        }
+      }
+
       // 1. Prefer production geometry from the PostGIS-backed tables.
       try {
         const geom = await fetchHoleGeometry(courseId, hole);
@@ -3126,16 +3212,55 @@ export const GpsMap = () => {
 
     async function loadCourses() {
       try {
-        const data = await fetchCourses();
-        if (cancelled || !data.length) return;
-        const byId = new Map([...UAE_COURSES, ...data.filter((course) => course.country === "AE")].map((course) => [course.id, course]));
+        const [data, cachedGolfApi] = await Promise.all([
+          fetchCourses().catch(() => [] as GolfCourse[]),
+          listCachedCourses().catch(() => []),
+        ]);
+        if (cancelled) return;
+        const golfApiCourses = cachedGolfApi.map(golfApiToGolfCourse);
+        // Merge: UAE demo + backend courses + real GolfAPI cached
+        // courses. GolfAPI entries take precedence when ids collide.
+        const byId = new Map<string, GolfCourse>();
+        for (const c of UAE_COURSES) byId.set(c.id, c);
+        for (const c of data.filter((course) => course.country === "AE")) byId.set(c.id, c);
+        for (const c of golfApiCourses) byId.set(c.id, c);
         const merged = Array.from(byId.values()).sort((a, b) => {
           if (a.id === MAIN_COURSE_ID) return -1;
           if (b.id === MAIN_COURSE_ID) return 1;
           return `${a.city} ${a.name}`.localeCompare(`${b.city} ${b.name}`);
         });
         setCourses(merged);
-        setCourseId((current) => (merged.some((course) => course.id === current) ? current : MAIN_COURSE_ID));
+        setCourseId((current) => {
+          // Auto-repair: prefer a real cached GolfAPI course over the
+          // demo/placeholder UUID when their names match, so activated
+          // courses actually bind to real coordinates.
+          const active = readActiveCourse();
+          const currentEntry = merged.find((c) => c.id === current);
+          const isCurrentDemoPlaceholder =
+            currentEntry && !isGolfApiCourseId(currentEntry.id);
+          const nameForRepair = (active?.name ?? currentEntry?.name)?.trim().toLowerCase();
+          if (nameForRepair) {
+            const hit = golfApiCourses.find(
+              (c) => c.name.trim().toLowerCase() === nameForRepair,
+            );
+            if (hit && (isCurrentDemoPlaceholder || !currentEntry)) {
+              writeActiveCourse({
+                id: hit.id,
+                name: hit.name,
+                source: "golfapi",
+                city: hit.city,
+                country: hit.country,
+                holes: hit.holes_count,
+              });
+              return hit.id;
+            }
+          }
+          if (currentEntry) return current;
+          // Keep the user's current selection if it looks like a
+          // GolfAPI id — the cached list may not have loaded yet.
+          if (isGolfApiCourseId(current)) return current;
+          return MAIN_COURSE_ID;
+        });
       } catch {
         if (!cancelled) setCourses(UAE_COURSES);
       }
