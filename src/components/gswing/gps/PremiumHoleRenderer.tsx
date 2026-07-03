@@ -839,30 +839,43 @@ function layerOrder(t: HazardGeometry["type"]): number {
 function GreenPolygon({
   polygon,
   project,
+  greenDirId,
 }: {
   polygon: Array<[number, number]>;
   project: (p: { lat: number; lng: number }) => { x: number; y: number };
+  greenDirId: string;
 }) {
   const pts = polygon.map(([lng, lat]) => project({ lat, lng }));
   if (pts.length < 3) return null;
-  // Centroid for ring highlight
   let cx = 0, cy = 0;
   for (const p of pts) { cx += p.x; cy += p.y; }
   cx /= pts.length; cy /= pts.length;
-  // Approximate radius for ring overlay
   let rMax = 0;
   for (const p of pts) rMax = Math.max(rMax, Math.hypot(p.x - cx, p.y - cy));
-  const path = `${pts
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-    .join(" ")} Z`;
+  const path = smoothRingPath(pts);
+  const clipId = `${greenDirId}-clip`;
   return (
-    <g filter="url(#gs-shadow)">
-      {/* fringe / collar */}
-      <path d={path} fill="#0e3a25" stroke="#0e3a25" strokeWidth={10} strokeLinejoin="round" opacity={0.95} />
-      {/* manicured green */}
-      <path d={path} fill="url(#gs-green)" stroke="#a8efc6" strokeOpacity={0.4} strokeWidth={1} />
-      {/* contour ring */}
-      <circle cx={cx} cy={cy} r={Math.max(4, rMax * 0.6)} fill="url(#gs-green-ring)" />
+    <g filter="url(#gs-shadow-soft)">
+      <defs>
+        <clipPath id={clipId}>
+          <path d={path} />
+        </clipPath>
+      </defs>
+      {/* Outer feathered fringe / collar */}
+      <path d={path} fill="#0e3a25" stroke="#0e3a25" strokeWidth={12} strokeLinejoin="round" opacity={0.95} filter="url(#gs-feather)" />
+      {/* Manicured turf */}
+      <path d={path} fill="url(#gs-green)" stroke="#a8efc6" strokeOpacity={0.5} strokeWidth={1} />
+      {/* Perpendicular mowing bands, clipped to the green */}
+      <g clipPath={`url(#${clipId})`}>
+        <rect x={cx - rMax - 10} y={cy - rMax - 10} width={rMax * 2 + 20} height={rMax * 2 + 20} fill="url(#gs-green-mow)" opacity={0.85} />
+      </g>
+      {/* Directional shading (front→back) */}
+      <path d={path} fill={`url(#${greenDirId})`} />
+      {/* Contour rings for depth */}
+      <circle cx={cx} cy={cy} r={Math.max(4, rMax * 0.62)} fill="url(#gs-green-ring)" />
+      <circle cx={cx} cy={cy} r={Math.max(3, rMax * 0.42)} fill="none" stroke="#ffffff" strokeOpacity={0.08} strokeWidth={0.6} />
+      {/* Highlight rim */}
+      <path d={path} fill="none" stroke="#e8ffe8" strokeOpacity={0.3} strokeWidth={0.8} filter="url(#gs-feather)" />
     </g>
   );
 }
@@ -966,16 +979,20 @@ function seededRand(seed: string): () => number {
 
 function WaterFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
+    const path = smoothRingPath(points);
     return (
-      <g filter="url(#gs-shadow)">
-        <path d={ringPath(points)} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
-        <path d={ringPath(points)} fill="none" stroke="#cfeeff" strokeOpacity={0.35} strokeWidth={0.6} transform={`translate(0,-1)`} />
+      <g filter="url(#gs-shadow-soft)">
+        <path d={path} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
+        <path d={path} fill="url(#gs-water-ripple)" opacity={0.7} />
+        <path d={path} fill="url(#gs-water-sheen)" opacity={0.9} />
+        <path d={path} fill="none" stroke="#eaf9ff" strokeOpacity={0.55} strokeWidth={0.7} transform="translate(0,-1)" filter="url(#gs-feather)" />
       </g>
     );
   }
   return (
-    <g filter="url(#gs-shadow)">
+    <g filter="url(#gs-shadow-soft)">
       <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
+      <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water-ripple)" opacity={0.6} />
       <ellipse cx={center.x} cy={center.y - 4} rx={20} ry={4} fill="#cfeeff" opacity={0.25} />
     </g>
   );
@@ -983,39 +1000,65 @@ function WaterFeature({ points, center }: { points: { x: number; y: number }[] |
 
 function BunkerFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
+    const path = smoothRingPath(points, 0.4);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    const large = Math.max(maxX - minX, maxY - minY) > 60;
     return (
       <g filter="url(#gs-shadow)">
-        <path d={ringPath(points)} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.7} strokeWidth={1} />
-        <path d={ringPath(points)} fill="url(#gs-sand-stipple)" opacity={0.55} />
+        <path d={path} fill="#3a2a10" opacity={0.5} transform="translate(1.2,2)" filter="url(#gs-feather)" />
+        <path d={path} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.65} strokeWidth={0.8} filter="url(#gs-bunker-rim)" />
+        <path d={path} fill={large ? "url(#gs-sand-grain)" : "url(#gs-sand-stipple)"} opacity={0.55} />
+        <path d={path} fill="none" stroke="#fff3c6" strokeOpacity={0.35} strokeWidth={0.5} filter="url(#gs-feather)" />
       </g>
     );
   }
-  // Cluster of ellipses simulates an organic sand shape
   return (
     <g filter="url(#gs-shadow)">
-      <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.7} strokeWidth={1} />
-      <ellipse cx={center.x + 7} cy={center.y - 3} rx={11} ry={7} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.6} strokeWidth={1} />
-      <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand-stipple)" opacity={0.5} />
+      <g filter="url(#gs-bunker-rim)">
+        <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.7} strokeWidth={0.8} />
+        <ellipse cx={center.x + 7} cy={center.y - 3} rx={11} ry={7} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.6} strokeWidth={0.8} />
+      </g>
+      <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand-grain)" opacity={0.5} />
     </g>
   );
 }
 
 function TreeFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
-  const cluster = points && points.length > 0 ? points.slice(0, 18) : seedCluster(center, 10);
+  const cluster = points && points.length > 0 ? points.slice(0, 22) : seedCluster(center, 12);
+  const rand = seededRand(`${center.x.toFixed(0)}:${center.y.toFixed(0)}:${cluster.length}`);
   return (
     <g filter="url(#gs-shadow)">
       {cluster.map((p, i) => {
-        const r = 6 + ((i * 53) % 5);
+        const r = 5.5 + rand() * 5.5;
+        const lightness = 0.75 + rand() * 0.5;
+        const base = shadeHex("#0d3a22", lightness);
+        const hi = shadeHex("#1b6a3c", lightness);
+        const jitterX = (rand() - 0.5) * 2;
+        const jitterY = (rand() - 0.5) * 2;
         return (
           <g key={i}>
-            <circle cx={p.x} cy={p.y + 2} r={r} fill="#04190e" opacity={0.55} />
-            <circle cx={p.x} cy={p.y} r={r} fill="#0d3a22" />
-            <circle cx={p.x - r * 0.3} cy={p.y - r * 0.35} r={r * 0.55} fill="#1b6a3c" opacity={0.85} />
+            <circle cx={p.x + jitterX} cy={p.y + 2.5} r={r * 1.05} fill="#02110a" opacity={0.55} />
+            <circle cx={p.x + jitterX} cy={p.y + jitterY} r={r} fill={base} />
+            <circle cx={p.x + jitterX - r * 0.32} cy={p.y + jitterY - r * 0.36} r={r * 0.55} fill={hi} opacity={0.9} />
+            <circle cx={p.x + jitterX - r * 0.55} cy={p.y + jitterY - r * 0.55} r={r * 0.22} fill="#a8e6bf" opacity={0.5} />
           </g>
         );
       })}
     </g>
   );
+}
+
+/** Multiply a hex color's channels by `mul`, clamped to 0-255. */
+function shadeHex(hex: string, mul: number): string {
+  const h = hex.replace("#", "");
+  const r = Math.min(255, Math.round(parseInt(h.slice(0, 2), 16) * mul));
+  const g = Math.min(255, Math.round(parseInt(h.slice(2, 4), 16) * mul));
+  const b = Math.min(255, Math.round(parseInt(h.slice(4, 6), 16) * mul));
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
 function seedCluster(center: { x: number; y: number }, n: number): { x: number; y: number }[] {
@@ -1032,7 +1075,7 @@ function seedCluster(center: { x: number; y: number }, n: number): { x: number; 
 
 function RoughFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
-    return <path d={ringPath(points)} fill="url(#gs-rough)" fillOpacity={0.85} stroke="#1f5a36" strokeOpacity={0.55} strokeWidth={0.8} />;
+    return <path d={smoothRingPath(points)} fill="url(#gs-rough)" fillOpacity={0.85} stroke="#1f5a36" strokeOpacity={0.55} strokeWidth={0.8} filter="url(#gs-feather)" />;
   }
   return <ellipse cx={center.x} cy={center.y} rx={26} ry={16} fill="url(#gs-rough)" fillOpacity={0.85} stroke="#1f5a36" strokeOpacity={0.55} />;
 }
