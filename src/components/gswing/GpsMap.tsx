@@ -1180,7 +1180,14 @@ function MapboxCourseView({
   // existing fallback (computeYardages from raw DB geometry) wins.
   const mappedOverride = useMemo(() => {
     if (!mappedHole) return null;
-    const snap = buildGolfGpsSnapshot(playerPosition, mappedHole, unit);
+    // Distance origin: prefer real player GPS, otherwise fall back to
+    // the tee so Front/Center/Back always show real numbers instead of
+    // blank dashes. Matches the "if live GPS unavailable, calculate
+    // from tee position" requirement.
+    const teeOrigin: LatLng | null =
+      mappedHole.tees[0]?.coordinate ?? tee ?? null;
+    const distanceOrigin: LatLng | null = playerPosition ?? teeOrigin;
+    const snap = buildGolfGpsSnapshot(distanceOrigin, mappedHole, unit);
     if (!snap.hasMapping) return null;
     const hazardKind = (
       t: string,
@@ -1257,7 +1264,7 @@ function MapboxCourseView({
       );
     }
     return { readout, insight: parts.join(" ") };
-  }, [mappedHole, playerPosition, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
+  }, [mappedHole, playerPosition, tee, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
 
   // Strict source-of-truth rules:
   //   - When mapped data exists for the selected hole, ONLY mapped data
@@ -1289,7 +1296,7 @@ function MapboxCourseView({
         : yardageReadout;
   const effectiveInsight: string =
     mappingStatus === "missing"
-      ? "Professional mapping required for this hole."
+      ? "Playing to green center."
       : mappingStatus === "mapped" && mappedOverride
         ? mappedOverride.insight
         : caddieInsight;
