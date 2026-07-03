@@ -25,6 +25,7 @@ import ManageCourses from "@/components/gswing/admin/ManageCourses";
 import { Home, MapPin, Trophy, Target, User, ChevronLeft, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MembershipGate } from "@/components/gswing/membership/MembershipGate";
+import { getActiveCourse } from "@/lib/active-course";
 
 const NAV = [
   { id: "home", label: "Home", icon: Home },
@@ -44,10 +45,29 @@ const TITLES: Record<string, string> = {
 };
 
 const Index = () => {
-  const [stage, setStage] = useState<"splash" | "auth" | "app">("splash");
+  // If the user already has an active course saved locally, treat this
+  // as a warm re-open (e.g. reload from within GPS) and skip the Splash
+  // stage entirely. This is what prevents the "Reselect Course → Welcome"
+  // regression: any in-app reload now restores the app shell instead of
+  // dumping the user back to the marketing splash.
+  const [stage, setStage] = useState<"splash" | "auth" | "app">(() =>
+    typeof window !== "undefined" && getActiveCourse() ? "app" : "splash",
+  );
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [pendingEnter, setPendingEnter] = useState(false);
-  const [view, setView] = useState("home");
+  const [view, setView] = useState<string>(() => {
+    if (typeof window === "undefined") return "home";
+    // Deep-link ?view=… wins; otherwise, if an active course exists,
+    // land straight on GPS so play resumes on reload.
+    try {
+      const url = new URL(window.location.href);
+      const v = url.searchParams.get("view");
+      if (v) return v;
+    } catch {
+      /* ignore */
+    }
+    return getActiveCourse() ? "gps" : "home";
+  });
   const [prevView, setPrevView] = useState<string>("home");
 
   const navigate = (next: string) => {
