@@ -73,7 +73,7 @@ export function GpsBottomSheet({
   shotPlan = null,
 }: GpsBottomSheetProps) {
   const [expanded, setExpanded] = useState(false);
-  const [minimized, setMinimized] = useState(true);
+  const [minimized, setMinimized] = useState(false);
   const [open, setOpen] = useState<SectionKey>("hazards");
   const u = unitShort(unit);
 
@@ -157,35 +157,28 @@ export function GpsBottomSheet({
             <DistanceCell label="Back" value={center != null ? fmt(back) : "—"} unit={center != null && back != null ? u : undefined} />
           </div>
 
-          {center == null && (
-            <p className="mt-2 text-center text-[11px] font-medium tracking-wide text-gold-soft">
-              Distances syncing…
-            </p>
-          )}
           {center != null && readout.pin != null && (
             <p className="mt-2 text-center text-[10px] uppercase tracking-wider text-gold-soft">
               Pin <span className="font-serif text-sm text-gold">{fmt(readout.pin)}</span> {u}
             </p>
           )}
 
-          {expanded && <div className="my-2 h-px w-full bg-gold/15" />}
+          <div className="my-2.5 h-px w-full bg-gold/15" />
 
-          {expanded && (
           <div className="flex justify-center">
             <button
               type="button"
               onClick={onToggleMeasure}
-              className={`flex h-9 items-center gap-2 rounded-full border px-5 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all active:scale-95 ${
+              className={`flex h-11 items-center gap-2.5 rounded-full border px-7 text-[12px] font-semibold uppercase tracking-[0.24em] transition-all active:scale-95 ${
                 measureActive
-                  ? "border-gold bg-gold text-black shadow-[0_0_18px_rgba(245,200,75,0.35)]"
+                  ? "border-gold bg-gold text-black shadow-[0_0_22px_rgba(245,200,75,0.45)]"
                   : "border-gold/45 bg-transparent text-gold hover:bg-gold/10"
               }`}
             >
-              <Ruler className="h-3.5 w-3.5" />
+              <Ruler className="h-4 w-4" />
               {measureActive ? "Measuring" : "Measure"}
             </button>
           </div>
-          )}
 
           {measureActive && shotPlan && (
             <div className="mt-2">
