@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "g-swing-mcp",
+      "version": "0.1.0",
+      "title": "G-Swing MCP"
+    },
+    "tools": [
+      {
+        "name": "list_courses",
+        "title": "List golf courses",
+        "description": "List golf courses indexed by G-Swing. Optional country filter and free-text name search. Returns id, name, country, city, holes_count, latitude, longitude.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "country": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO country name or code to filter by (e.g. 'United Arab Emirates')."
+            },
+            "search": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against course name."
+            },
+            "limit": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Max rows to return (default 50, cap 200)."
+            }
+          },
+          "required": [
+            "country",
+            "search",
+            "limit"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_course",
+        "title": "Get course details",
+        "description": "Get full detail for a single course, including its holes (number, par, yardage).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "course_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "The course id returned by list_courses."
+            }
+          },
+          "required": [
+            "course_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_hole_gps",
+        "title": "Get hole GPS data",
+        "description": "Get GPS geometry for one hole: tee boxes, green front/center/back, and hazards. If lat/lng are provided, distances from that point are included.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "course_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Course id from list_courses."
+            },
+            "hole_number": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 36,
+              "description": "Hole number, 1-based."
+            },
+            "lat": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional player latitude for distance calculations."
+            },
+            "lng": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional player longitude for distance calculations."
+            },
+            "unit": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "yards",
+                    "meters"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Distance unit for computed player distances (default yards)."
+            }
+          },
+          "required": [
+            "course_id",
+            "hole_number",
+            "lat",
+            "lng",
+            "unit"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
