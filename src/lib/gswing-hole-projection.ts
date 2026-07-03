@@ -28,6 +28,8 @@ export interface Viewport {
   width: number;
   height: number;
   paddingPx: number;
+  /** Optional extra padding reserved at the bottom (e.g. bottom sheet). */
+  paddingBottomPx?: number;
 }
 
 export interface ProjectedPoint {
@@ -130,13 +132,18 @@ export function fitHoleToViewport(
   const cosLat = Math.cos((bounds.centerLat * Math.PI) / 180);
   const lngSpan = (bounds.maxLng - bounds.minLng) * cosLat;
   const latSpan = bounds.maxLat - bounds.minLat;
-  const usableW = Math.max(1, viewport.width - viewport.paddingPx * 2);
-  const usableH = Math.max(1, viewport.height - viewport.paddingPx * 2);
+  const padSide = viewport.paddingPx;
+  const padBottom = viewport.paddingBottomPx ?? viewport.paddingPx;
+  const usableW = Math.max(1, viewport.width - padSide * 2);
+  const usableH = Math.max(1, viewport.height - padSide - padBottom);
   const scale = Math.min(usableW / lngSpan, usableH / latSpan);
   const projW = lngSpan * scale;
   const projH = latSpan * scale;
   const offsetX = (viewport.width - projW) / 2 - bounds.minLng * cosLat * scale;
-  const offsetY = (viewport.height - projH) / 2 + bounds.maxLat * scale;
+  // Center within the usable (top-padded, bottom-padded) band so the fit
+  // stays visible above the bottom sheet.
+  const usableTop = padSide;
+  const offsetY = usableTop + (usableH - projH) / 2 + bounds.maxLat * scale;
   return { bounds, viewport, scale, offsetX, offsetY, cosLat };
 }
 
