@@ -1766,17 +1766,6 @@ function MapboxCourseView({
       {/* Non-intrusive offline chip — never blocks play. */}
       <OfflineBanner />
 
-      {/* End Round pill — visible but subtle, right side under the top HUD. */}
-      <div className="pointer-events-none absolute right-3 top-3 z-30 flex flex-col items-end gap-1">
-        <button
-          type="button"
-          onClick={() => setEndRoundOpen(true)}
-          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold backdrop-blur-md transition-all active:scale-95"
-        >
-          {round.round.endedAt != null ? "Round summary" : "End round"}
-        </button>
-      </div>
-
       {/* End-of-round summary. Also acts as a resume prompt after refresh. */}
       <EndRoundDialog
         open={endRoundOpen}
