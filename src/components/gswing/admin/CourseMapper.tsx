@@ -209,26 +209,26 @@ export default function CourseMapper() {
       },
       layers: [{ id: "fallback-sat-layer", type: "raster" as const, source: "fallback-sat" }],
     };
-    const FALLBACK_OSM_STYLE = {
+    const FALLBACK_OPEN_TILE_STYLE = {
       version: 8 as const,
       sources: {
-        "fallback-osm": {
+        "fallback-open-tile": {
           type: "raster" as const,
           tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
           tileSize: 256,
           attribution: "© OpenStreetMap contributors",
         },
       },
-      layers: [{ id: "fallback-osm-layer", type: "raster" as const, source: "fallback-osm" }],
+      layers: [{ id: "fallback-open-tile-layer", type: "raster" as const, source: "fallback-open-tile" }],
     };
-    const styleSpec: string | typeof FALLBACK_SAT_STYLE | typeof FALLBACK_OSM_STYLE =
+    const styleSpec: string | typeof FALLBACK_SAT_STYLE | typeof FALLBACK_OPEN_TILE_STYLE =
       mapStyle === "satellite"
         ? "mapbox://styles/mapbox/satellite-streets-v12"
         : mapStyle === "streets"
           ? "mapbox://styles/mapbox/dark-v11"
           : mapStyle === "fallback-satellite"
             ? FALLBACK_SAT_STYLE
-            : FALLBACK_OSM_STYLE;
+            : FALLBACK_OPEN_TILE_STYLE;
     // eslint-disable-next-line no-console
     console.log("[CourseMapper] map init", {
       style: typeof styleSpec === "string" ? styleSpec : mapStyle,
