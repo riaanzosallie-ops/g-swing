@@ -1296,7 +1296,7 @@ function MapboxCourseView({
         : yardageReadout;
   const effectiveInsight: string =
     mappingStatus === "missing"
-      ? "Professional mapping required for this hole."
+      ? "Playing to green center."
       : mappingStatus === "mapped" && mappedOverride
         ? mappedOverride.insight
         : caddieInsight;
