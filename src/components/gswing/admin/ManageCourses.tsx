@@ -221,7 +221,7 @@ export default function ManageCourses({ go }: { go?: (view: string) => void }) {
                 >
                   <MapIcon className="h-3 w-3" /> Live GPS
                 </Button>
-                {(c.external_provider === "GolfAPI.io" || c.external_provider === "GolfCourseAPI") && (
+                {c.external_provider === "GolfAPI.io" && (
                   <Button
                     size="sm" variant="outline"
                     onClick={() => openMapper(c.id, 1)}
