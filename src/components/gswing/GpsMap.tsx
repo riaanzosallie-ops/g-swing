@@ -3016,6 +3016,14 @@ export const GpsMap = () => {
   // Bump to force a fresh hole/geometry load even when courseId+hole
   // don't change (e.g. user re-selects the current course).
   const [reloadNonce, setReloadNonce] = useState(0);
+  // GolfAPI cache/quality snapshot for the currently-bound course.
+  // Purely informational — surfaced by the owner debug panel and used
+  // for the Premium quality badge when the course is auto-generated.
+  const [golfApiHealth, setGolfApiHealth] = useState<{
+    cached: boolean;
+    quality: number;
+    holesWithCoords: number;
+  }>({ cached: false, quality: 0, holesWithCoords: 0 });
   const [currentTime, setCurrentTime] = useState(() =>
     new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
   );
