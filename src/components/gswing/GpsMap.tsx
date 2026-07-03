@@ -3505,7 +3505,7 @@ export const GpsMap = () => {
           <p className="truncate text-xs text-muted-foreground">{selectedCourse.name}</p>
         </div>
         <div className="ml-auto rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">
-          H{hole}/18
+          H{hole}/{selectableHoleCount}
         </div>
       </div>
 
