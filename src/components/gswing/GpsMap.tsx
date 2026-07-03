@@ -1712,6 +1712,16 @@ function MapboxCourseView({
               }
             : undefined
         }
+        onPrevHole={
+          onChangeHole
+            ? () => {
+                const total = holeCount ?? 18;
+                onChangeHole(hole <= 1 ? total : hole - 1);
+              }
+            : undefined
+        }
+        onEndRound={() => setEndRoundOpen(true)}
+        endedLabel={round.round.endedAt != null ? "Round summary" : "End round"}
         mapView={mapView}
         onSetMapView={handleSetMapView}
         measureActive={measureActive}
