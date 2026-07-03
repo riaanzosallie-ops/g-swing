@@ -67,7 +67,20 @@ function collectHolePoints(
     // Hazards: only their key points (reach/carry/center), NOT their
     // full polygons — a tree cluster polygon can extend far outside the
     // corridor and would blow up the fit.
+    // Additionally, skip pure scenery hazards (trees, rough,
+    // out_of_bounds) even for their key points — a distant tree band's
+    // centroid can still stretch the fit far off the corridor. Only
+    // playable hazards (bunkers, water, penalty areas, waste, custom)
+    // are permitted to influence bounds.
+    const playableHazard = new Set([
+      "bunker",
+      "water",
+      "penalty_area",
+      "waste_area",
+      "custom",
+    ]);
     for (const h of hole.hazards) {
+      if (!playableHazard.has(h.type)) continue;
       pts.push(h.center);
       if (h.front) pts.push(h.front);
       if (h.carry) pts.push(h.carry);

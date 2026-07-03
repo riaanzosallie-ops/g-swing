@@ -60,6 +60,24 @@ export function getBundledCourseGeometry(center: LatLng): OsmCourseGeometry | nu
 }
 
 /**
+ * Playable hole count for a bundled course layout near `center`, or
+ * null if this course isn't bundled. Used by the GPS header so seeded
+ * layouts (e.g. Sharjah's 9 mapped holes) don't advertise the upstream
+ * "18" count from GolfAPI when only 9 are actually playable in-app.
+ */
+export function getBundledCourseHoleCount(center: LatLng): number | null {
+  for (const c of BUNDLED) {
+    if (metersBetween(c.center, center) <= MATCH_RADIUS_M) {
+      const hl = c.data.holeLines?.length ?? 0;
+      const fw = c.data.fairways?.length ?? 0;
+      const n = Math.max(hl, fw);
+      return n > 0 ? n : null;
+    }
+  }
+  return null;
+}
+
+/**
  * Merge bundled + live OSM geometry. Bundled features come first so the
  * per-hole matcher prefers them on distance ties; all OSM features are
  * appended (at Sharjah: OSM contributes the surveyed bunkers + lakes).

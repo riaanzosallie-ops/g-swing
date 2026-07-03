@@ -118,6 +118,7 @@ import {
 import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
 import type { MappedHole } from "@/types/gswing-course-map";
 import { synthesizePremiumHoleWithOsm } from "@/lib/gswing-auto-premium";
+import { getBundledCourseHoleCount } from "@/lib/bundled-course-geometry";
 import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
@@ -2875,7 +2876,24 @@ export const GpsMap = () => {
     () => courses.find((course) => course.id === courseId) ?? courses[0] ?? UAE_COURSES[0],
     [courseId, courses],
   );
-  const selectableHoleCount = selectedCourse.holes_count >= 18 ? 18 : selectedCourse.holes_count || 18;
+  // Prefer the actual in-app layout size (bundled/seeded geometry) over
+  // whatever GolfAPI advertises. Sharjah upstream reports 18 but only
+  // ~9 holes are surveyed in-app, so the header should read Hx/9, not
+  // Hx/18. Falls back to the upstream count when no bundled layout.
+  const bundledHoleCount = useMemo(
+    () =>
+      getBundledCourseHoleCount({
+        lat: selectedCourse.lat,
+        lng: selectedCourse.lng,
+      }),
+    [selectedCourse.lat, selectedCourse.lng],
+  );
+  const selectableHoleCount =
+    bundledHoleCount && bundledHoleCount > 0
+      ? bundledHoleCount
+      : selectedCourse.holes_count >= 18
+        ? 18
+        : selectedCourse.holes_count || 18;
 
   const displayUnit = unitLabel(unit);
   // Weather (real, no fabrication) for the GPS Caddie insight panel.
@@ -3487,7 +3505,7 @@ export const GpsMap = () => {
           <p className="truncate text-xs text-muted-foreground">{selectedCourse.name}</p>
         </div>
         <div className="ml-auto rounded-full border border-gold/30 px-3 py-1 text-xs text-gold">
-          H{hole}/18
+          H{hole}/{selectableHoleCount}
         </div>
       </div>
 
