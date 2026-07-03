@@ -4,11 +4,12 @@
 // Function; the API key never touches the browser.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Activity, CheckCircle2, CloudDownload, Database, Loader2, RefreshCw,
+  Activity, ArrowLeft, CheckCircle2, CloudDownload, Database, Loader2, RefreshCw,
   Search, ShieldAlert, Trash2, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +25,11 @@ type Status = "unknown" | "ok" | "error" | "checking";
 
 export default function GolfApiSettingsPage() {
   const admin = useGswingAdmin();
+  const navigate = useNavigate();
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/");
+  };
 
   const [health, setHealth] = useState<Status>("unknown");
   const [apiLeft, setApiLeft] = useState<string | null>(null);
@@ -195,6 +201,14 @@ export default function GolfApiSettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 pb-24 text-white">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={goBack}
+        className="-ml-2 gap-1 text-gold hover:bg-gold/10"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back
+      </Button>
       <header className="rounded-2xl border border-gold/25 bg-emerald-950/40 p-4">
         <p className="text-[10px] uppercase tracking-[0.3em] text-gold/80">Settings · G-Swing Ops</p>
         <h1 className="font-serif text-2xl text-gold">Golf API</h1>
