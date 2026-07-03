@@ -3089,6 +3089,31 @@ export const GpsMap = () => {
       console.info("[GSWING][5] Loading Course/Hole", { courseId, hole });
     }
     try {
+      // 0. GolfAPI cached course? Bind directly from provider tables so
+      //    tee / green / pin / hazard distances come from the real
+      //    cached coordinates instead of demo geometry.
+      if (isGolfApiCourseId(courseId)) {
+        try {
+          const golfApi = await loadGolfApiHoleGps(courseId, hole, unit, playerPos);
+          if (golfApi) {
+            setGeometryPayload(null);
+            setGps(golfApi);
+            if (import.meta.env.DEV) {
+              // eslint-disable-next-line no-console
+              console.info(`[GSWING][${hole === 1 ? "7" : "6"}] Hole ${hole} Loaded (golfapi cache)`, {
+                courseId,
+                status: golfApi.status,
+                tees: golfApi.tee_boxes.length,
+                hasGreen: !!golfApi.green,
+              });
+            }
+            return;
+          }
+        } catch {
+          // fall through to other loaders
+        }
+      }
+
       // 1. Prefer production geometry from the PostGIS-backed tables.
       try {
         const geom = await fetchHoleGeometry(courseId, hole);
