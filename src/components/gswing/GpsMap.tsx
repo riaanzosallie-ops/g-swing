@@ -1694,49 +1694,7 @@ function MapboxCourseView({
         </div>
       )}
 
-      {mapView === "premium" ? (
-        <PremiumGpsOverlay
-          hole={gps?.hole_number ?? hole}
-          par={gps?.par ?? null}
-          handicap={gps?.handicap ?? null}
-          totalHoles={holeCount ?? 18}
-          readout={effectiveReadout}
-          unit={unit}
-          mapView={mapView}
-          onSetMapView={handleSetMapView}
-          measureActive={measureActive}
-          onToggleMeasure={toggleMeasure}
-          showOverlays={showOverlays}
-          onToggleOverlays={() => setShowOverlays((v) => !v)}
-          showHazards={showHazards}
-          onToggleHazards={() => setShowHazards((v) => !v)}
-          showLabels={showLabels}
-          onToggleLabels={() => setShowLabels((v) => !v)}
-          onRecenter={onRecenter}
-          onFitHole={onFitHole}
-          onFlyover={onFlyover}
-          flyoverDisabled={!geometry}
-          flyoverRunning={flyoverRunning}
-          onRefreshMapping={onRefreshMapping}
-          weather={hudWeather}
-          onBack={() => window.dispatchEvent(new CustomEvent("gswing-exit-gps"))}
-          onNextHole={
-            onChangeHole
-              ? () => {
-                  const total = holeCount ?? 18;
-                  onChangeHole(hole >= total ? 1 : hole + 1);
-                }
-              : undefined
-          }
-          onOpenScorecard={() =>
-            window.dispatchEvent(new CustomEvent("gswing-nav", { detail: "scorecard" }))
-          }
-          onOpenSettings={() =>
-            window.dispatchEvent(new CustomEvent("gswing-nav", { detail: "profile" }))
-          }
-        />
-      ) : (
-        <PremiumGpsChrome
+      <PremiumGpsChrome
         hole={gps?.hole_number ?? hole}
         par={gps?.par ?? null}
         handicap={gps?.handicap ?? null}
@@ -1772,54 +1730,9 @@ function MapboxCourseView({
         playerAccuracy={playerAccuracy}
         weather={hudWeather}
         caddieInsight={effectiveInsight}
-        debug={
-          membership.isOwner
-            ? {
-                courseName: selectedCourse.name,
-                courseMapId: mappedCourseId,
-                selectedHole: hole,
-                mappedHole,
-                mappingStatus,
-                front: effectiveReadout.front,
-                center: effectiveReadout.center,
-                back: effectiveReadout.back,
-                unitShort,
-                rendererActive: false,
-                visualMode: mapView,
-                measurementTarget: measurePoint,
-                measurementDistance:
-                  measurePoint && playerPosition
-                    ? Math.round(
-                        haversineYards(playerPosition, measurePoint) *
-                          (unit === "meters" ? 0.9144 : 1),
-                      )
-                    : null,
-                measurementSource: measurePoint ? "satellite-mapbox" : null,
-                satellite: {
-                  activeProvider: activeSatProvider,
-                  providerLabel:
-                    SATELLITE_PROVIDERS[activeSatProvider].label,
-                  sampleTileUrl: SATELLITE_PROVIDERS[
-                    activeSatProvider
-                  ].sampleTileUrl({
-                    mapboxToken:
-                      tokenState.status === "ready" ? tokenState.token : null,
-                  }),
-                  mapboxTokenStatus: tokenState.status,
-                  fallbackActive: useEsriFallback,
-                  lastTileError: satDiag.lastTileError,
-                  retryCount: satDiag.retryCount,
-                  attribution:
-                    SATELLITE_PROVIDERS[activeSatProvider].attribution,
-                },
-              }
-            : undefined
-        }
-        />
-      )}
+      />
 
-      {mapView === "satellite" && (
-        <GpsBottomSheet
+      <GpsBottomSheet
           unit={unit}
           readout={effectiveReadout}
           fallbackCenterYards={effectiveFallbackCenter}
@@ -1833,35 +1746,7 @@ function MapboxCourseView({
           onPickTarget={pickTarget}
           clubSuggestion={clubSuggestion}
           shotPlan={shotPlanProps}
-        />
-      )}
-
-      {/* Premium mode: floating Shot Plan panel above the dock, driven
-          by the same Round Engine as satellite so recall works across
-          both views. Only surfaces once the user has a target. */}
-      {mapView === "premium" && measurePoint && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-[7.25rem] z-20 flex justify-center px-3 sm:bottom-[6.5rem]">
-          <div className="pointer-events-auto w-full max-w-md">
-            <ShotPlanPanel {...shotPlanProps} variant="compact" />
-          </div>
-        </div>
-      )}
-
-      {mapView === "satellite" && (
-        <CourseInfoPanel
-          course={{
-            id: selectedCourse.id,
-            name: selectedCourse.name,
-            city: selectedCourse.city,
-            country: selectedCourse.country,
-            lat: selectedCourse.lat,
-            lng: selectedCourse.lng,
-            holes_count: selectedCourse.holes_count,
-          }}
-          teeBoxes={gps?.tee_boxes?.length ?? 0}
-          renderer={activeSatProvider === "mapbox" ? "Mapbox" : "Esri"}
-        />
-      )}
+      />
 
       {/* Non-intrusive offline chip — never blocks play. */}
       <OfflineBanner />
