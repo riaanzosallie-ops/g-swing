@@ -117,7 +117,7 @@ import {
 } from "@/lib/gswing-course-map-loader";
 import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
 import type { MappedHole } from "@/types/gswing-course-map";
-import { synthesizePremiumHole } from "@/lib/gswing-auto-premium";
+import { synthesizePremiumHoleWithOsm } from "@/lib/gswing-auto-premium";
 import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
@@ -720,10 +720,11 @@ function MapboxCourseView({
         if (cancelled) return;
       if (!courseMap) {
           setMappedCourseId(null);
-          // No DB mapping at all → try to auto-generate Premium purely
-          // from GolfAPI.io geometry so the golfer still gets the
-          // illustrated hole immediately.
-          const auto = synthesizePremiumHole(gps, hole);
+          // No DB mapping at all → auto-generate Premium from GolfAPI.io
+          // geometry, enriched with surveyed OSM course polygons when the
+          // course is traced in OpenStreetMap.
+          const auto = await synthesizePremiumHoleWithOsm(gps, hole, selectedCenter);
+          if (cancelled) return;
           if (auto) {
             setMappedHole(auto);
             setMappedIsAuto(true);
@@ -755,8 +756,10 @@ function MapboxCourseView({
           setMappingStatus("mapped");
         } else {
           // Course exists but this specific hole isn't drawn yet —
-          // synthesise Premium from GolfAPI.io so the round can continue.
-          const auto = synthesizePremiumHole(gps, hole);
+          // synthesise Premium from GolfAPI.io (plus OSM) so the round
+          // can continue.
+          const auto = await synthesizePremiumHoleWithOsm(gps, hole, selectedCenter);
+          if (cancelled) return;
           if (auto) {
             setMappedHole(auto);
             setMappedIsAuto(true);
@@ -782,7 +785,11 @@ function MapboxCourseView({
         }
       } catch {
         if (!cancelled) {
-          const auto = synthesizePremiumHole(gps, hole);
+          const auto = await synthesizePremiumHoleWithOsm(gps, hole, {
+            lat: selectedCourse.lat,
+            lng: selectedCourse.lng,
+          }).catch(() => null);
+          if (cancelled) return;
           if (auto) {
             setMappedHole(auto);
             setMappedIsAuto(true);
