@@ -1812,6 +1812,51 @@ function MapboxCourseView({
         />
       )}
 
+      {/* Non-intrusive offline chip — never blocks play. */}
+      <OfflineBanner />
+
+      {/* End Round pill — visible but subtle, right side under the top HUD. */}
+      <div className="pointer-events-none absolute right-3 top-3 z-30 flex flex-col items-end gap-1">
+        <button
+          type="button"
+          onClick={() => setEndRoundOpen(true)}
+          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold backdrop-blur-md transition-all active:scale-95"
+        >
+          {round.round.endedAt != null ? "Round summary" : "End round"}
+        </button>
+      </div>
+
+      {/* Owner-only debug/status. Collapsed by default; never leaks to
+          normal users. */}
+      {membership.isOwner && (
+        <OwnerDebugPanel
+          courseName={selectedCourse.name}
+          courseId={selectedCourse.id}
+          source={sourceLabel(evaluateHoleQuality(mappedHole).source)}
+          qualityScore={evaluateHoleQuality(mappedHole).score}
+          qualityLabel={evaluateHoleQuality(mappedHole).badge.label}
+          cached={!!mappedHole}
+          round={round.round}
+          gpsAccuracyMeters={playerAccuracy}
+          mapView={mapView}
+        />
+      )}
+
+      {/* End-of-round summary. Also acts as a resume prompt after refresh. */}
+      <EndRoundDialog
+        open={endRoundOpen}
+        round={round.round}
+        unit={displayUnit === "m" ? "meters" : "yards"}
+        ended={round.round.endedAt != null}
+        onEndRound={() => round.endRound()}
+        onResume={() => setEndRoundOpen(false)}
+        onStartNew={() => {
+          round.resetRound();
+          setEndRoundOpen(false);
+        }}
+        onClose={() => setEndRoundOpen(false)}
+      />
+
       {mapView === "satellite" && satelliteError && (
         <div className="pointer-events-none absolute inset-x-0 top-16 z-30 flex justify-center px-4">
           <div
