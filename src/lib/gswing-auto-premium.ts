@@ -123,7 +123,7 @@ function pickBestTee(tees: TeeBox[]): TeeBox | null {
   // Prefer white/regular, then any tee with coords.
   const priority = ["white", "regular", "men", "blue", "yellow"];
   for (const p of priority) {
-    const hit = tees.find((t) => (t.color ?? t.name ?? "").toLowerCase().includes(p));
+    const hit = tees.find((t) => (t.color ?? "").toLowerCase().includes(p));
     if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lng)) return hit;
   }
   return tees.find((t) => Number.isFinite(t.lat) && Number.isFinite(t.lng)) ?? null;
@@ -218,9 +218,9 @@ export function synthesizePremiumHole(
     .filter((t) => Number.isFinite(t.lat) && Number.isFinite(t.lng))
     .map((t, idx) => ({
       id: `auto-tee-${holeNumber}-${idx}`,
-      name: t.name ?? t.color ?? "Tee",
+      name: t.color ?? "Tee",
       coordinate: { lat: t.lat, lng: t.lng },
-      yardage: null,
+      yardage: t.yardage ?? null,
     }));
   if (tees.length === 0) {
     tees.push({ id: `auto-tee-${holeNumber}`, name: "Tee", coordinate: tee, yardage: null });
