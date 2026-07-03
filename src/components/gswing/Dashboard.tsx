@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   Activity, MapPin, Video, Briefcase, Trophy, Newspaper, User, Coins,
   BarChart3, Swords, MessagesSquare, Film, Radio, Flag, Sparkles,
-  CloudSun, Bot, Award, CircleDot, Dumbbell, Check, Circle, Map as MapIcon,
+  CloudSun, Bot, Award, CircleDot, Dumbbell, Check, Circle, Map as MapIcon, Globe2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlayer, useRounds } from "@/lib/gswing-store";
