@@ -435,14 +435,19 @@ export function synthesizePremiumHole(
     else if (h.type === "ob") rM = 14;
     else rM = 9 + rng() * 4; // bunker 9..13
 
-    // Bunkers: nudge toward the fairway edge so they hug it.
+    // Bunkers: only nudge when the real point lies inside the fairway
+    // ribbon (would otherwise render on top of the fairway). Real
+    // GolfAPI coordinates always win when they're already outside.
     if (h.type === "bunker" && !isPar3) {
       const proj = projectOntoCenterline(centerline, c);
       const t = proj.index / (centerline.length - 1);
       const w = fairwayWidth(t);
-      const off = w + rM * 0.6;
-      const sideBearing = (proj.bearingDeg + (proj.side === 1 ? 270 : 90)) % 360;
-      c = destination(proj.projected, sideBearing, off);
+      const distM = meters(proj.projected, c);
+      if (distM < w + 3) {
+        const off = w + rM * 0.6;
+        const sideBearing = (proj.bearingDeg + (proj.side === 1 ? 270 : 90)) % 360;
+        c = destination(proj.projected, sideBearing, off);
+      }
     }
     pushHazard(h, c, organicBlob(c, rM, rng));
   }
@@ -489,6 +494,7 @@ export function synthesizePremiumHole(
   if (!hazards.some((h) => h.type === "trees")) naLayers.push("trees");
   if (!hazards.some((h) => h.type === "water" || h.type === "penalty_area")) naLayers.push("water");
   if (!hazards.some((h) => h.type === "bunker")) naLayers.push("bunkers");
+  if (isPar3 && !fairwayPolygon) naLayers.push("fairway_polygon");
 
   return {
     id: `auto:${gps.course_id}:${holeNumber}`,
