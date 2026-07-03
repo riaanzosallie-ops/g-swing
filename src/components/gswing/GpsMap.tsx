@@ -1392,7 +1392,7 @@ function MapboxCourseView({
     async (layerKey: string) => {
       if (!membership.isOwner) return;
       if (!mappedHole?.id) {
-        toast.error("Open the Course Mapper to seed this hole first.");
+        toast.error("Open the Enhancement Studio to refine this hole first.");
         return;
       }
       try {
@@ -2332,7 +2332,7 @@ function PremiumEmptyMappingCard({
               onClick={() => navigate("/gswing/course-mapper")}
               className="h-8 rounded-full border-gold/40 bg-black/40 text-[11px] font-semibold uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
             >
-              Open Course Mapper
+              Open Enhancement Studio
             </Button>
           )}
           <Button

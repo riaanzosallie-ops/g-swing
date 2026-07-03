@@ -31,9 +31,11 @@ const BUNDLED: BundledCourse[] = [
     center: { lat: 25.3536, lng: 55.4881 },
     // Sharjah Golf & Shooting Club — confirmed 9-hole championship
     // course by the club's own website (golfandshootingshj.com).
-    // Bundled geometry contains 7 fairway corridors because holes
-    // 8 and 9 share turf with earlier holes (played in opposite
-    // directions with different tees/greens). The runtime matcher
+    // Bundled geometry contains 7 per-hole fairway corridors (H3 + H8
+    // are par-3 with no fairway), 9 green ellipses, 9 tee rectangles,
+    // and 21 tree-mass polygons. All polygons are tightly fitted to
+    // their own holeLine so the 90m anti-blob guard in
+    // extractOsmHoleGeometry always passes. The runtime matcher
     // resolves all 9 holes from live GolfAPI tee/green anchors.
     holeCount: 9,
     data: sharjahGeometry as BundledCourse["data"],

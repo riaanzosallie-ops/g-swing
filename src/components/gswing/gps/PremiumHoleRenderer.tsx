@@ -331,16 +331,16 @@ function PremiumMappingRequired({
         <p className="text-[10px] uppercase tracking-[0.3em] text-gold-soft">G-Swing Premium</p>
         <h2 className="mt-1 font-serif text-xl text-gold">Hole {selectedHoleNumber}</h2>
         <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-gold">
-          Premium mapping required
+          Premium Enhancement Studio
         </p>
         <p className="mt-3 text-[12px] leading-snug text-white/75">
-          The illustrated Premium view needs the visual polygons below before
-          it can render this hole. GPS distances continue to work from saved
-          tee / green / pin data.
+          This hole renders automatically from GolfAPI.io — refine the visual
+          layers below for a pixel-perfect illustration. GPS distances, Front /
+          Center / Back, and measurements all work now.
         </p>
         <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-3 text-left">
           <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-gold-soft">
-            <span>Missing visual layers</span>
+            <span>Enhancement layers</span>
             <span>{progress.done}/{progress.total}</span>
           </div>
           <ul className="mt-2 space-y-1 text-[12px] text-white/85">
@@ -353,9 +353,9 @@ function PremiumMappingRequired({
           </ul>
         </div>
         <p className="mt-3 text-[11px] leading-snug text-white/55">
-          Tip: switch to <span className="text-gold">Satellite</span> above to
-          play this hole now, or open the Course Mapper to add the missing
-          polygons (or mark them not applicable for this hole).
+          Switch to <span className="text-gold">Satellite</span> above at any
+          time, or open the Enhancement Studio to refine individual polygons
+          for this hole (or mark any layer not applicable).
         </p>
         {onContinueSatellite && (
           <button
@@ -377,7 +377,8 @@ function PremiumMappingRequired({
               </span>
             </div>
             <p className="mb-3 text-[11px] leading-snug text-white/70">
-              Complete missing visual layers to enable Premium view for this hole.
+              Refine visual layers to perfect the illustrated Premium view for
+              this hole. Everything else already renders automatically.
             </p>
             <button
               type="button"
@@ -385,7 +386,7 @@ function PremiumMappingRequired({
               disabled={!onOpenMapper}
               className="block w-full rounded-xl bg-gold px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-black shadow-[0_0_18px_rgba(245,200,75,0.35)] transition-all active:scale-[0.98] disabled:opacity-50"
             >
-              Open Course Mapper
+              Open Enhancement Studio
             </button>
             {missing.length > 0 && onMarkLayerNa && (
               <div className="mt-2">
