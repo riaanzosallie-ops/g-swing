@@ -117,6 +117,7 @@ import {
 } from "@/lib/gswing-course-map-loader";
 import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
 import type { MappedHole } from "@/types/gswing-course-map";
+import { synthesizePremiumHole } from "@/lib/gswing-auto-premium";
 import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
@@ -373,6 +374,9 @@ function MapboxCourseView({
   const [mappingStatus, setMappingStatus] = useState<
     "idle" | "loading" | "mapped" | "missing"
   >("idle");
+  // True when the current `mappedHole` came from the auto synthesiser
+  // (GolfAPI.io coordinates → drawn polygons), not from Course Mapper.
+  const [mappedIsAuto, setMappedIsAuto] = useState(false);
   const [mappingRefreshTick, setMappingRefreshTick] = useState(0);
   // Tracks whether the nearest-course lookup actually found a mapped
   // course near the player. Used by the honest GPS lock banner to
@@ -672,10 +676,21 @@ function MapboxCourseView({
           courseMap = byName ?? byDistance ?? null;
         }
         if (cancelled) return;
-        if (!courseMap) {
+      if (!courseMap) {
           setMappedCourseId(null);
-          setMappedHole(null);
-          setMappingStatus("missing");
+          // No DB mapping at all → try to auto-generate Premium purely
+          // from GolfAPI.io geometry so the golfer still gets the
+          // illustrated hole immediately.
+          const auto = synthesizePremiumHole(gps, hole);
+          if (auto) {
+            setMappedHole(auto);
+            setMappedIsAuto(true);
+            setMappingStatus("mapped");
+          } else {
+            setMappedHole(null);
+            setMappedIsAuto(false);
+            setMappingStatus("missing");
+          }
           setNearestCourseFound(false);
           if (import.meta.env.DEV) {
             // eslint-disable-next-line no-console
@@ -692,8 +707,24 @@ function MapboxCourseView({
         setNearestCourseFound(true);
         const hp = await loadMappedHole(courseMap.id, hole);
         if (cancelled) return;
-        setMappedHole(hp);
-        setMappingStatus(hp ? "mapped" : "missing");
+        if (hp) {
+          setMappedHole(hp);
+          setMappedIsAuto(false);
+          setMappingStatus("mapped");
+        } else {
+          // Course exists but this specific hole isn't drawn yet —
+          // synthesise Premium from GolfAPI.io so the round can continue.
+          const auto = synthesizePremiumHole(gps, hole);
+          if (auto) {
+            setMappedHole(auto);
+            setMappedIsAuto(true);
+            setMappingStatus("mapped");
+          } else {
+            setMappedHole(null);
+            setMappedIsAuto(false);
+            setMappingStatus("missing");
+          }
+        }
         if (import.meta.env.DEV) {
           // eslint-disable-next-line no-console
           console.info("[gswing.gps] mapping loaded", {
@@ -709,8 +740,16 @@ function MapboxCourseView({
         }
       } catch {
         if (!cancelled) {
-          setMappedHole(null);
-          setMappingStatus("missing");
+          const auto = synthesizePremiumHole(gps, hole);
+          if (auto) {
+            setMappedHole(auto);
+            setMappedIsAuto(true);
+            setMappingStatus("mapped");
+          } else {
+            setMappedHole(null);
+            setMappedIsAuto(false);
+            setMappingStatus("missing");
+          }
         }
       }
     })();
@@ -724,6 +763,7 @@ function MapboxCourseView({
     selectedCourse.lng,
     hole,
     mappingRefreshTick,
+    gps,
   ]);
 
   // Push mapped hole into the Mapbox sources/layers. Additive — never
@@ -1391,6 +1431,7 @@ function MapboxCourseView({
               </div>
             </div>
           ) : (
+            <>
             <PremiumHoleRenderer
               mappedHole={mappedHole}
               playerPosition={playerPosition}
@@ -1406,6 +1447,12 @@ function MapboxCourseView({
               onMarkLayerNa={markLayerNotApplicable}
               onContinueSatellite={() => handleSetMapView("satellite")}
             />
+            {mappedIsAuto && mappedHole && (
+              <div className="pointer-events-none absolute left-3 bottom-3 z-30 rounded-full border border-emerald-400/30 bg-black/65 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-emerald-200 backdrop-blur-md">
+                Auto · GolfAPI.io
+              </div>
+            )}
+            </>
           )}
         </div>
       )}
