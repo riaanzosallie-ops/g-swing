@@ -138,6 +138,17 @@ import { PremiumHoleRenderer } from "@/components/gswing/gps/PremiumHoleRenderer
 import { PremiumGpsOverlay } from "@/components/gswing/gps/PremiumGpsOverlay";
 import { CourseSelectorSheet } from "@/components/gswing/gps/CourseSelectorSheet";
 import { useGswingMembership } from "@/hooks/useGswingMembership";
+import {
+  loadGolfApiHoleGps,
+  golfApiToGolfCourse,
+  isGolfApiCourseId,
+  computeGolfApiCourseQuality,
+} from "@/lib/golfapi/gps-adapter";
+import { listCachedCourses } from "@/lib/golfapi/client";
+import {
+  getActiveCourse as readActiveCourse,
+  setActiveCourse as writeActiveCourse,
+} from "@/lib/active-course";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
