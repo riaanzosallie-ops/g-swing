@@ -123,9 +123,27 @@ export function PremiumHoleRenderer({
   const missing = useMemo(() => missingPremiumLayers(mappedHole), [mappedHole]);
   const progress = useMemo(() => premiumProgress(mappedHole), [mappedHole]);
   const quality = useMemo(() => evaluateHoleQuality(mappedHole), [mappedHole]);
+  // Hole-only bounds first — the hole must always fill the viewport,
+  // even when the player is far from the course (e.g. sitting at home).
+  const holeOnlyBounds = useMemo(
+    () => buildHoleBounds(mappedHole, null),
+    [mappedHole],
+  );
+  const includePlayer = useMemo(() => {
+    if (!holeOnlyBounds || !playerPosition) return false;
+    const latPad = 250 / 111000;
+    const lngPad =
+      250 / (111000 * Math.max(0.1, Math.cos((holeOnlyBounds.centerLat * Math.PI) / 180)));
+    return (
+      playerPosition.lat >= holeOnlyBounds.minLat - latPad &&
+      playerPosition.lat <= holeOnlyBounds.maxLat + latPad &&
+      playerPosition.lng >= holeOnlyBounds.minLng - lngPad &&
+      playerPosition.lng <= holeOnlyBounds.maxLng + lngPad
+    );
+  }, [holeOnlyBounds, playerPosition?.lat, playerPosition?.lng]);
   const bounds = useMemo(
-    () => buildHoleBounds(mappedHole, playerPosition),
-    [mappedHole, playerPosition?.lat, playerPosition?.lng],
+    () => buildHoleBounds(mappedHole, includePlayer ? playerPosition : null),
+    [mappedHole, playerPosition?.lat, playerPosition?.lng, includePlayer],
   );
 
   // Dev-only diagnostics so we can verify in console that Premium is
@@ -230,14 +248,14 @@ export function PremiumHoleRenderer({
               projection={projection}
             />
           )}
-          {projection && playerPosition && (
+          {projection && playerPosition && includePlayer && (
             <PlayerMarker
               projection={projection}
               player={playerPosition}
               accuracy={gpsAccuracy}
             />
           )}
-          {projection && playerPosition && measurementTarget && (
+          {projection && playerPosition && includePlayer && measurementTarget && (
             <MeasurementLineLayer
               projection={projection}
               from={playerPosition}
@@ -903,7 +921,7 @@ function HazardShape({
     case "bunker":
       return <BunkerFeature points={polyPts} center={c} />;
     case "trees":
-      return <TreeFeature points={polyPts} center={c} />;
+      return <TreeFeature points={polyPts} center={c} projection={projection} />;
     case "rough":
       return <RoughFeature points={polyPts} center={c} />;
     case "out_of_bounds":
@@ -1012,24 +1030,84 @@ function BunkerFeature({ points, center }: { points: { x: number; y: number }[] 
   );
 }
 
-function TreeFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
-  const cluster = points && points.length > 0 ? points.slice(0, 22) : seedCluster(center, 12);
-  const rand = seededRand(`${center.x.toFixed(0)}:${center.y.toFixed(0)}:${cluster.length}`);
+function TreeFeature({
+  points,
+  center,
+  projection,
+}: {
+  points: { x: number; y: number }[] | null;
+  center: { x: number; y: number };
+  projection: FittedProjection;
+}) {
+  // meters → px, same conversion PlayerMarker uses for the accuracy ring.
+  const metersToPx = projection.scale / 111000;
+  // Seed from the projected cluster centroid so scatter is stable across
+  // renders (deterministic per hazard position).
+  const rand = seededRand(`${center.x.toFixed(0)}:${center.y.toFixed(0)}:trees`);
+
+  // Bounding box + point-in-polygon test, in px space.
+  const poly = points && points.length >= 3 ? points : null;
+  let minX = center.x - 14,
+    maxX = center.x + 14,
+    minY = center.y - 14,
+    maxY = center.y + 14;
+  if (poly) {
+    minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+    for (const p of poly) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  const inPoly = (x: number, y: number): boolean => {
+    if (!poly) {
+      const dx = x - center.x;
+      const dy = y - center.y;
+      return dx * dx + dy * dy <= 14 * 14;
+    }
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      const intersect = ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / (yj - yi + 1e-9) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  };
+
+  // Scatter 5–9 trees inside the cluster polygon.
+  const target = 5 + Math.floor(rand() * 5);
+  const scattered: Array<{ x: number; y: number; r: number }> = [];
+  let attempts = 0;
+  while (scattered.length < target && attempts < target * 40) {
+    attempts++;
+    const x = minX + rand() * (maxX - minX);
+    const y = minY + rand() * (maxY - minY);
+    if (!inPoly(x, y)) continue;
+    const rMeters = 2.5 + rand() * 2;
+    const r = Math.max(3, Math.min(14, rMeters * metersToPx));
+    scattered.push({ x, y, r });
+  }
+  // Fallback so we always draw at least one tree even in tiny clusters.
+  if (scattered.length === 0) {
+    scattered.push({ x: center.x, y: center.y, r: Math.max(3, Math.min(14, 3 * metersToPx)) });
+  }
+
   return (
     <g filter="url(#gs-shadow)">
-      {cluster.map((p, i) => {
-        const r = 5.5 + rand() * 5.5;
+      {scattered.map((p, i) => {
         const lightness = 0.75 + rand() * 0.5;
         const base = shadeHex("#0d3a22", lightness);
         const hi = shadeHex("#1b6a3c", lightness);
-        const jitterX = (rand() - 0.5) * 2;
-        const jitterY = (rand() - 0.5) * 2;
+        const r = p.r;
         return (
           <g key={i}>
-            <circle cx={p.x + jitterX} cy={p.y + 2.5} r={r * 1.05} fill="#02110a" opacity={0.55} />
-            <circle cx={p.x + jitterX} cy={p.y + jitterY} r={r} fill={base} />
-            <circle cx={p.x + jitterX - r * 0.32} cy={p.y + jitterY - r * 0.36} r={r * 0.55} fill={hi} opacity={0.9} />
-            <circle cx={p.x + jitterX - r * 0.55} cy={p.y + jitterY - r * 0.55} r={r * 0.22} fill="#a8e6bf" opacity={0.5} />
+            <circle cx={p.x} cy={p.y + r * 0.35} r={r * 1.05} fill="#02110a" opacity={0.55} />
+            <circle cx={p.x} cy={p.y} r={r} fill={base} />
+            <circle cx={p.x - r * 0.32} cy={p.y - r * 0.36} r={r * 0.55} fill={hi} opacity={0.9} />
+            <circle cx={p.x - r * 0.55} cy={p.y - r * 0.55} r={r * 0.22} fill="#a8e6bf" opacity={0.5} />
           </g>
         );
       })}
