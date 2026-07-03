@@ -1460,9 +1460,95 @@ function MapboxCourseView({
       // Ensure the measure tool is on so the user sees the line + badge.
       setMeasureActive(true);
       setMeasurePoint({ lat: t.latlng.lat, lng: t.latlng.lng });
+      activeTargetRef.current = { kind: t.kind, label: t.label };
     },
     [],
   );
+
+  // Track which chip fired the current measurement (if any) so the
+  // Shot Planning panel can label it. Ref (not state) so tap-anywhere
+  // clears it without an extra render.
+  const activeTargetRef = useRef<{ kind: MeasureTarget["kind"]; label: string } | null>(null);
+  useEffect(() => {
+    // Free-form tap clears the chip context.
+    if (!measurePoint) activeTargetRef.current = null;
+  }, [measurePoint?.lat, measurePoint?.lng]);
+
+  // Round Engine — foundation for later phases (auto-hole-detect,
+  // strokes gained, analytics). Phase 1 uses it to persist saved
+  // measurements + club recommendations per hole so the Shot Planning
+  // panel offers instant recall.
+  const round = useRound(selectedCourse.id, selectedCourse.name);
+  const savedThisHole = useMemo(
+    () => round.measurementsForHole(hole),
+    [round, hole],
+  );
+
+  // Live shot metrics — everything downstream consumes these so both
+  // Premium and Satellite modes show the same numbers.
+  const shotDistanceDisplay = useMemo(() => {
+    if (!measurePoint || !measureOrigin) return null;
+    const yards = haversineYards(measureOrigin, measurePoint);
+    return Math.round(toDisplayUnit(yards, displayUnit === "m" ? "meters" : "yards"));
+  }, [measureOrigin?.lat, measureOrigin?.lng, measurePoint?.lat, measurePoint?.lng, displayUnit]);
+
+  // Closest hazard on the shot line the golfer must carry. Uses the
+  // in-memory readout so it costs nothing — no GolfAPI calls.
+  const carryOnLine = useMemo(() => {
+    if (!shotDistanceDisplay || !effectiveReadout?.carries?.length) return null;
+    const displayCarries = effectiveReadout.carries
+      .map((c) => ({
+        label: c.label ?? (c.kind ? c.kind[0].toUpperCase() + c.kind.slice(1) : "Hazard"),
+        value: Math.round(toDisplayUnit(c.carry, displayUnit === "m" ? "meters" : "yards")),
+      }))
+      .filter((c) => c.value > 0 && c.value < shotDistanceDisplay)
+      .sort((a, b) => b.value - a.value);
+    return displayCarries[0] ?? null;
+  }, [effectiveReadout?.carries, shotDistanceDisplay, displayUnit]);
+
+  const activeTargetLabel = activeTargetRef.current?.label ?? null;
+  const shotUnit: "yards" | "meters" = displayUnit === "m" ? "meters" : "yards";
+
+  const handleSaveShot = useCallback(() => {
+    if (shotDistanceDisplay == null || !measurePoint) return;
+    round.saveMeasurement({
+      holeNumber: hole,
+      lat: measurePoint.lat,
+      lng: measurePoint.lng,
+      distance: shotDistanceDisplay,
+      unit: shotUnit,
+      carry: carryOnLine?.value ?? null,
+      targetKind: activeTargetRef.current?.kind ?? "tap",
+      targetLabel: activeTargetRef.current?.label ?? "Tap",
+      clubName: clubSuggestion?.club.name ?? null,
+      clubConfidence: clubSuggestion?.confidence ?? null,
+    });
+    toast.success("Shot saved");
+  }, [round, hole, measurePoint?.lat, measurePoint?.lng, shotDistanceDisplay, shotUnit, carryOnLine?.value, clubSuggestion?.club.name, clubSuggestion?.confidence]);
+
+  const handleRecallShot = useCallback(
+    (m: SavedMeasurement) => {
+      setMeasureActive(true);
+      setMeasurePoint({ lat: m.lat, lng: m.lng });
+      activeTargetRef.current = m.targetLabel
+        ? { kind: (m.targetKind ?? "tap") as MeasureTarget["kind"], label: m.targetLabel }
+        : null;
+    },
+    [],
+  );
+
+  const shotPlanProps = {
+    distance: shotDistanceDisplay,
+    unit: shotUnit,
+    carry: carryOnLine,
+    clubSuggestion,
+    activeTargetLabel,
+    savedForHole: savedThisHole,
+    onRecall: handleRecallShot,
+    onRemoveSaved: round.removeMeasurement,
+    onSave: handleSaveShot,
+    onClear: () => setMeasurePoint(null),
+  };
 
   return (
     <div
