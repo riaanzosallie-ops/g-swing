@@ -408,6 +408,33 @@ function RendererDefs() {
           <feMergeNode in="SourceGraphic" />
         </feMerge>
       </filter>
+      {/* Softer, wider drop shadow used behind large landforms (fairway, boundary). */}
+      <filter id="gs-shadow-soft" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="5" />
+        <feOffset dy="3" result="off" />
+        <feComponentTransfer><feFuncA type="linear" slope="0.45" /></feComponentTransfer>
+        <feMerge>
+          <feMergeNode />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      {/* Edge feather — used to soften polygon rims so auto-generated shapes
+          don't look laser-cut. Applied via a lightweight blur+composite. */}
+      <filter id="gs-feather" x="-10%" y="-10%" width="120%" height="120%">
+        <feGaussianBlur stdDeviation="0.9" />
+      </filter>
+      {/* Bunker rim highlight — soft inner glow */}
+      <filter id="gs-bunker-rim" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="b" />
+        <feSpecularLighting in="b" surfaceScale="2" specularConstant="0.6" specularExponent="18" lightingColor="#fff5d6" result="spec">
+          <feDistantLight azimuth="135" elevation="55" />
+        </feSpecularLighting>
+        <feComposite in="spec" in2="SourceAlpha" operator="in" result="specMasked" />
+        <feMerge>
+          <feMergeNode in="SourceGraphic" />
+          <feMergeNode in="specMasked" />
+        </feMerge>
+      </filter>
       {/* Gentle inner highlight glow used by the green */}
       <filter id="gs-glow" x="-40%" y="-40%" width="180%" height="180%">
         <feGaussianBlur stdDeviation="3" result="b" />
@@ -422,6 +449,20 @@ function RendererDefs() {
         <stop offset="55%" stopColor="#3aa765" />
         <stop offset="100%" stopColor="#1e6b3f" />
       </radialGradient>
+      {/* Mowing stripes — alternating light/dark bands. Rotation is applied
+          per-hole via a wrapping <pattern> with patternTransform inside
+          HoleGeometryLayer so stripes follow tee→green bearing. */}
+      <pattern id="gs-mow-base" width="14" height="14" patternUnits="userSpaceOnUse">
+        <rect width="14" height="14" fill="transparent" />
+        <rect x="0" y="0" width="14" height="7" fill="#ffffff" fillOpacity="0.07" />
+        <rect x="0" y="7" width="14" height="7" fill="#000000" fillOpacity="0.05" />
+      </pattern>
+      {/* Finer mowing stripes for the green — perpendicular bands. */}
+      <pattern id="gs-green-mow" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="transparent" />
+        <rect x="0" y="0" width="8" height="4" fill="#ffffff" fillOpacity="0.09" />
+        <rect x="0" y="4" width="8" height="4" fill="#000000" fillOpacity="0.06" />
+      </pattern>
       <radialGradient id="gs-semirough" cx="50%" cy="50%" r="60%">
         <stop offset="0%" stopColor="#2f7e4d" />
         <stop offset="100%" stopColor="#16542f" />
@@ -436,12 +477,31 @@ function RendererDefs() {
         <stop offset="55%" stopColor="#4ad17e" />
         <stop offset="100%" stopColor="#1c8048" />
       </radialGradient>
+      {/* Directional green shading — used for front-to-back gradient */}
+      <linearGradient id="gs-green-dir" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.22" />
+        <stop offset="50%" stopColor="#ffffff" stopOpacity="0" />
+        <stop offset="100%" stopColor="#000000" stopOpacity="0.28" />
+      </linearGradient>
       {/* Water gradient — deep teal with highlight */}
       <linearGradient id="gs-water" x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stopColor="#5cc8e0" stopOpacity="0.95" />
         <stop offset="40%" stopColor="#1d6fb3" />
         <stop offset="100%" stopColor="#0b2c4f" />
       </linearGradient>
+      {/* Water reflection sheen — thin diagonal highlight */}
+      <linearGradient id="gs-water-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#eaf9ff" stopOpacity="0.35" />
+        <stop offset="35%" stopColor="#ffffff" stopOpacity="0" />
+        <stop offset="70%" stopColor="#ffffff" stopOpacity="0" />
+        <stop offset="100%" stopColor="#8fd6ff" stopOpacity="0.18" />
+      </linearGradient>
+      {/* Subtle ripple lines over water polygons. */}
+      <pattern id="gs-water-ripple" width="18" height="10" patternUnits="userSpaceOnUse">
+        <rect width="18" height="10" fill="transparent" />
+        <path d="M0 5 Q 4.5 2 9 5 T 18 5" fill="none" stroke="#eaf9ff" strokeOpacity="0.28" strokeWidth="0.5" />
+        <path d="M0 8 Q 4.5 6 9 8 T 18 8" fill="none" stroke="#ffffff" strokeOpacity="0.15" strokeWidth="0.4" />
+      </pattern>
       {/* Bunker gradient — warm sand with rim */}
       <radialGradient id="gs-sand" cx="50%" cy="40%" r="60%">
         <stop offset="0%" stopColor="#fbeec3" />
@@ -453,6 +513,14 @@ function RendererDefs() {
         <rect width="6" height="6" fill="transparent" />
         <circle cx="1.5" cy="1.5" r="0.5" fill="#8a6f3a" opacity="0.45" />
         <circle cx="4.5" cy="3.5" r="0.4" fill="#8a6f3a" opacity="0.35" />
+      </pattern>
+      {/* Denser grain for larger bunkers */}
+      <pattern id="gs-sand-grain" width="10" height="10" patternUnits="userSpaceOnUse">
+        <rect width="10" height="10" fill="transparent" />
+        <circle cx="2" cy="3" r="0.55" fill="#7d6432" opacity="0.4" />
+        <circle cx="6" cy="7" r="0.5" fill="#7d6432" opacity="0.35" />
+        <circle cx="8.5" cy="1.5" r="0.4" fill="#c9a869" opacity="0.55" />
+        <circle cx="3.5" cy="8" r="0.35" fill="#c9a869" opacity="0.5" />
       </pattern>
       {/* Subtle green contour rings via mask */}
       <radialGradient id="gs-green-ring" cx="50%" cy="50%" r="50%">
