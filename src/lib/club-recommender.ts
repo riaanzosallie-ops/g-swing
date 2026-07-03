@@ -16,6 +16,10 @@ export interface ClubSuggestion {
   gapMeters: number;
   /** Copy-ready hint: "Slight left / 4m short" style. */
   note: string;
+  /** 0-100 confidence score. 100 = perfect match, 30 = stretch. */
+  confidence: number;
+  /** Human-facing tone for the badge. */
+  tone: "high" | "medium" | "low" | "stretch";
 }
 
 /** Convert an incoming display distance to metres. */
@@ -49,20 +53,35 @@ export function suggestClub(
   const cover = playable.find((c) => c.distance >= targetMeters);
   if (cover) {
     const gap = cover.distance - targetMeters;
+    const abs = Math.abs(gap);
+    // Tight fit → high confidence. Wide gap → we're clubbing well up.
+    const confidence =
+      abs < 3 ? 98
+      : abs < 8 ? 92
+      : abs < 15 ? 82
+      : abs < 25 ? 72
+      : 62;
+    const tone: ClubSuggestion["tone"] =
+      confidence >= 90 ? "high" : confidence >= 75 ? "medium" : "low";
     return {
       club: cover,
       gapMeters: -gap, // negative = shot is inside the club's carry
       note: gap < 3 ? "Full swing" : `Club up ~${Math.round(gap)}m of green`,
+      confidence,
+      tone,
     };
   }
 
   // Beyond every club — recommend the longest and flag the stretch.
   const longest = playable[playable.length - 1];
   const gap = targetMeters - longest.distance;
+  const confidence = Math.max(28, Math.round(60 - gap * 2));
   return {
     club: longest,
     gapMeters: gap,
     note: `Stretch · ${Math.round(gap)}m over max carry`,
+    confidence,
+    tone: "stretch",
   };
 }
 
