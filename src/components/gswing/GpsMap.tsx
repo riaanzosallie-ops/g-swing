@@ -1758,7 +1758,19 @@ function MapboxCourseView({
           targets={measureTargets}
           onPickTarget={pickTarget}
           clubSuggestion={clubSuggestion}
+          shotPlan={shotPlanProps}
         />
+      )}
+
+      {/* Premium mode: floating Shot Plan panel above the dock, driven
+          by the same Round Engine as satellite so recall works across
+          both views. Only surfaces once the user has a target. */}
+      {mapView === "premium" && measurePoint && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[7.25rem] z-20 flex justify-center px-3 sm:bottom-[6.5rem]">
+          <div className="pointer-events-auto w-full max-w-md">
+            <ShotPlanPanel {...shotPlanProps} variant="compact" />
+          </div>
+        </div>
       )}
 
       {mapView === "satellite" && (
