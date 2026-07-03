@@ -1,5 +1,5 @@
 import heroBg from "@/assets/gswing-hero-v3.jpg";
-import { Apple, ChevronRight, Globe, Lock, ShieldCheck, Target, Trophy, BarChart3, Flag } from "lucide-react";
+import { ChevronRight, Globe, Lock, Mail, ShieldCheck, Target, Trophy, BarChart3, Flag } from "lucide-react";
 
 const Feature = ({
   icon: Icon,
@@ -167,29 +167,19 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => {
           <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-white/40 [animation:splash-shine-sweep_3.5s_ease-in-out_infinite]" />
         </button>
 
-        {/* Continue with */}
+        {/* Email-only sign-in — social providers intentionally hidden. */}
         <div className="mt-6 flex w-full items-center gap-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gold/40 to-gold/60" />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/80">Continue with</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/80">Sign in with</span>
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-gold/40 to-gold/60" />
         </div>
-        <div className="mt-3 grid w-full grid-cols-2 gap-3">
-          <button
-            onClick={onEnter}
-            aria-label="Continue with Apple"
-            className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-b from-neutral-900 to-black text-sm font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition hover:border-gold/40"
-          >
-            <Apple className="h-4 w-4" /> Apple
-          </button>
-          <button
-            onClick={onEnter}
-            aria-label="Continue with Google"
-            className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-b from-neutral-900 to-black text-sm font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition hover:border-gold/40"
-          >
-            <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-[10px] font-bold text-black">G</span>
-            Google
-          </button>
-        </div>
+        <button
+          onClick={onEnter}
+          aria-label="Continue with Email"
+          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gold/25 bg-gradient-to-b from-neutral-900 to-black text-sm font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition hover:border-gold/50"
+        >
+          <Mail className="h-4 w-4 text-gold" /> Continue with Email
+        </button>
 
         {/* Honest trust row — no fabricated counts */}
         <div className="mt-7 grid w-full grid-cols-3 gap-3 text-center">
