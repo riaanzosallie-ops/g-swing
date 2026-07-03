@@ -3137,16 +3137,52 @@ export const GpsMap = () => {
 
     async function loadCourses() {
       try {
-        const data = await fetchCourses();
-        if (cancelled || !data.length) return;
-        const byId = new Map([...UAE_COURSES, ...data.filter((course) => course.country === "AE")].map((course) => [course.id, course]));
+        const [data, cachedGolfApi] = await Promise.all([
+          fetchCourses().catch(() => [] as GolfCourse[]),
+          listCachedCourses().catch(() => []),
+        ]);
+        if (cancelled) return;
+        const golfApiCourses = cachedGolfApi.map(golfApiToGolfCourse);
+        // Merge: UAE demo + backend courses + real GolfAPI cached
+        // courses. GolfAPI entries take precedence when ids collide.
+        const byId = new Map<string, GolfCourse>();
+        for (const c of UAE_COURSES) byId.set(c.id, c);
+        for (const c of data.filter((course) => course.country === "AE")) byId.set(c.id, c);
+        for (const c of golfApiCourses) byId.set(c.id, c);
         const merged = Array.from(byId.values()).sort((a, b) => {
           if (a.id === MAIN_COURSE_ID) return -1;
           if (b.id === MAIN_COURSE_ID) return 1;
           return `${a.city} ${a.name}`.localeCompare(`${b.city} ${b.name}`);
         });
         setCourses(merged);
-        setCourseId((current) => (merged.some((course) => course.id === current) ? current : MAIN_COURSE_ID));
+        setCourseId((current) => {
+          if (merged.some((course) => course.id === current)) return current;
+          // Auto-repair: if the persisted active course id doesn't
+          // resolve but its name matches a cached GolfAPI course, bind
+          // to the real provider id and update the persisted record.
+          const active = readActiveCourse();
+          if (active?.name) {
+            const norm = active.name.trim().toLowerCase();
+            const hit = golfApiCourses.find(
+              (c) => c.name.trim().toLowerCase() === norm,
+            );
+            if (hit) {
+              writeActiveCourse({
+                id: hit.id,
+                name: hit.name,
+                source: "golfapi",
+                city: hit.city,
+                country: hit.country,
+                holes: hit.holes_count,
+              });
+              return hit.id;
+            }
+          }
+          // Keep the user's current selection if it looks like a
+          // GolfAPI id — the cached list may not have loaded yet.
+          if (isGolfApiCourseId(current)) return current;
+          return MAIN_COURSE_ID;
+        });
       } catch {
         if (!cancelled) setCourses(UAE_COURSES);
       }
