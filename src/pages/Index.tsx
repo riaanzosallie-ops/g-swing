@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dashboard } from "@/components/gswing/Dashboard";
 import { GpsMap } from "@/components/gswing/GpsMap";
 import { GpsErrorBoundary } from "@/components/gswing/GpsErrorBoundary";
+import { AppErrorBoundary } from "@/components/gswing/AppErrorBoundary";
 import { MyBag } from "@/components/gswing/MyBag";
 import { SwingAnalysis } from "@/components/gswing/SwingAnalysis";
 import { Scorecard } from "@/components/gswing/Scorecard";
@@ -45,6 +46,7 @@ const TITLES: Record<string, string> = {
 const Index = () => {
   const [stage, setStage] = useState<"splash" | "auth" | "app">("splash");
   const [hasSession, setHasSession] = useState<boolean | null>(null);
+  const [pendingEnter, setPendingEnter] = useState(false);
   const [view, setView] = useState("home");
   const [prevView, setPrevView] = useState<string>("home");
 
@@ -110,6 +112,12 @@ const Index = () => {
   }, [hasSession]);
 
   function handleEnter() {
+    // Session lookup may still be in flight; wait rather than
+    // forcing the user to re-login.
+    if (hasSession === null) {
+      setPendingEnter(true);
+      return;
+    }
     if (hasSession) setStage("app");
     else setStage("auth");
   }
@@ -119,8 +127,23 @@ const Index = () => {
     if (stage === "auth" && hasSession) setStage("app");
   }, [stage, hasSession]);
 
+  // Resolve a pending Enter tap once the session decision arrives.
+  useEffect(() => {
+    if (!pendingEnter || hasSession === null) return;
+    setPendingEnter(false);
+    setStage(hasSession ? "app" : "auth");
+  }, [pendingEnter, hasSession]);
+
   if (stage === "splash") return <Splash onEnter={handleEnter} />;
   if (stage === "auth") {
+    // Only show login once we've confirmed there is no session.
+    if (hasSession === null) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
+        </div>
+      );
+    }
     return (
       <PremiumAuth
         onAuthenticated={() => setStage("app")}
@@ -162,35 +185,55 @@ const Index = () => {
             </GpsErrorBoundary>
           </MembershipGate>
         )}
-        {view === "bag" && <MyBag go={navigate} />}
+        {view === "bag" && (
+          <AppErrorBoundary label="My Bag"><MyBag go={navigate} /></AppErrorBoundary>
+        )}
         {view === "swing" && (
-          <MembershipGate featureKey="swing.analysis"><SwingAnalysis /></MembershipGate>
+          <MembershipGate featureKey="swing.analysis">
+            <AppErrorBoundary label="Swing Analysis"><SwingAnalysis /></AppErrorBoundary>
+          </MembershipGate>
         )}
-        {view === "scorecard" && <Scorecard />}
-        {view === "pros" && <ProsBags />}
-        {view === "news" && <News />}
+        {view === "scorecard" && (
+          <AppErrorBoundary label="Scorecard"><Scorecard /></AppErrorBoundary>
+        )}
+        {view === "pros" && <AppErrorBoundary label="Pros' Bags"><ProsBags /></AppErrorBoundary>}
+        {view === "news" && <AppErrorBoundary label="News"><News /></AppErrorBoundary>}
         {view === "stats" && (
-          <MembershipGate featureKey="stats.advanced"><Stats /></MembershipGate>
+          <MembershipGate featureKey="stats.advanced">
+            <AppErrorBoundary label="Stats"><Stats /></AppErrorBoundary>
+          </MembershipGate>
         )}
-        {view === "profile" && <Profile />}
-        {view === "clublink" && <ClubLink />}
+        {view === "profile" && <AppErrorBoundary label="Profile"><Profile /></AppErrorBoundary>}
+        {view === "clublink" && <AppErrorBoundary label="Club-Link"><ClubLink /></AppErrorBoundary>}
         {view === "arena" && (
-          <MembershipGate featureKey="arena.full"><Arena go={navigate} /></MembershipGate>
+          <MembershipGate featureKey="arena.full">
+            <AppErrorBoundary label="Arena"><Arena go={navigate} /></AppErrorBoundary>
+          </MembershipGate>
         )}
         {view === "live" && (
-          <MembershipGate featureKey="live.dashboard"><LiveDashboard go={navigate} /></MembershipGate>
+          <MembershipGate featureKey="live.dashboard">
+            <AppErrorBoundary label="Live Dashboard"><LiveDashboard go={navigate} /></AppErrorBoundary>
+          </MembershipGate>
         )}
-        {view === "chat" && <RoundChat />}
+        {view === "chat" && <AppErrorBoundary label="Round Chat"><RoundChat /></AppErrorBoundary>}
         {view === "roast" && (
-          <MembershipGate featureKey="roast.full"><Roast /></MembershipGate>
+          <MembershipGate featureKey="roast.full">
+            <AppErrorBoundary label="ACE Roast"><Roast /></AppErrorBoundary>
+          </MembershipGate>
         )}
         {view === "memories" && (
-          <MembershipGate featureKey="memories.full"><FairwayMemories /></MembershipGate>
+          <MembershipGate featureKey="memories.full">
+            <AppErrorBoundary label="Fairway Memories"><FairwayMemories /></AppErrorBoundary>
+          </MembershipGate>
         )}
         {view === "tournament" && (
-          <MembershipGate featureKey="tournament.create"><Tournaments /></MembershipGate>
+          <MembershipGate featureKey="tournament.create">
+            <AppErrorBoundary label="Tournaments"><Tournaments /></AppErrorBoundary>
+          </MembershipGate>
         )}
-        {view === "courses" && <ManageCourses go={navigate} />}
+        {view === "courses" && (
+          <AppErrorBoundary label="Manage Courses"><ManageCourses go={navigate} /></AppErrorBoundary>
+        )}
       </main>
 
       <AceCaddie />
