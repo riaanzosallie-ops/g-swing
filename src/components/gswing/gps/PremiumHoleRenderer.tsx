@@ -65,6 +65,39 @@ export interface PremiumHoleRendererProps {
 
 const PADDING = 44;
 
+// ─── Per-par viewport padding multipliers ────────────────────────────────────
+// Par 3: tighter zoom so the compact hole fills the frame. Par 5: pull back so
+// the full corridor is visible. Par 4: default. Applies to paddingPx only;
+// paddingBottomPx is unchanged (reserved for the bottom sheet).
+function parPaddingPx(par: number | null): number {
+  if (par === 3) return 22;   // zoom in — green becomes focal point
+  if (par === 5) return 62;   // zoom out — whole corridor visible
+  return PADDING;             // par 4 / unknown
+}
+
+// ─── Per-hole ambient personality ────────────────────────────────────────────
+// Returns a subtle tint overlay that gives each hole a unique atmospheric feel
+// without touching geometry. Values are CSS rgba strings and opacities.
+function holePersonality(holeNum: number): {
+  tint: string;        // radial gradient overlay colour
+  tintOpacity: number;
+  lightAngle: number;  // sunlight azimuth in degrees (affects mow stripe highlight)
+  ambientTag: string;  // short descriptor for debug
+} {
+  const personalities: Record<number, { tint: string; tintOpacity: number; lightAngle: number; ambientTag: string }> = {
+    1: { tint: "#1a3a8c", tintOpacity: 0.06, lightAngle: 135, ambientTag: "lakeside-dawn" },
+    2: { tint: "#0d2e12", tintOpacity: 0.05, lightAngle: 110, ambientTag: "tree-lined" },
+    3: { tint: "#103070", tintOpacity: 0.07, lightAngle: 150, ambientTag: "par3-dramatic" },
+    4: { tint: "#f5c84b", tintOpacity: 0.03, lightAngle:  90, ambientTag: "championship-noon" },
+    5: { tint: "#1a5c9c", tintOpacity: 0.08, lightAngle: 125, ambientTag: "water-carry" },
+    6: { tint: "#0a2c0a", tintOpacity: 0.04, lightAngle: 100, ambientTag: "long-par5" },
+    7: { tint: "#1e3a1e", tintOpacity: 0.05, lightAngle: 155, ambientTag: "dogleg-afternoon" },
+    8: { tint: "#103070", tintOpacity: 0.06, lightAngle: 145, ambientTag: "par3-dusk" },
+    9: { tint: "#2a1a0a", tintOpacity: 0.05, lightAngle: 120, ambientTag: "finishing-hole" },
+  };
+  return personalities[holeNum] ?? { tint: "#0d2e12", tintOpacity: 0.04, lightAngle: 120, ambientTag: "default" };
+}
+
 export function PremiumHoleRenderer({
   mappedHole,
   playerPosition,
@@ -181,15 +214,17 @@ export function PremiumHoleRenderer({
     });
   }, [mappedHole, selectedHoleNumber, usable, premiumReady, progress]);
 
+  const par = mappedHole?.par ?? null;
+
   const projection: FittedProjection | null = useMemo(() => {
     if (!bounds || size.w < 20 || size.h < 20) return null;
     return fitHoleToViewport(bounds, {
       width: size.w,
       height: size.h,
-      paddingPx: PADDING,
+      paddingPx: parPaddingPx(par),
       paddingBottomPx: PADDING + 280,
     });
-  }, [bounds, size.w, size.h]);
+  }, [bounds, size.w, size.h, par]);
 
   // Stage [10] — first successful paint with all data required.
   const renderCompleteRef = useRef(false);
@@ -228,6 +263,16 @@ export function PremiumHoleRenderer({
       <div className="absolute inset-0 bg-[radial-gradient(120%_100%_at_50%_40%,#16623f_0%,#0b4129_38%,#042214_72%,#01100a_100%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(70%_45%_at_70%_15%,rgba(245,200,75,0.10)_0%,transparent_70%)] mix-blend-screen" />
       <div className="absolute inset-0 bg-[radial-gradient(45%_30%_at_15%_90%,rgba(0,0,0,0.55)_0%,transparent_70%)]" />
+      {/* Per-hole personality tint — subtle atmospheric colour cast unique to each hole */}
+      {(() => {
+        const p = holePersonality(selectedHoleNumber);
+        return (
+          <div
+            className="absolute inset-0 mix-blend-soft-light pointer-events-none"
+            style={{ backgroundColor: p.tint, opacity: p.tintOpacity * 12 }}
+          />
+        );
+      })()}
 
       {/* When a MappedHole exists but has no usable tee/green geometry
            (e.g. auto-synth returned a shell with no GolfAPI coordinates),
@@ -261,6 +306,8 @@ export function PremiumHoleRenderer({
             <HoleGeometryLayer
               hole={mappedHole}
               projection={projection}
+              holeNumber={selectedHoleNumber}
+              bounds={bounds}
             />
           )}
           {projection && playerPosition && includePlayer && (
@@ -567,9 +614,13 @@ function RendererDefs() {
 function HoleGeometryLayer({
   hole,
   projection,
+  holeNumber,
+  bounds,
 }: {
   hole: MappedHole;
   projection: FittedProjection;
+  holeNumber: number;
+  bounds: ReturnType<typeof buildHoleBounds>;
 }) {
   const project = (p: { lat: number; lng: number }) =>
     projectLatLngToHoleCanvas(p, projection);
@@ -605,6 +656,23 @@ function HoleGeometryLayer({
   const mowPatternId = `gs-mow-${uid}`;
   const mowPerpPatternId = `gs-mow-perp-${uid}`;
   const greenDirId = `gs-green-dir-${uid}`;
+  const holeClipId = `gs-hole-clip-${uid}`;
+
+  // Compute the water clipping rect in SVG canvas space.
+  // Use the hole bounding box + a generous margin (75px) so water that
+  // legitimately bleeds slightly outside the fairway corridor is still
+  // visible, while large shared lakes that span multiple holes are cut off.
+  const WATER_CLIP_MARGIN = 75; // px on each side
+  const clipRect = bounds ? (() => {
+    const tl = project({ lat: bounds.maxLat, lng: bounds.minLng });
+    const br = project({ lat: bounds.minLat, lng: bounds.maxLng });
+    return {
+      x: tl.x - WATER_CLIP_MARGIN,
+      y: tl.y - WATER_CLIP_MARGIN,
+      w: (br.x - tl.x) + WATER_CLIP_MARGIN * 2,
+      h: (br.y - tl.y) + WATER_CLIP_MARGIN * 2,
+    };
+  })() : null;
 
   // Green radius fallback only for the legacy ring overlay; if no polygon
   // we still draw the front/back-derived footprint as a soft halo.
@@ -617,7 +685,7 @@ function HoleGeometryLayer({
 
   return (
     <g>
-      {/* Per-hole dynamic defs: rotated mowing patterns + oriented green shading. */}
+      {/* Per-hole dynamic defs: rotated mowing patterns + oriented green shading + water clip. */}
       <defs>
         <pattern
           id={mowPatternId}
@@ -653,6 +721,19 @@ function HoleGeometryLayer({
           <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
           <stop offset="100%" stopColor="#04140a" stopOpacity="0.35" />
         </linearGradient>
+        {/* Water viewport clip — keeps shared multi-hole lakes confined to the
+             active hole frame. Feathered by a generous margin so natural
+             water that legitimately sits at the edge is not hard-cut. */}
+        {clipRect && (
+          <clipPath id={holeClipId}>
+            <rect
+              x={clipRect.x}
+              y={clipRect.y}
+              width={clipRect.w}
+              height={clipRect.h}
+            />
+          </clipPath>
+        )}
       </defs>
       {/* Hole boundary — painted as the outer rough mass for depth. */}
       {holeBoundaryPts && holeBoundaryPts.length >= 3 && (
@@ -744,13 +825,24 @@ function HoleGeometryLayer({
         />
       )}
 
-      {/* Hazards (water under sand under trees) */}
+      {/* ─── Hazards ────────────────────────────────────────────────────────
+           Water is clipped to the hole corridor viewport + a generous margin
+           so shared lake polygons (H1/H3, H5/H7/H9, H6/H8) do not spill
+           beyond the active hole's frame. Bunkers and trees are NOT clipped
+           — they are always within reasonable range of the fairway.
+           ─────────────────────────────────────────────────────────────────── */}
       <g>
         {hole.hazards
           .slice()
           .sort((a, b) => layerOrder(a.type) - layerOrder(b.type))
           .map((h) => (
-            <HazardShape key={h.id} hazard={h} projection={projection} />
+            <HazardShape
+              key={h.id}
+              hazard={h}
+              projection={projection}
+              holeNumber={holeNumber}
+              holeClipId={holeClipId}
+            />
           ))}
       </g>
 
@@ -799,20 +891,28 @@ function HoleGeometryLayer({
         )
       )}
 
-      {/* Pin / flag */}
+      {/* Pin / flag — focal point of the entire hole illustration */}
       {pin && (() => {
         const p = project(pin);
         return (
-          <g filter="url(#gs-shadow)">
-            <circle cx={p.x} cy={p.y + 1} r={4} fill="#000" opacity={0.35} />
-            <line x1={p.x} y1={p.y} x2={p.x} y2={p.y - 26} stroke="#f7f3e5" strokeWidth={1.5} />
+          <g>
+            {/* Pin glow halo — subtle golden bloom so the pin is immediately visible */}
+            <circle cx={p.x} cy={p.y} r={18} fill="#F5C84B" fillOpacity={0.07} filter="url(#gs-glow)" />
+            {/* Ground shadow cone under the pin */}
+            <ellipse cx={p.x + 2} cy={p.y + 2} rx={5} ry={2.5} fill="#000" opacity={0.32} filter="url(#gs-feather)" />
+            {/* Flagstick */}
+            <line x1={p.x} y1={p.y} x2={p.x} y2={p.y - 28}
+              stroke="#f7f3e5" strokeWidth={1.6} strokeLinecap="round" />
+            {/* Flag */}
             <polygon
-              points={`${p.x},${p.y - 26} ${p.x + 14},${p.y - 21} ${p.x},${p.y - 16}`}
+              points={`${p.x},${p.y - 28} ${p.x + 15},${p.y - 22} ${p.x},${p.y - 16}`}
               fill="#F5C84B"
               stroke="#8a6a18"
-              strokeWidth={0.6}
+              strokeWidth={0.7}
             />
-            <circle cx={p.x} cy={p.y} r={3} fill="#fff" stroke="#1a1a1a" strokeWidth={0.6} />
+            {/* Cup ring at base */}
+            <circle cx={p.x} cy={p.y} r={3.2} fill="#fff" stroke="#1a1a1a" strokeWidth={0.8} />
+            <circle cx={p.x} cy={p.y} r={1.4} fill="#000" opacity={0.5} />
           </g>
         );
       })()}
@@ -888,21 +988,26 @@ function GreenPolygon({
           <path d={path} />
         </clipPath>
       </defs>
-      {/* Outer feathered fringe / collar */}
-      <path d={path} fill="#0e3a25" stroke="#0e3a25" strokeWidth={12} strokeLinejoin="round" opacity={0.95} filter="url(#gs-feather)" />
+      {/* Wide feathered fringe / collar — dark surround that makes the green pop */}
+      <path d={path} fill="#0c3020" stroke="#0c3020" strokeWidth={16} strokeLinejoin="round" opacity={0.98} filter="url(#gs-feather)" />
+      {/* Collar ring — slightly lighter than rough, slightly darker than green */}
+      <path d={path} fill="none" stroke="#1a5c38" strokeOpacity={0.85} strokeWidth={5} />
       {/* Manicured turf */}
-      <path d={path} fill="url(#gs-green)" stroke="#a8efc6" strokeOpacity={0.5} strokeWidth={1} />
+      <path d={path} fill="url(#gs-green)" stroke="#a8efc6" strokeOpacity={0.55} strokeWidth={1.1} />
       {/* Perpendicular mowing bands, clipped to the green */}
       <g clipPath={`url(#${clipId})`}>
-        <rect x={cx - rMax - 10} y={cy - rMax - 10} width={rMax * 2 + 20} height={rMax * 2 + 20} fill="url(#gs-green-mow)" opacity={0.85} />
+        <rect x={cx - rMax - 10} y={cy - rMax - 10} width={rMax * 2 + 20} height={rMax * 2 + 20} fill="url(#gs-green-mow)" opacity={0.92} />
       </g>
       {/* Directional shading (front→back) */}
       <path d={path} fill={`url(#${greenDirId})`} />
-      {/* Contour rings for depth */}
-      <circle cx={cx} cy={cy} r={Math.max(4, rMax * 0.62)} fill="url(#gs-green-ring)" />
-      <circle cx={cx} cy={cy} r={Math.max(3, rMax * 0.42)} fill="none" stroke="#ffffff" strokeOpacity={0.08} strokeWidth={0.6} />
-      {/* Highlight rim */}
-      <path d={path} fill="none" stroke="#e8ffe8" strokeOpacity={0.3} strokeWidth={0.8} filter="url(#gs-feather)" />
+      {/* Contour rings for depth — organic green surface feel */}
+      <circle cx={cx} cy={cy} r={Math.max(4, rMax * 0.65)} fill="url(#gs-green-ring)" />
+      <circle cx={cx} cy={cy} r={Math.max(3, rMax * 0.42)} fill="none" stroke="#ffffff" strokeOpacity={0.1} strokeWidth={0.8} />
+      {/* Cup shadow — small dark ring at the centre to imply the hole */}
+      <circle cx={cx} cy={cy} r={Math.max(2.5, rMax * 0.08)} fill="#041a0d" opacity={0.65} />
+      <circle cx={cx} cy={cy} r={Math.max(2, rMax * 0.06)} fill="#000" opacity={0.4} />
+      {/* Highlight rim — bright edge catches the sun */}
+      <path d={path} fill="none" stroke="#d8ffe8" strokeOpacity={0.38} strokeWidth={1} filter="url(#gs-feather)" />
     </g>
   );
 }
@@ -926,9 +1031,13 @@ function GreenFallback({
 function HazardShape({
   hazard,
   projection,
+  holeNumber,
+  holeClipId,
 }: {
   hazard: HazardGeometry;
   projection: FittedProjection;
+  holeNumber: number;
+  holeClipId: string;
 }) {
   const project = (p: { lat: number; lng: number }) =>
     projectLatLngToHoleCanvas(p, projection);
@@ -941,11 +1050,17 @@ function HazardShape({
   switch (hazard.type) {
     case "water":
     case "penalty_area":
-      return <WaterFeature points={polyPts} center={c} />;
+      // Water is always clipped to the hole viewport so shared multi-hole
+      // lakes don't dominate frames they don't belong to.
+      return (
+        <g clipPath={`url(#${holeClipId})`}>
+          <WaterFeature points={polyPts} center={c} />
+        </g>
+      );
     case "bunker":
-      return <BunkerFeature points={polyPts} center={c} />;
+      return <BunkerFeature points={polyPts} center={c} hazardId={hazard.id} />;
     case "trees":
-      return <TreeFeature points={polyPts} center={c} projection={projection} />;
+      return <TreeFeature points={polyPts} center={c} projection={projection} holeNumber={holeNumber} hazardId={hazard.id} />;
     case "rough":
       return <RoughFeature points={polyPts} center={c} />;
     case "out_of_bounds":
@@ -953,7 +1068,7 @@ function HazardShape({
     case "waste_area":
       return <WasteFeature points={polyPts} center={c} />;
     default:
-      return <BunkerFeature points={polyPts} center={c} />;
+      return <BunkerFeature points={polyPts} center={c} hazardId={hazard.id} />;
   }
 }
 
@@ -1006,34 +1121,102 @@ function seededRand(seed: string): () => number {
 
 function WaterFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
-    const path = smoothRingPath(points);
+    const path = smoothRingPath(points, 0.45);
+    // Compute centroid for highlight placement
+    let cx = 0, cy = 0;
+    for (const p of points) { cx += p.x; cy += p.y; }
+    cx /= points.length; cy /= points.length;
     return (
       <g filter="url(#gs-shadow-soft)">
-        <path d={path} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
-        <path d={path} fill="url(#gs-water-ripple)" opacity={0.7} />
-        <path d={path} fill="url(#gs-water-sheen)" opacity={0.9} />
-        <path d={path} fill="none" stroke="#eaf9ff" strokeOpacity={0.55} strokeWidth={0.7} transform="translate(0,-1)" filter="url(#gs-feather)" />
+        {/* Base fill */}
+        <path d={path} fill="url(#gs-water)" />
+        {/* Ripple texture */}
+        <path d={path} fill="url(#gs-water-ripple)" opacity={0.65} />
+        {/* Directional sheen */}
+        <path d={path} fill="url(#gs-water-sheen)" opacity={0.85} />
+        {/* Defined shoreline — bright inner edge for clarity */}
+        <path d={path} fill="none" stroke="#b8eaff" strokeOpacity={0.7} strokeWidth={1.2} />
+        {/* Soft outer glow so edge feathers naturally into rough */}
+        <path d={path} fill="none" stroke="#9adcff" strokeOpacity={0.3} strokeWidth={4}
+          filter="url(#gs-feather)" />
+        {/* Specular highlight — bright white patch near top-left (sun position) */}
+        <ellipse
+          cx={cx - Math.abs(cx - points[0].x) * 0.25}
+          cy={cy - Math.abs(cy - points[0].y) * 0.2}
+          rx={Math.max(8, Math.abs(cx - points[0].x) * 0.3)}
+          ry={Math.max(4, Math.abs(cy - points[0].y) * 0.15)}
+          fill="#eaf9ff"
+          opacity={0.22}
+        />
       </g>
     );
   }
   return (
     <g filter="url(#gs-shadow-soft)">
-      <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
+      <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water)" stroke="#b8eaff" strokeOpacity={0.65} strokeWidth={1.2} />
       <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water-ripple)" opacity={0.6} />
-      <ellipse cx={center.x} cy={center.y - 4} rx={20} ry={4} fill="#cfeeff" opacity={0.25} />
+      <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water-sheen)" opacity={0.8} />
+      <ellipse cx={center.x - 6} cy={center.y - 5} rx={14} ry={5} fill="#cfeeff" opacity={0.28} />
     </g>
   );
 }
 
-function BunkerFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
+function BunkerFeature({ points, center, hazardId }: { points: { x: number; y: number }[] | null; center: { x: number; y: number }; hazardId: string }) {
   if (points) {
-    const path = smoothRingPath(points, 0.4);
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const p of points) {
       if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
       if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
     }
-    const large = Math.max(maxX - minX, maxY - minY) > 60;
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    const large = Math.max(spanX, spanY) > 60;
+    // Detect long strip bunkers (aspect ratio > 3.5:1). Instead of rendering
+    // as one ribbon, split into N visually-separated oval bunker sections.
+    const aspectRatio = Math.max(spanX, spanY) / Math.max(1, Math.min(spanX, spanY));
+    const isStrip = aspectRatio > 3.5 && Math.max(spanX, spanY) > 80;
+    if (isStrip) {
+      // Determine if the strip is more horizontal or vertical
+      const horizontal = spanX > spanY;
+      const mainSpan = horizontal ? spanX : spanY;
+      // Split into 3 sections with gaps between them (25% gap of each section)
+      const numSections = 3;
+      const sectionLen = mainSpan / numSections;
+      const gapFrac = 0.18; // 18% gap between sections
+      const rng = seededRand(hazardId + ":strip");
+      const sections = Array.from({ length: numSections }, (_, i) => {
+        const sectionCx = horizontal
+          ? minX + sectionLen * i + sectionLen * 0.5
+          : (minX + maxX) / 2 + (rng() - 0.5) * (spanX * 0.3);
+        const sectionCy = horizontal
+          ? (minY + maxY) / 2 + (rng() - 0.5) * (spanY * 0.3)
+          : minY + sectionLen * i + sectionLen * 0.5;
+        const rx = horizontal
+          ? sectionLen * (1 - gapFrac) * 0.5
+          : Math.max(6, spanX * 0.5 * (0.7 + rng() * 0.3));
+        const ry = horizontal
+          ? Math.max(6, spanY * 0.5 * (0.7 + rng() * 0.3))
+          : sectionLen * (1 - gapFrac) * 0.5;
+        return { cx: sectionCx, cy: sectionCy, rx, ry };
+      });
+      return (
+        <g filter="url(#gs-shadow)">
+          {sections.map((s, i) => (
+            <g key={i} filter="url(#gs-bunker-rim)">
+              <ellipse cx={s.cx + 1} cy={s.cy + 1.5} rx={s.rx} ry={s.ry} fill="#3a2a10" opacity={0.45} filter="url(#gs-feather)" />
+              <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry}
+                fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.65} strokeWidth={0.8} />
+              <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry}
+                fill="url(#gs-sand-stipple)" opacity={0.55} />
+              <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry}
+                fill="none" stroke="#fff3c6" strokeOpacity={0.3} strokeWidth={0.5} filter="url(#gs-feather)" />
+            </g>
+          ))}
+        </g>
+      );
+    }
+    // Standard bunker polygon render
+    const path = smoothRingPath(points, 0.4);
     return (
       <g filter="url(#gs-shadow)">
         <path d={path} fill="#3a2a10" opacity={0.5} transform="translate(1.2,2)" filter="url(#gs-feather)" />
@@ -1054,20 +1237,32 @@ function BunkerFeature({ points, center }: { points: { x: number; y: number }[] 
   );
 }
 
+// Three palm/desert-golf tree palettes for variety. Each entry is
+// [baseHex, highlightHex, specularHex].
+const TREE_PALETTES: [string, string, string][] = [
+  ["#0d3a22", "#1b6a3c", "#a8e6bf"],  // deep emerald (most common)
+  ["#1a4a18", "#2d7a28", "#b8f0a0"],  // bright lime-green
+  ["#0a2e1f", "#145c38", "#80d4a8"],  // muted teal-green
+  ["#263a14", "#4a7520", "#c8e890"],  // olive-khaki (desert palms)
+];
+
 function TreeFeature({
   points,
   center,
   projection,
+  holeNumber,
+  hazardId,
 }: {
   points: { x: number; y: number }[] | null;
   center: { x: number; y: number };
   projection: FittedProjection;
+  holeNumber: number;
+  hazardId: string;
 }) {
   // meters → px, same conversion PlayerMarker uses for the accuracy ring.
   const metersToPx = projection.scale / 111000;
-  // Seed from the projected cluster centroid so scatter is stable across
-  // renders (deterministic per hazard position).
-  const rand = seededRand(`${center.x.toFixed(0)}:${center.y.toFixed(0)}:trees`);
+  // Seed from hazard id for stable, unique scatter per cluster.
+  const rand = seededRand(`${hazardId}:${holeNumber}:trees`);
 
   // Bounding box + point-in-polygon test, in px space.
   const poly = points && points.length >= 3 ? points : null;
@@ -1125,19 +1320,43 @@ function TreeFeature({
     scattered.push({ x: center.x, y: center.y, r: Math.max(3, Math.min(14, 3 * metersToPx)) });
   }
 
+  // Pre-pick palette for this cluster (stable, based on seeded rand)
+  const paletteIdx = Math.floor(rand() * TREE_PALETTES.length);
+
   return (
     <g filter="url(#gs-shadow)">
       {scattered.map((p, i) => {
-        const lightness = 0.75 + rand() * 0.5;
-        const base = shadeHex("#0d3a22", lightness);
-        const hi = shadeHex("#1b6a3c", lightness);
+        const lightness = 0.72 + rand() * 0.56;
+        // Occasionally use a neighbouring palette for intra-cluster variety
+        const thisPalette = TREE_PALETTES[(paletteIdx + (rand() > 0.78 ? 1 : 0)) % TREE_PALETTES.length];
+        const base = shadeHex(thisPalette[0], lightness);
+        const hi   = shadeHex(thisPalette[1], lightness);
+        const spec = thisPalette[2];
         const r = p.r;
+        // Taller trees get a tiny trunk nub for silhouette realism
+        const showTrunk = r > 5.5;
         return (
           <g key={i}>
-            <circle cx={p.x} cy={p.y + r * 0.35} r={r * 1.05} fill="#02110a" opacity={0.55} />
+            {/* Drop shadow */}
+            <ellipse cx={p.x + r * 0.25} cy={p.y + r * 0.55} rx={r * 0.85} ry={r * 0.3} fill="#01090504" opacity={0.65} />
+            {/* Trunk */}
+            {showTrunk && (
+              <rect
+                x={p.x - 0.8}
+                y={p.y + r * 0.45}
+                width={1.6}
+                height={r * 0.55}
+                rx={0.8}
+                fill="#3a2008"
+                opacity={0.75}
+              />
+            )}
+            {/* Canopy base */}
             <circle cx={p.x} cy={p.y} r={r} fill={base} />
-            <circle cx={p.x - r * 0.32} cy={p.y - r * 0.36} r={r * 0.55} fill={hi} opacity={0.9} />
-            <circle cx={p.x - r * 0.55} cy={p.y - r * 0.55} r={r * 0.22} fill="#a8e6bf" opacity={0.5} />
+            {/* Inner highlight dome */}
+            <circle cx={p.x - r * 0.32} cy={p.y - r * 0.36} r={r * 0.55} fill={hi} opacity={0.88} />
+            {/* Specular tip */}
+            <circle cx={p.x - r * 0.52} cy={p.y - r * 0.52} r={r * 0.2} fill={spec} opacity={0.48} />
           </g>
         );
       })}
