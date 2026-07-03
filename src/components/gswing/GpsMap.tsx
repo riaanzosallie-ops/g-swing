@@ -405,6 +405,36 @@ function MapboxCourseView({
   // current hole has no surveyed geometry yet".
   const [nearestCourseFound, setNearestCourseFound] = useState<boolean | null>(null);
 
+  // GolfAPI cached-course health (owner debug + quality badge).
+  const [golfApiHealth, setGolfApiHealth] = useState<{
+    cached: boolean;
+    quality: number;
+    holesWithCoords: number;
+  }>({ cached: false, quality: 0, holesWithCoords: 0 });
+  useEffect(() => {
+    let cancelled = false;
+    if (!isGolfApiCourseId(selectedCourse.id)) {
+      setGolfApiHealth({ cached: false, quality: 0, holesWithCoords: 0 });
+      return;
+    }
+    computeGolfApiCourseQuality(selectedCourse.id)
+      .then((h) => {
+        if (cancelled) return;
+        setGolfApiHealth({
+          cached: h.holesWithCoords > 0,
+          quality: h.score,
+          holesWithCoords: h.holesWithCoords,
+        });
+      })
+      .catch(() => {
+        if (!cancelled)
+          setGolfApiHealth({ cached: false, quality: 0, holesWithCoords: 0 });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCourse.id]);
+
   // Always-visible-course UX: when the selected hole has no Premium mapping
   // yet, default to Satellite so the user can see, pan, zoom, and measure
   // immediately. Premium becomes an enhancement, not a prerequisite.
