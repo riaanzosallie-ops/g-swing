@@ -1666,6 +1666,25 @@ function MapboxCourseView({
           measurePoint={measurePoint}
           onClearMeasure={() => setMeasurePoint(null)}
           playerPosition={playerPosition}
+          targets={measureTargets}
+          onPickTarget={pickTarget}
+          clubSuggestion={clubSuggestion}
+        />
+      )}
+
+      {mapView === "satellite" && (
+        <CourseInfoPanel
+          course={{
+            id: selectedCourse.id,
+            name: selectedCourse.name,
+            city: selectedCourse.city,
+            country: selectedCourse.country,
+            lat: selectedCourse.lat,
+            lng: selectedCourse.lng,
+            holes_count: selectedCourse.holes_count,
+          }}
+          teeBoxes={gps?.tee_boxes?.length ?? 0}
+          renderer={activeSatProvider === "mapbox" ? "Mapbox" : "Esri"}
         />
       )}
 
