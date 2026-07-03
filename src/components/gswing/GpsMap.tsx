@@ -1180,7 +1180,14 @@ function MapboxCourseView({
   // existing fallback (computeYardages from raw DB geometry) wins.
   const mappedOverride = useMemo(() => {
     if (!mappedHole) return null;
-    const snap = buildGolfGpsSnapshot(playerPosition, mappedHole, unit);
+    // Distance origin: prefer real player GPS, otherwise fall back to
+    // the tee so Front/Center/Back always show real numbers instead of
+    // blank dashes. Matches the "if live GPS unavailable, calculate
+    // from tee position" requirement.
+    const teeOrigin: LatLng | null =
+      mappedHole.tees[0]?.coordinate ?? tee ?? null;
+    const distanceOrigin: LatLng | null = playerPosition ?? teeOrigin;
+    const snap = buildGolfGpsSnapshot(distanceOrigin, mappedHole, unit);
     if (!snap.hasMapping) return null;
     const hazardKind = (
       t: string,
