@@ -122,6 +122,9 @@ import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGswingAdmin } from "@/lib/use-gswing-admin";
 import { GpsBottomSheet } from "@/components/gswing/gps/GpsBottomSheet";
+import type { MeasureTarget } from "@/components/gswing/gps/GpsBottomSheet";
+import { CourseInfoPanel } from "@/components/gswing/gps/CourseInfoPanel";
+import { suggestClub } from "@/lib/club-recommender";
 import { MappingDebugPanel } from "@/components/gswing/gps/MappingDebugPanel";
 import type { MappingDebugPanelProps } from "@/components/gswing/gps/MappingDebugPanel";
 import { PremiumHoleRenderer } from "@/components/gswing/gps/PremiumHoleRenderer";
@@ -1387,6 +1390,77 @@ function MapboxCourseView({
       return next;
     });
 
+  // --- Priority-3 quick targets + Priority-4 club recommendation ------------
+  // Assemble a compact list of well-known targets from live GolfAPI.io data
+  // and any mapped hole geometry. Never triggers a GolfAPI call itself —
+  // pure derivation from what's already in memory.
+  const measureTargets = useMemo<MeasureTarget[]>(() => {
+    const list: MeasureTarget[] = [];
+    const seen = new Set<string>();
+    const push = (t: MeasureTarget) => {
+      const key = `${t.kind}:${t.latlng.lat.toFixed(6)}:${t.latlng.lng.toFixed(6)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push(t);
+    };
+    // Pin / green anchors from GolfAPI.io payload.
+    if (pinFromGps) push({ id: "pin", label: "Pin", latlng: pinFromGps, kind: "pin" });
+    const g = gps?.green;
+    if (g?.front) push({ id: "gfront", label: "Front", latlng: { lat: g.front.lat, lng: g.front.lng }, kind: "front" });
+    if (g?.center) push({ id: "gcenter", label: "Center", latlng: { lat: g.center.lat, lng: g.center.lng }, kind: "center" });
+    if (g?.back) push({ id: "gback", label: "Back", latlng: { lat: g.back.lat, lng: g.back.lng }, kind: "back" });
+    // Named hazards from GolfAPI.io that carry coordinates.
+    for (const h of gps?.hazards ?? []) {
+      if (h.lat == null || h.lng == null) continue;
+      const label = h.label?.trim()
+        ? h.label
+        : h.type === "layup"
+          ? "Layup"
+          : h.type === "dogleg"
+            ? "Dogleg"
+            : h.type.charAt(0).toUpperCase() + h.type.slice(1);
+      const kind: MeasureTarget["kind"] = h.type === "layup" ? "layup" : "hazard";
+      push({ id: `hz-${h.type}-${label}-${h.lat.toFixed(4)}`, label, latlng: { lat: h.lat, lng: h.lng }, kind });
+    }
+    // Mapped-hole extras (layup rings drawn in Course Mapper).
+    for (const pt of mappedHole?.layups ?? []) {
+      const c = pt?.coordinate;
+      if (!c) continue;
+      const yd = pt.targetYardageFromGreen;
+      push({
+        id: `mh-layup-${pt.id}`,
+        label: pt.name?.trim() || (yd != null ? `Layup ${yd}` : "Layup"),
+        latlng: { lat: c.lat, lng: c.lng },
+        kind: "layup",
+      });
+    }
+    return list.slice(0, 8);
+  }, [gps, pinFromGps, mappedHole]);
+
+  const [bag] = useBag();
+  const clubSuggestion = useMemo(() => {
+    if (!measurePoint || !measureOrigin) return null;
+    const yards = haversineYards(measureOrigin, measurePoint);
+    const display = toDisplayUnit(yards, displayUnit === "m" ? "meters" : "yards");
+    return suggestClub(bag, display, displayUnit === "m" ? "meters" : "yards");
+  }, [
+    bag,
+    measurePoint?.lat,
+    measurePoint?.lng,
+    measureOrigin?.lat,
+    measureOrigin?.lng,
+    displayUnit,
+  ]);
+
+  const pickTarget = useCallback(
+    (t: MeasureTarget) => {
+      // Ensure the measure tool is on so the user sees the line + badge.
+      setMeasureActive(true);
+      setMeasurePoint({ lat: t.latlng.lat, lng: t.latlng.lng });
+    },
+    [],
+  );
+
   return (
     <div
       className={`gswing-map relative overflow-hidden rounded-[28px] border border-gold/25 bg-black shadow-elegant ${
@@ -1592,6 +1666,25 @@ function MapboxCourseView({
           measurePoint={measurePoint}
           onClearMeasure={() => setMeasurePoint(null)}
           playerPosition={playerPosition}
+          targets={measureTargets}
+          onPickTarget={pickTarget}
+          clubSuggestion={clubSuggestion}
+        />
+      )}
+
+      {mapView === "satellite" && (
+        <CourseInfoPanel
+          course={{
+            id: selectedCourse.id,
+            name: selectedCourse.name,
+            city: selectedCourse.city,
+            country: selectedCourse.country,
+            lat: selectedCourse.lat,
+            lng: selectedCourse.lng,
+            holes_count: selectedCourse.holes_count,
+          }}
+          teeBoxes={gps?.tee_boxes?.length ?? 0}
+          renderer={activeSatProvider === "mapbox" ? "Mapbox" : "Esri"}
         />
       )}
 
