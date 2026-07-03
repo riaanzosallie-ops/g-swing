@@ -215,10 +215,10 @@ export function PremiumHoleRenderer({
           <div className="rounded-2xl border border-gold/30 bg-black/55 px-5 py-4 backdrop-blur-md">
             <p className="font-serif text-base text-gold">Hole {selectedHoleNumber}</p>
             <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gold-soft">
-              GPS mapping required
+              Course Ready · Loading Hole
             </p>
             <p className="mt-2 max-w-[260px] text-[11px] leading-snug text-white/65">
-              Open the Course Mapper to save tee, green front/center/back and pin for this hole.
+              Waiting for hole coordinates. You can switch to Satellite above to keep playing.
             </p>
           </div>
         </div>

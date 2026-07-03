@@ -193,8 +193,8 @@ export const Splash = ({ onEnter }: { onEnter: () => void }) => {
           <div className="flex items-center justify-center gap-2">
             <Globe className="h-5 w-5 text-emerald-300" />
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200 leading-none">Live GPS</div>
-              <div className="mt-1 text-[10px] text-white/70">Mapbox</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200 leading-none">Premium GPS</div>
+              <div className="mt-1 text-[10px] text-white/70">GolfAPI.io · Satellite</div>
             </div>
           </div>
           <div className="flex items-center justify-center gap-2">
