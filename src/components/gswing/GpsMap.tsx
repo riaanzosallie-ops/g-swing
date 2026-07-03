@@ -1278,7 +1278,15 @@ function MapboxCourseView({
   // currently-selected course + hole, or mark a missing premium visual
   // layer as "not applicable" for this hole. Strictly gated behind
   // membership.isOwner — non-owner users never see these affordances.
-  const navigateToCourseMapper = useNavigate();
+  // NOTE: intentionally NOT using react-router's useNavigate here.
+  // useNavigate contains a conditional internal branch
+  // (`isDataRoute ? useNavigateStable() : useNavigateUnstable()`),
+  // which can flip the number of hooks it invokes across renders
+  // during router bootstrap and cause React error #310 ("Rendered
+  // more hooks than during the previous render") inside this very
+  // large component. We only need a straight cross-page navigation
+  // to the Course Mapper URL, so window.location.assign is both
+  // sufficient and hook-free.
   const openMapperForCurrentHole = useCallback(() => {
     if (!membership.isOwner) return;
     // One-tap launch: hand the mapper *everything* it needs to skip the
@@ -1298,7 +1306,9 @@ function MapboxCourseView({
       params.set("lng", String(selectedCourse.lng));
     }
     params.set("returnTo", "gps");
-    navigateToCourseMapper(`/gswing/course-mapper?${params.toString()}`);
+    if (typeof window !== "undefined") {
+      window.location.assign(`/gswing/course-mapper?${params.toString()}`);
+    }
   }, [
     membership.isOwner,
     selectedCourse?.name,
@@ -1308,7 +1318,6 @@ function MapboxCourseView({
     hole,
     unit,
     playerPosition,
-    navigateToCourseMapper,
   ]);
 
   // Instant refresh: when the user returns from the Course Mapper with
@@ -1370,25 +1379,27 @@ function MapboxCourseView({
     toast.info("Refreshing course mapping…");
   }, []);
 
-  if (tokenState.status === "loading") {
-    return (
+  // NOTE: DO NOT early-return here. Any early return before the
+  // remaining hooks would change the number of hooks between renders
+  // (e.g. first render with "loading" completes 85 hooks; a later
+  // render with "ready" completes 96 hooks) and trigger React error
+  // #310 ("Rendered more hooks than during the previous render").
+  // Compute a fallback element and render it below, after every hook
+  // in the component body has been declared unconditionally.
+  const tokenBlockerElement =
+    tokenState.status === "loading" ? (
       <Card className="gradient-card flex h-[58vh] min-h-[410px] items-center justify-center border-gold/30 p-4 text-xs text-muted-foreground">
         <div className="text-center">
           <p className="mb-1 font-serif text-base text-gold">Loading Mapbox…</p>
           <p>Fetching secure satellite token.</p>
         </div>
       </Card>
-    );
-  }
-
-  if (tokenState.status === "error") {
-    return (
+    ) : tokenState.status === "error" ? (
       <Card className="gradient-card border-gold/30 p-4 text-xs text-muted-foreground">
         <p className="mb-1 font-serif text-base text-gold">Mapbox token unavailable</p>
         {tokenState.message}
       </Card>
-    );
-  }
+    ) : null;
 
   const toggleMeasure = () =>
     setMeasureActive((v) => {
@@ -1572,6 +1583,10 @@ function MapboxCourseView({
     onSave: handleSaveShot,
     onClear: () => setMeasurePoint(null),
   };
+
+  // Show the token loading/error blocker without early-returning above
+  // the hook chain. This preserves a stable hook count across renders.
+  if (tokenBlockerElement) return tokenBlockerElement;
 
   return (
     <div
