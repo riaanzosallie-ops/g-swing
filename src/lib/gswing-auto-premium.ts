@@ -188,7 +188,51 @@ function organicBufferPolygon(
     left.push(toRing(destination(line[i], (brg + 270) % 360, wl)));
     right.push(toRing(destination(line[i], (brg + 90) % 360, wr)));
   }
-  const ring = [...left, ...right.reverse(), left[0]];
+  // Semicircular end caps so the ring doesn't have visible flat ends.
+  const capSegments = 7;
+  const brgStart = centerlineBearingAt(line, 0);
+  const brgEnd = centerlineBearingAt(line, n - 1);
+  const wStart = widthAt(0);
+  const wEnd = widthAt(1);
+  const arcAround = (
+    center: LatLng,
+    fromBearing: number,
+    toBearing: number,
+    radius: number,
+    segments: number,
+  ): Array<[number, number]> => {
+    // Sweep the shortest way from `fromBearing` → `toBearing`.
+    let delta = ((toBearing - fromBearing + 540) % 360) - 180;
+    const out: Array<[number, number]> = [];
+    for (let i = 1; i < segments; i++) {
+      const b = (fromBearing + delta * (i / segments) + 360) % 360;
+      out.push(toRing(destination(center, b, Math.max(2, radius))));
+    }
+    return out;
+  };
+  // End cap at line[n-1]: sweep forward from left → right through brg.
+  const endCap = arcAround(
+    line[n - 1],
+    (brgEnd + 270) % 360,
+    (brgEnd + 90) % 360,
+    wEnd,
+    capSegments,
+  );
+  // Start cap at line[0]: sweep back from right → left through brg+180.
+  const startCap = arcAround(
+    line[0],
+    (brgStart + 90) % 360,
+    (brgStart + 270) % 360,
+    wStart,
+    capSegments,
+  );
+  const ring = [
+    ...left,
+    ...endCap,
+    ...right.reverse(),
+    ...startCap,
+    left[0],
+  ];
   return ring;
 }
 
@@ -336,7 +380,22 @@ export function synthesizePremiumHole(
     .filter((h) => h.type === "dogleg" && h.lat != null && h.lng != null)
     .map((h) => ({ lat: h.lat as number, lng: h.lng as number }))
     .sort((a, b) => meters(tee, a) - meters(tee, b));
-  const centerline = smoothCenterline([tee, ...doglegPts, centerG], 24);
+  const rawControls: LatLng[] = [tee];
+  if (doglegPts.length === 0) {
+    // Gentle single-bend so straight tee→green fairways still curve.
+    const perp = (teeToGreenBearing + (rng() < 0.5 ? 90 : 270)) % 360;
+    const offM = holeLengthM * 0.03;
+    const alongAt = (t: number): LatLng => ({
+      lat: tee.lat + (centerG.lat - tee.lat) * t,
+      lng: tee.lng + (centerG.lng - tee.lng) * t,
+    });
+    rawControls.push(destination(alongAt(0.35), perp, offM));
+    rawControls.push(destination(alongAt(0.70), perp, offM));
+  } else {
+    rawControls.push(...doglegPts);
+  }
+  rawControls.push(centerG);
+  const centerline = smoothCenterline(rawControls, 24);
 
   // ---- Fairway (organic buffer around centerline) ----------------------
   const fullHalf = Math.min(32, Math.max(16, holeLengthM * 0.045));
