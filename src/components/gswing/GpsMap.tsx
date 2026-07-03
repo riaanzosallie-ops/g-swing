@@ -132,7 +132,6 @@ import { EndRoundDialog } from "@/components/gswing/gps/EndRoundDialog";
 import { OfflineBanner } from "@/components/gswing/gps/OfflineBanner";
 import { OwnerDebugPanel } from "@/components/gswing/gps/OwnerDebugPanel";
 import { evaluateHoleQuality, sourceLabel } from "@/lib/gswing-hole-quality";
-import { Flag } from "lucide-react";
 import { MappingDebugPanel } from "@/components/gswing/gps/MappingDebugPanel";
 import type { MappingDebugPanelProps } from "@/components/gswing/gps/MappingDebugPanel";
 import { PremiumHoleRenderer } from "@/components/gswing/gps/PremiumHoleRenderer";
