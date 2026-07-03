@@ -919,6 +919,47 @@ function ringPath(pts: { x: number; y: number }[]): string {
     .join(" ")} Z`;
 }
 
+/**
+ * Smoothed closed ring using Catmull-Rom → cubic Bézier conversion.
+ * Produces softer, organic edges — critical for making auto-generated
+ * bunker / water / boundary polygons look hand-drawn instead of faceted.
+ * Falls back to a straight ring for <4 points.
+ */
+function smoothRingPath(pts: { x: number; y: number }[], tension = 0.5): string {
+  const n = pts.length;
+  if (n < 4) return ringPath(pts);
+  const k = (1 - tension) / 6;
+  const p = (i: number) => pts[((i % n) + n) % n];
+  let d = `M ${p(0).x.toFixed(1)} ${p(0).y.toFixed(1)}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = p(i - 1);
+    const p1 = p(i);
+    const p2 = p(i + 1);
+    const p3 = p(i + 2);
+    const c1x = p1.x + (p2.x - p0.x) * k;
+    const c1y = p1.y + (p2.y - p0.y) * k;
+    const c2x = p2.x - (p3.x - p1.x) * k;
+    const c2y = p2.y - (p3.y - p1.y) * k;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return `${d} Z`;
+}
+
+/** Cheap deterministic PRNG for seeded per-hazard variation. */
+function seededRand(seed: string): () => number {
+  let s = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    s ^= seed.charCodeAt(i);
+    s = Math.imul(s, 16777619);
+  }
+  return () => {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    return ((s >>> 0) % 100000) / 100000;
+  };
+}
+
 function WaterFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
     return (
