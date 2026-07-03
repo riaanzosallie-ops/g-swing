@@ -15,12 +15,27 @@ import sharjahGeometry from "@/data/sharjah-course-geometry.json";
 
 interface BundledCourse {
   center: LatLng;
+  /**
+   * Truthful playable hole count for this course, per the operator's
+   * own published layout. Distinct from `data.fairways.length` because
+   * 9-hole layouts commonly share fairway corridors between out/back
+   * holes — the runtime matcher slices the same corridor with
+   * different tee/green anchors per hole.
+   */
+  holeCount: number;
   data: Omit<OsmCourseGeometry, "fetchedAt" | "center">;
 }
 
 const BUNDLED: BundledCourse[] = [
   {
     center: { lat: 25.3536, lng: 55.4881 },
+    // Sharjah Golf & Shooting Club — confirmed 9-hole championship
+    // course by the club's own website (golfandshootingshj.com).
+    // Bundled geometry contains 7 fairway corridors because holes
+    // 8 and 9 share turf with earlier holes (played in opposite
+    // directions with different tees/greens). The runtime matcher
+    // resolves all 9 holes from live GolfAPI tee/green anchors.
+    holeCount: 9,
     data: sharjahGeometry as BundledCourse["data"],
   },
 ];
@@ -61,17 +76,16 @@ export function getBundledCourseGeometry(center: LatLng): OsmCourseGeometry | nu
 
 /**
  * Playable hole count for a bundled course layout near `center`, or
- * null if this course isn't bundled. Used by the GPS header so seeded
- * layouts (e.g. Sharjah's 9 mapped holes) don't advertise the upstream
- * "18" count from GolfAPI when only 9 are actually playable in-app.
+ * null if this course isn't bundled. Returns the explicitly declared
+ * `holeCount` — NOT `fairways.length` — because shared corridors on
+ * 9-hole layouts (common in the UAE) mean fairway count under-reports
+ * the true playable hole count. Values here reflect each course
+ * operator's own published layout.
  */
 export function getBundledCourseHoleCount(center: LatLng): number | null {
   for (const c of BUNDLED) {
     if (metersBetween(c.center, center) <= MATCH_RADIUS_M) {
-      const hl = c.data.holeLines?.length ?? 0;
-      const fw = c.data.fairways?.length ?? 0;
-      const n = Math.max(hl, fw);
-      return n > 0 ? n : null;
+      return c.holeCount > 0 ? c.holeCount : null;
     }
   }
   return null;
