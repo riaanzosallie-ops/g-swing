@@ -166,7 +166,7 @@ export default function ManageCourses({ go }: { go?: (view: string) => void }) {
       {courses && filtered.length === 0 && (
         <Card className="border-gold/20 bg-black/40 p-6 text-center text-xs text-foreground/70">
           {courses.length === 0
-            ? "No courses yet. Add one via the GolfCourseAPI search inside Course Mapper, or start a manual map."
+            ? "No courses yet. Add one via the Golf API admin (GolfAPI.io), or start a manual map."
             : "No courses match this filter."}
         </Card>
       )}
@@ -221,7 +221,7 @@ export default function ManageCourses({ go }: { go?: (view: string) => void }) {
                 >
                   <MapIcon className="h-3 w-3" /> Live GPS
                 </Button>
-                {c.external_provider === "GolfCourseAPI" && (
+                {(c.external_provider === "GolfAPI.io" || c.external_provider === "GolfCourseAPI") && (
                   <Button
                     size="sm" variant="outline"
                     onClick={() => openMapper(c.id, 1)}
