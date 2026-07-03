@@ -435,19 +435,10 @@ function MapboxCourseView({
     };
   }, [selectedCourse.id]);
 
-  // Always-visible-course UX: when the selected hole has no Premium mapping
-  // yet, default to Satellite so the user can see, pan, zoom, and measure
-  // immediately. Premium becomes an enhancement, not a prerequisite.
-  useEffect(() => {
-    if (userPickedViewRef.current) return;
-    if (mappingStatus === "missing" && mapView === "premium") {
-      setMapView("satellite");
-    } else if (mappingStatus === "mapped" && mapView === "satellite") {
-      // If user lands on a fully mapped hole and hasn't expressed a
-      // preference, give them Premium (the marquee experience).
-      setMapView("premium");
-    }
-  }, [mappingStatus, mapView]);
+  // Premium is the default renderer. We only auto-switch to Satellite
+  // when Premium literally cannot render (no mapped hole AND no
+  // auto-synthesised hole from GolfAPI coordinates). Otherwise the
+  // golfer stays on the illustrated hole they picked.
 
   // Reset the dismiss flag whenever hole or course changes so the hint
   // re-appears once per missing hole, not just once per session.
@@ -1689,59 +1680,12 @@ function MapboxCourseView({
               onMarkLayerNa={markLayerNotApplicable}
               onContinueSatellite={() => handleSetMapView("satellite")}
             />
-            {mappedIsAuto && mappedHole && (
-              <div className="pointer-events-none absolute left-3 bottom-3 z-30 rounded-full border border-emerald-400/30 bg-black/65 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-emerald-200 backdrop-blur-md">
-                Auto · GolfAPI.io
-              </div>
-            )}
             </>
           )}
         </div>
       )}
 
-      {mapView === "premium" ? (
-        <PremiumGpsOverlay
-          hole={gps?.hole_number ?? hole}
-          par={gps?.par ?? null}
-          handicap={gps?.handicap ?? null}
-          totalHoles={holeCount ?? 18}
-          readout={effectiveReadout}
-          unit={unit}
-          mapView={mapView}
-          onSetMapView={handleSetMapView}
-          measureActive={measureActive}
-          onToggleMeasure={toggleMeasure}
-          showOverlays={showOverlays}
-          onToggleOverlays={() => setShowOverlays((v) => !v)}
-          showHazards={showHazards}
-          onToggleHazards={() => setShowHazards((v) => !v)}
-          showLabels={showLabels}
-          onToggleLabels={() => setShowLabels((v) => !v)}
-          onRecenter={onRecenter}
-          onFitHole={onFitHole}
-          onFlyover={onFlyover}
-          flyoverDisabled={!geometry}
-          flyoverRunning={flyoverRunning}
-          onRefreshMapping={onRefreshMapping}
-          weather={hudWeather}
-          onBack={() => window.dispatchEvent(new CustomEvent("gswing-exit-gps"))}
-          onNextHole={
-            onChangeHole
-              ? () => {
-                  const total = holeCount ?? 18;
-                  onChangeHole(hole >= total ? 1 : hole + 1);
-                }
-              : undefined
-          }
-          onOpenScorecard={() =>
-            window.dispatchEvent(new CustomEvent("gswing-nav", { detail: "scorecard" }))
-          }
-          onOpenSettings={() =>
-            window.dispatchEvent(new CustomEvent("gswing-nav", { detail: "profile" }))
-          }
-        />
-      ) : (
-        <PremiumGpsChrome
+      <PremiumGpsChrome
         hole={gps?.hole_number ?? hole}
         par={gps?.par ?? null}
         handicap={gps?.handicap ?? null}
@@ -1777,54 +1721,9 @@ function MapboxCourseView({
         playerAccuracy={playerAccuracy}
         weather={hudWeather}
         caddieInsight={effectiveInsight}
-        debug={
-          membership.isOwner
-            ? {
-                courseName: selectedCourse.name,
-                courseMapId: mappedCourseId,
-                selectedHole: hole,
-                mappedHole,
-                mappingStatus,
-                front: effectiveReadout.front,
-                center: effectiveReadout.center,
-                back: effectiveReadout.back,
-                unitShort,
-                rendererActive: false,
-                visualMode: mapView,
-                measurementTarget: measurePoint,
-                measurementDistance:
-                  measurePoint && playerPosition
-                    ? Math.round(
-                        haversineYards(playerPosition, measurePoint) *
-                          (unit === "meters" ? 0.9144 : 1),
-                      )
-                    : null,
-                measurementSource: measurePoint ? "satellite-mapbox" : null,
-                satellite: {
-                  activeProvider: activeSatProvider,
-                  providerLabel:
-                    SATELLITE_PROVIDERS[activeSatProvider].label,
-                  sampleTileUrl: SATELLITE_PROVIDERS[
-                    activeSatProvider
-                  ].sampleTileUrl({
-                    mapboxToken:
-                      tokenState.status === "ready" ? tokenState.token : null,
-                  }),
-                  mapboxTokenStatus: tokenState.status,
-                  fallbackActive: useEsriFallback,
-                  lastTileError: satDiag.lastTileError,
-                  retryCount: satDiag.retryCount,
-                  attribution:
-                    SATELLITE_PROVIDERS[activeSatProvider].attribution,
-                },
-              }
-            : undefined
-        }
-        />
-      )}
+      />
 
-      {mapView === "satellite" && (
-        <GpsBottomSheet
+      <GpsBottomSheet
           unit={unit}
           readout={effectiveReadout}
           fallbackCenterYards={effectiveFallbackCenter}
@@ -1838,35 +1737,7 @@ function MapboxCourseView({
           onPickTarget={pickTarget}
           clubSuggestion={clubSuggestion}
           shotPlan={shotPlanProps}
-        />
-      )}
-
-      {/* Premium mode: floating Shot Plan panel above the dock, driven
-          by the same Round Engine as satellite so recall works across
-          both views. Only surfaces once the user has a target. */}
-      {mapView === "premium" && measurePoint && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-[7.25rem] z-20 flex justify-center px-3 sm:bottom-[6.5rem]">
-          <div className="pointer-events-auto w-full max-w-md">
-            <ShotPlanPanel {...shotPlanProps} variant="compact" />
-          </div>
-        </div>
-      )}
-
-      {mapView === "satellite" && (
-        <CourseInfoPanel
-          course={{
-            id: selectedCourse.id,
-            name: selectedCourse.name,
-            city: selectedCourse.city,
-            country: selectedCourse.country,
-            lat: selectedCourse.lat,
-            lng: selectedCourse.lng,
-            holes_count: selectedCourse.holes_count,
-          }}
-          teeBoxes={gps?.tee_boxes?.length ?? 0}
-          renderer={activeSatProvider === "mapbox" ? "Mapbox" : "Esri"}
-        />
-      )}
+      />
 
       {/* Non-intrusive offline chip — never blocks play. */}
       <OfflineBanner />
@@ -1881,42 +1752,6 @@ function MapboxCourseView({
           {round.round.endedAt != null ? "Round summary" : "End round"}
         </button>
       </div>
-
-      {/* Owner-only debug/status. Collapsed by default; never leaks to
-          normal users. */}
-      {membership.isOwner && (
-        <OwnerDebugPanel
-          courseName={selectedCourse.name}
-          courseId={selectedCourse.id}
-          source={
-            isGolfApiCourseId(selectedCourse.id)
-              ? "GolfAPI.io Auto"
-              : sourceLabel(evaluateHoleQuality(mappedHole).source)
-          }
-          qualityScore={
-            isGolfApiCourseId(selectedCourse.id)
-              ? golfApiHealth.quality
-              : evaluateHoleQuality(mappedHole).score
-          }
-          qualityLabel={
-            isGolfApiCourseId(selectedCourse.id)
-              ? (golfApiHealth.quality >= 90
-                  ? "Premium Ready"
-                  : golfApiHealth.quality >= 75
-                    ? "Premium Ready · Can Enhance"
-                    : golfApiHealth.holesWithCoords > 0
-                      ? "Enhancement Recommended"
-                      : "Coordinates unavailable")
-              : evaluateHoleQuality(mappedHole).badge.label
-          }
-          cached={
-            isGolfApiCourseId(selectedCourse.id) ? golfApiHealth.cached : !!mappedHole
-          }
-          round={round.round}
-          gpsAccuracyMeters={playerAccuracy}
-          mapView={mapView}
-        />
-      )}
 
       {/* End-of-round summary. Also acts as a resume prompt after refresh. */}
       <EndRoundDialog
@@ -1981,84 +1816,6 @@ function MapboxCourseView({
         </div>
       )}
 
-      {/* Satellite provider badge — small, non-intrusive, auto-fades.
-          Tells the user which imagery source is active without leaking
-          technical errors. Hidden in Premium mode. */}
-      {mapView === "satellite" && (
-        <div
-          className={`pointer-events-none absolute right-3 top-16 z-30 transition-opacity duration-500 ${
-            providerBadgeVisible ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <div className="flex items-center gap-1.5 rounded-full border border-gold/30 bg-black/65 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-gold-soft shadow-elegant backdrop-blur-md">
-            <span aria-hidden>🛰️</span>
-            <span>{SATELLITE_PROVIDERS[activeSatProvider].label}</span>
-            {SATELLITE_PROVIDERS[activeSatProvider].badgeSuffix && (
-              <span className="text-white/55">
-                · {SATELLITE_PROVIDERS[activeSatProvider].badgeSuffix}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Non-blocking "Premium not mapped yet" hint — visible only in
-          Satellite mode for a course/hole whose premium polygons aren't
-          drawn. Satellite imagery and all GPS tools remain fully usable;
-          this card just invites the user to start mapping. */}
-      {mapView === "satellite" && mappingStatus === "missing" && !premiumHintDismissed && (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-3 sm:top-4">
-          <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-emerald-400/30 bg-black/80 px-4 py-3.5 text-white/90 shadow-elegant backdrop-blur-md">
-            <div className="flex items-start gap-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-400/20 text-emerald-300">✓</span>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300">
-                    Course Loaded Successfully
-                  </p>
-                </div>
-                <p className="mt-1.5 text-[13px] font-semibold text-white">
-                  {selectedCourse.name}
-                </p>
-                <ul className="mt-2 space-y-0.5 text-[11px] leading-snug text-white/75">
-                  <li>✓ Course Data: GolfAPI.io</li>
-                  <li>✓ Satellite Map: Mapbox</li>
-                  <li>✓ GPS Ready · Hole & Tee Data Loaded</li>
-                </ul>
-                <p className="mt-2 text-[11px] leading-snug text-white/70">
-                  You can <span className="text-emerald-300 font-semibold">start your round immediately</span> using Satellite GPS. Mapping is optional and only enhances the premium visual overlays (fairways, greens, bunkers, hazards).
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPremiumHintDismissed(true)}
-                    className="rounded-lg bg-gold px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-black shadow-[0_0_14px_rgba(245,200,75,0.35)] active:scale-[0.98]"
-                  >
-                    Start Round
-                  </button>
-                  {membership.isOwner && (
-                    <button
-                      type="button"
-                      onClick={openMapperForCurrentHole}
-                      className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80 hover:bg-white/10"
-                    >
-                      Map Course (Optional)
-                    </button>
-                  )}
-                </div>
-              </div>
-              <button
-                type="button"
-                aria-label="Dismiss"
-                onClick={() => setPremiumHintDismissed(true)}
-                className="-mr-1 -mt-1 rounded-full p-1 text-white/55 hover:bg-white/10 hover:text-white"
-              >
-                <XIcon className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2295,27 +2052,7 @@ function PremiumGpsChrome(props: {
                   </span>
                 </div>
               )}
-              <div className="mt-1 text-[9px] uppercase tracking-wider text-gold-soft/70">
-                Mapping ·{" "}
-                {mappingStatus === "mapped"
-                  ? "ready"
-                  : mappingStatus === "loading"
-                    ? "loading…"
-                    : "required"}
-              </div>
             </div>
-            {debug && (
-              <>
-                <div className="my-1 h-px bg-gold/15" />
-                <div className="px-1 pb-1">
-                  <MappingDebugPanel
-                    {...debug}
-                    playerPosition={playerPosition}
-                    playerAccuracy={playerAccuracy}
-                  />
-                </div>
-              </>
-            )}
           </PopoverContent>
         </Popover>
       </div>

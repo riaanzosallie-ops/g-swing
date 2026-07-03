@@ -210,19 +210,7 @@ export function PremiumHoleRenderer({
       <div className="absolute inset-0 bg-[radial-gradient(70%_45%_at_70%_15%,rgba(245,200,75,0.10)_0%,transparent_70%)] mix-blend-screen" />
       <div className="absolute inset-0 bg-[radial-gradient(45%_30%_at_15%_90%,rgba(0,0,0,0.55)_0%,transparent_70%)]" />
 
-      {!usable ? (
-        <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
-          <div className="rounded-2xl border border-gold/30 bg-black/55 px-5 py-4 backdrop-blur-md">
-            <p className="font-serif text-base text-gold">Hole {selectedHoleNumber}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gold-soft">
-              Course Ready · Loading Hole
-            </p>
-            <p className="mt-2 max-w-[260px] text-[11px] leading-snug text-white/65">
-              Waiting for hole coordinates. You can switch to Satellite above to keep playing.
-            </p>
-          </div>
-        </div>
-      ) : (
+      {!usable ? null : (
         <svg
           ref={svgRef}
           width={size.w || 1}
@@ -257,36 +245,6 @@ export function PremiumHoleRenderer({
             />
           )}
         </svg>
-      )}
-
-      {/* Hole Quality + Source badge — always visible when a hole renders.
-          Non-blocking: never interrupts play. */}
-      {usable && (
-        <div className="pointer-events-none absolute left-3 top-3 flex max-w-[70%] flex-col gap-1">
-          <div className={`pointer-events-auto inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] backdrop-blur-md ${badgeToneClasses(quality.badge.tone)}`}>
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
-            {quality.badge.label}
-            <span className="opacity-70">· {quality.score}%</span>
-          </div>
-          <div className="pointer-events-auto inline-flex w-fit items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-white/70 backdrop-blur-md">
-            {sourceLabel(quality.source)}
-          </div>
-        </div>
-      )}
-
-      {/* Subtle Enhance CTA — only when score < 90 and there is a mapper hook. */}
-      {usable && quality.badge.shouldEnhance && onOpenMapper && (
-        <button
-          type="button"
-          onClick={() => onOpenMapper()}
-          className={`absolute right-3 top-3 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] backdrop-blur-md transition-all active:scale-95 ${
-            quality.badge.stronglyRecommend
-              ? "border-amber-400/60 bg-amber-500/15 text-amber-100 shadow-[0_0_14px_rgba(245,200,75,0.35)]"
-              : "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-          }`}
-        >
-          {quality.badge.stronglyRecommend ? "Enhance in Mapper" : "Enhance Course"}
-        </button>
       )}
 
       {/* Hint chip when measuring with no GPS / no target */}
