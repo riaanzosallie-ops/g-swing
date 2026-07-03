@@ -408,6 +408,33 @@ function RendererDefs() {
           <feMergeNode in="SourceGraphic" />
         </feMerge>
       </filter>
+      {/* Softer, wider drop shadow used behind large landforms (fairway, boundary). */}
+      <filter id="gs-shadow-soft" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="5" />
+        <feOffset dy="3" result="off" />
+        <feComponentTransfer><feFuncA type="linear" slope="0.45" /></feComponentTransfer>
+        <feMerge>
+          <feMergeNode />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      {/* Edge feather — used to soften polygon rims so auto-generated shapes
+          don't look laser-cut. Applied via a lightweight blur+composite. */}
+      <filter id="gs-feather" x="-10%" y="-10%" width="120%" height="120%">
+        <feGaussianBlur stdDeviation="0.9" />
+      </filter>
+      {/* Bunker rim highlight — soft inner glow */}
+      <filter id="gs-bunker-rim" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="b" />
+        <feSpecularLighting in="b" surfaceScale="2" specularConstant="0.6" specularExponent="18" lightingColor="#fff5d6" result="spec">
+          <feDistantLight azimuth="135" elevation="55" />
+        </feSpecularLighting>
+        <feComposite in="spec" in2="SourceAlpha" operator="in" result="specMasked" />
+        <feMerge>
+          <feMergeNode in="SourceGraphic" />
+          <feMergeNode in="specMasked" />
+        </feMerge>
+      </filter>
       {/* Gentle inner highlight glow used by the green */}
       <filter id="gs-glow" x="-40%" y="-40%" width="180%" height="180%">
         <feGaussianBlur stdDeviation="3" result="b" />
@@ -422,6 +449,20 @@ function RendererDefs() {
         <stop offset="55%" stopColor="#3aa765" />
         <stop offset="100%" stopColor="#1e6b3f" />
       </radialGradient>
+      {/* Mowing stripes — alternating light/dark bands. Rotation is applied
+          per-hole via a wrapping <pattern> with patternTransform inside
+          HoleGeometryLayer so stripes follow tee→green bearing. */}
+      <pattern id="gs-mow-base" width="14" height="14" patternUnits="userSpaceOnUse">
+        <rect width="14" height="14" fill="transparent" />
+        <rect x="0" y="0" width="14" height="7" fill="#ffffff" fillOpacity="0.07" />
+        <rect x="0" y="7" width="14" height="7" fill="#000000" fillOpacity="0.05" />
+      </pattern>
+      {/* Finer mowing stripes for the green — perpendicular bands. */}
+      <pattern id="gs-green-mow" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="transparent" />
+        <rect x="0" y="0" width="8" height="4" fill="#ffffff" fillOpacity="0.09" />
+        <rect x="0" y="4" width="8" height="4" fill="#000000" fillOpacity="0.06" />
+      </pattern>
       <radialGradient id="gs-semirough" cx="50%" cy="50%" r="60%">
         <stop offset="0%" stopColor="#2f7e4d" />
         <stop offset="100%" stopColor="#16542f" />
@@ -436,12 +477,31 @@ function RendererDefs() {
         <stop offset="55%" stopColor="#4ad17e" />
         <stop offset="100%" stopColor="#1c8048" />
       </radialGradient>
+      {/* Directional green shading — used for front-to-back gradient */}
+      <linearGradient id="gs-green-dir" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.22" />
+        <stop offset="50%" stopColor="#ffffff" stopOpacity="0" />
+        <stop offset="100%" stopColor="#000000" stopOpacity="0.28" />
+      </linearGradient>
       {/* Water gradient — deep teal with highlight */}
       <linearGradient id="gs-water" x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stopColor="#5cc8e0" stopOpacity="0.95" />
         <stop offset="40%" stopColor="#1d6fb3" />
         <stop offset="100%" stopColor="#0b2c4f" />
       </linearGradient>
+      {/* Water reflection sheen — thin diagonal highlight */}
+      <linearGradient id="gs-water-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#eaf9ff" stopOpacity="0.35" />
+        <stop offset="35%" stopColor="#ffffff" stopOpacity="0" />
+        <stop offset="70%" stopColor="#ffffff" stopOpacity="0" />
+        <stop offset="100%" stopColor="#8fd6ff" stopOpacity="0.18" />
+      </linearGradient>
+      {/* Subtle ripple lines over water polygons. */}
+      <pattern id="gs-water-ripple" width="18" height="10" patternUnits="userSpaceOnUse">
+        <rect width="18" height="10" fill="transparent" />
+        <path d="M0 5 Q 4.5 2 9 5 T 18 5" fill="none" stroke="#eaf9ff" strokeOpacity="0.28" strokeWidth="0.5" />
+        <path d="M0 8 Q 4.5 6 9 8 T 18 8" fill="none" stroke="#ffffff" strokeOpacity="0.15" strokeWidth="0.4" />
+      </pattern>
       {/* Bunker gradient — warm sand with rim */}
       <radialGradient id="gs-sand" cx="50%" cy="40%" r="60%">
         <stop offset="0%" stopColor="#fbeec3" />
@@ -453,6 +513,14 @@ function RendererDefs() {
         <rect width="6" height="6" fill="transparent" />
         <circle cx="1.5" cy="1.5" r="0.5" fill="#8a6f3a" opacity="0.45" />
         <circle cx="4.5" cy="3.5" r="0.4" fill="#8a6f3a" opacity="0.35" />
+      </pattern>
+      {/* Denser grain for larger bunkers */}
+      <pattern id="gs-sand-grain" width="10" height="10" patternUnits="userSpaceOnUse">
+        <rect width="10" height="10" fill="transparent" />
+        <circle cx="2" cy="3" r="0.55" fill="#7d6432" opacity="0.4" />
+        <circle cx="6" cy="7" r="0.5" fill="#7d6432" opacity="0.35" />
+        <circle cx="8.5" cy="1.5" r="0.4" fill="#c9a869" opacity="0.55" />
+        <circle cx="3.5" cy="8" r="0.35" fill="#c9a869" opacity="0.5" />
       </pattern>
       {/* Subtle green contour rings via mask */}
       <radialGradient id="gs-green-ring" cx="50%" cy="50%" r="50%">
@@ -498,6 +566,19 @@ function HoleGeometryLayer({
   const roughPts = hole.roughPolygon ? projectRing(hole.roughPolygon) : null;
   const cartPathPts = hole.cartPath ? projectRing(hole.cartPath) : null;
 
+  // Mowing angle: tee → green centroid, in screen degrees.
+  let mowAngleDeg = 0;
+  if (tee && greenCenter) {
+    const t = project(tee);
+    const g = project(greenCenter);
+    mowAngleDeg = (Math.atan2(g.y - t.y, g.x - t.x) * 180) / Math.PI;
+  }
+  // Sanitised id fragment for unique per-hole defs.
+  const uid = (hole.id || `h${hole.holeNumber}`).replace(/[^a-zA-Z0-9_-]/g, "_");
+  const mowPatternId = `gs-mow-${uid}`;
+  const mowPerpPatternId = `gs-mow-perp-${uid}`;
+  const greenDirId = `gs-green-dir-${uid}`;
+
   // Green radius fallback only for the legacy ring overlay; if no polygon
   // we still draw the front/back-derived footprint as a soft halo.
   let greenRadiusPx = 28;
@@ -509,16 +590,62 @@ function HoleGeometryLayer({
 
   return (
     <g>
+      {/* Per-hole dynamic defs: rotated mowing patterns + oriented green shading. */}
+      <defs>
+        <pattern
+          id={mowPatternId}
+          width="18"
+          height="18"
+          patternUnits="userSpaceOnUse"
+          patternTransform={`rotate(${mowAngleDeg.toFixed(1)})`}
+        >
+          <rect width="18" height="18" fill="transparent" />
+          <rect x="0" y="0" width="18" height="9" fill="#ffffff" fillOpacity="0.08" />
+          <rect x="0" y="9" width="18" height="9" fill="#000000" fillOpacity="0.07" />
+        </pattern>
+        <pattern
+          id={mowPerpPatternId}
+          width="10"
+          height="10"
+          patternUnits="userSpaceOnUse"
+          patternTransform={`rotate(${(mowAngleDeg + 90).toFixed(1)})`}
+        >
+          <rect width="10" height="10" fill="transparent" />
+          <rect x="0" y="0" width="10" height="5" fill="#ffffff" fillOpacity="0.11" />
+          <rect x="0" y="5" width="10" height="5" fill="#000000" fillOpacity="0.07" />
+        </pattern>
+        <linearGradient
+          id={greenDirId}
+          gradientUnits="userSpaceOnUse"
+          x1={greenFront ? project(greenFront).x : 0}
+          y1={greenFront ? project(greenFront).y : 0}
+          x2={greenBack ? project(greenBack).x : 0}
+          y2={greenBack ? project(greenBack).y : 0}
+        >
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.22" />
+          <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="100%" stopColor="#04140a" stopOpacity="0.35" />
+        </linearGradient>
+      </defs>
       {/* Hole boundary — painted as the outer rough mass for depth. */}
       {holeBoundaryPts && holeBoundaryPts.length >= 3 && (
-        <g filter="url(#gs-shadow)">
+        <g filter="url(#gs-shadow-soft)">
           <path
-            d={ringPath(holeBoundaryPts)}
+            d={smoothRingPath(holeBoundaryPts)}
             fill="url(#gs-rough)"
             fillOpacity={0.95}
             stroke="#0a2c19"
             strokeOpacity={0.7}
             strokeWidth={1}
+          />
+          {/* Feathered rim so the boundary blends into the terrain */}
+          <path
+            d={smoothRingPath(holeBoundaryPts)}
+            fill="none"
+            stroke="#031a0f"
+            strokeOpacity={0.55}
+            strokeWidth={6}
+            filter="url(#gs-feather)"
           />
         </g>
       )}
@@ -526,7 +653,7 @@ function HoleGeometryLayer({
       {/* Explicit rough polygon overlay (if mapped separately). */}
       {roughPts && roughPts.length >= 3 && (
         <path
-          d={ringPath(roughPts)}
+          d={smoothRingPath(roughPts)}
           fill="url(#gs-semirough)"
           fillOpacity={0.85}
           stroke="#16542f"
@@ -537,21 +664,39 @@ function HoleGeometryLayer({
 
       {/* Manicured fairway — organic polygon from mapping. */}
       {fairwayPts && fairwayPts.length >= 3 && (
-        <g filter="url(#gs-shadow)">
+        <g filter="url(#gs-shadow-soft)">
+          {/* Feathered semi-rough halo just outside the fairway */}
           <path
-            d={ringPath(fairwayPts)}
+            d={smoothRingPath(fairwayPts)}
+            fill="url(#gs-semirough)"
+            fillOpacity={0.5}
+            stroke="none"
+            transform="scale(1.035)"
+            style={{ transformOrigin: "center", transformBox: "fill-box" } as React.CSSProperties}
+            filter="url(#gs-feather)"
+          />
+          {/* Base fairway turf */}
+          <path
+            d={smoothRingPath(fairwayPts)}
             fill="url(#gs-fairway)"
             stroke="#1e6b3f"
-            strokeOpacity={0.6}
+            strokeOpacity={0.55}
             strokeWidth={1}
           />
-          {/* Subtle mowing highlight ribbon along centroid axis. */}
+          {/* Mowing stripes rotated along tee→green bearing. */}
           <path
-            d={ringPath(fairwayPts)}
+            d={smoothRingPath(fairwayPts)}
+            fill={`url(#${mowPatternId})`}
+            stroke="none"
+          />
+          {/* Sunlit highlight ribbon */}
+          <path
+            d={smoothRingPath(fairwayPts)}
             fill="none"
-            stroke="#c8f5d6"
-            strokeOpacity={0.18}
-            strokeWidth={2}
+            stroke="#dcffe8"
+            strokeOpacity={0.15}
+            strokeWidth={1.4}
+            filter="url(#gs-feather)"
           />
         </g>
       )}
@@ -613,7 +758,11 @@ function HoleGeometryLayer({
 
       {/* Green — uses mapped polygon when available, organic shape */}
       {greenPolygon && greenPolygon.length >= 3 ? (
-        <GreenPolygon polygon={greenPolygon} project={project} />
+        <GreenPolygon
+          polygon={greenPolygon}
+          project={project}
+          greenDirId={greenDirId}
+        />
       ) : (
         greenCenter && (
           <GreenFallback
@@ -690,30 +839,43 @@ function layerOrder(t: HazardGeometry["type"]): number {
 function GreenPolygon({
   polygon,
   project,
+  greenDirId,
 }: {
   polygon: Array<[number, number]>;
   project: (p: { lat: number; lng: number }) => { x: number; y: number };
+  greenDirId: string;
 }) {
   const pts = polygon.map(([lng, lat]) => project({ lat, lng }));
   if (pts.length < 3) return null;
-  // Centroid for ring highlight
   let cx = 0, cy = 0;
   for (const p of pts) { cx += p.x; cy += p.y; }
   cx /= pts.length; cy /= pts.length;
-  // Approximate radius for ring overlay
   let rMax = 0;
   for (const p of pts) rMax = Math.max(rMax, Math.hypot(p.x - cx, p.y - cy));
-  const path = `${pts
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-    .join(" ")} Z`;
+  const path = smoothRingPath(pts);
+  const clipId = `${greenDirId}-clip`;
   return (
-    <g filter="url(#gs-shadow)">
-      {/* fringe / collar */}
-      <path d={path} fill="#0e3a25" stroke="#0e3a25" strokeWidth={10} strokeLinejoin="round" opacity={0.95} />
-      {/* manicured green */}
-      <path d={path} fill="url(#gs-green)" stroke="#a8efc6" strokeOpacity={0.4} strokeWidth={1} />
-      {/* contour ring */}
-      <circle cx={cx} cy={cy} r={Math.max(4, rMax * 0.6)} fill="url(#gs-green-ring)" />
+    <g filter="url(#gs-shadow-soft)">
+      <defs>
+        <clipPath id={clipId}>
+          <path d={path} />
+        </clipPath>
+      </defs>
+      {/* Outer feathered fringe / collar */}
+      <path d={path} fill="#0e3a25" stroke="#0e3a25" strokeWidth={12} strokeLinejoin="round" opacity={0.95} filter="url(#gs-feather)" />
+      {/* Manicured turf */}
+      <path d={path} fill="url(#gs-green)" stroke="#a8efc6" strokeOpacity={0.5} strokeWidth={1} />
+      {/* Perpendicular mowing bands, clipped to the green */}
+      <g clipPath={`url(#${clipId})`}>
+        <rect x={cx - rMax - 10} y={cy - rMax - 10} width={rMax * 2 + 20} height={rMax * 2 + 20} fill="url(#gs-green-mow)" opacity={0.85} />
+      </g>
+      {/* Directional shading (front→back) */}
+      <path d={path} fill={`url(#${greenDirId})`} />
+      {/* Contour rings for depth */}
+      <circle cx={cx} cy={cy} r={Math.max(4, rMax * 0.62)} fill="url(#gs-green-ring)" />
+      <circle cx={cx} cy={cy} r={Math.max(3, rMax * 0.42)} fill="none" stroke="#ffffff" strokeOpacity={0.08} strokeWidth={0.6} />
+      {/* Highlight rim */}
+      <path d={path} fill="none" stroke="#e8ffe8" strokeOpacity={0.3} strokeWidth={0.8} filter="url(#gs-feather)" />
     </g>
   );
 }
@@ -774,18 +936,63 @@ function ringPath(pts: { x: number; y: number }[]): string {
     .join(" ")} Z`;
 }
 
+/**
+ * Smoothed closed ring using Catmull-Rom → cubic Bézier conversion.
+ * Produces softer, organic edges — critical for making auto-generated
+ * bunker / water / boundary polygons look hand-drawn instead of faceted.
+ * Falls back to a straight ring for <4 points.
+ */
+function smoothRingPath(pts: { x: number; y: number }[], tension = 0.5): string {
+  const n = pts.length;
+  if (n < 4) return ringPath(pts);
+  const k = (1 - tension) / 6;
+  const p = (i: number) => pts[((i % n) + n) % n];
+  let d = `M ${p(0).x.toFixed(1)} ${p(0).y.toFixed(1)}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = p(i - 1);
+    const p1 = p(i);
+    const p2 = p(i + 1);
+    const p3 = p(i + 2);
+    const c1x = p1.x + (p2.x - p0.x) * k;
+    const c1y = p1.y + (p2.y - p0.y) * k;
+    const c2x = p2.x - (p3.x - p1.x) * k;
+    const c2y = p2.y - (p3.y - p1.y) * k;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return `${d} Z`;
+}
+
+/** Cheap deterministic PRNG for seeded per-hazard variation. */
+function seededRand(seed: string): () => number {
+  let s = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    s ^= seed.charCodeAt(i);
+    s = Math.imul(s, 16777619);
+  }
+  return () => {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    return ((s >>> 0) % 100000) / 100000;
+  };
+}
+
 function WaterFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
+    const path = smoothRingPath(points);
     return (
-      <g filter="url(#gs-shadow)">
-        <path d={ringPath(points)} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
-        <path d={ringPath(points)} fill="none" stroke="#cfeeff" strokeOpacity={0.35} strokeWidth={0.6} transform={`translate(0,-1)`} />
+      <g filter="url(#gs-shadow-soft)">
+        <path d={path} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
+        <path d={path} fill="url(#gs-water-ripple)" opacity={0.7} />
+        <path d={path} fill="url(#gs-water-sheen)" opacity={0.9} />
+        <path d={path} fill="none" stroke="#eaf9ff" strokeOpacity={0.55} strokeWidth={0.7} transform="translate(0,-1)" filter="url(#gs-feather)" />
       </g>
     );
   }
   return (
-    <g filter="url(#gs-shadow)">
+    <g filter="url(#gs-shadow-soft)">
       <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water)" stroke="#9adcff" strokeOpacity={0.55} strokeWidth={1} />
+      <ellipse cx={center.x} cy={center.y} rx={28} ry={18} fill="url(#gs-water-ripple)" opacity={0.6} />
       <ellipse cx={center.x} cy={center.y - 4} rx={20} ry={4} fill="#cfeeff" opacity={0.25} />
     </g>
   );
@@ -793,39 +1000,65 @@ function WaterFeature({ points, center }: { points: { x: number; y: number }[] |
 
 function BunkerFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
+    const path = smoothRingPath(points, 0.4);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    const large = Math.max(maxX - minX, maxY - minY) > 60;
     return (
       <g filter="url(#gs-shadow)">
-        <path d={ringPath(points)} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.7} strokeWidth={1} />
-        <path d={ringPath(points)} fill="url(#gs-sand-stipple)" opacity={0.55} />
+        <path d={path} fill="#3a2a10" opacity={0.5} transform="translate(1.2,2)" filter="url(#gs-feather)" />
+        <path d={path} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.65} strokeWidth={0.8} filter="url(#gs-bunker-rim)" />
+        <path d={path} fill={large ? "url(#gs-sand-grain)" : "url(#gs-sand-stipple)"} opacity={0.55} />
+        <path d={path} fill="none" stroke="#fff3c6" strokeOpacity={0.35} strokeWidth={0.5} filter="url(#gs-feather)" />
       </g>
     );
   }
-  // Cluster of ellipses simulates an organic sand shape
   return (
     <g filter="url(#gs-shadow)">
-      <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.7} strokeWidth={1} />
-      <ellipse cx={center.x + 7} cy={center.y - 3} rx={11} ry={7} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.6} strokeWidth={1} />
-      <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand-stipple)" opacity={0.5} />
+      <g filter="url(#gs-bunker-rim)">
+        <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.7} strokeWidth={0.8} />
+        <ellipse cx={center.x + 7} cy={center.y - 3} rx={11} ry={7} fill="url(#gs-sand)" stroke="#a87f3a" strokeOpacity={0.6} strokeWidth={0.8} />
+      </g>
+      <ellipse cx={center.x - 5} cy={center.y + 1} rx={16} ry={10} fill="url(#gs-sand-grain)" opacity={0.5} />
     </g>
   );
 }
 
 function TreeFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
-  const cluster = points && points.length > 0 ? points.slice(0, 18) : seedCluster(center, 10);
+  const cluster = points && points.length > 0 ? points.slice(0, 22) : seedCluster(center, 12);
+  const rand = seededRand(`${center.x.toFixed(0)}:${center.y.toFixed(0)}:${cluster.length}`);
   return (
     <g filter="url(#gs-shadow)">
       {cluster.map((p, i) => {
-        const r = 6 + ((i * 53) % 5);
+        const r = 5.5 + rand() * 5.5;
+        const lightness = 0.75 + rand() * 0.5;
+        const base = shadeHex("#0d3a22", lightness);
+        const hi = shadeHex("#1b6a3c", lightness);
+        const jitterX = (rand() - 0.5) * 2;
+        const jitterY = (rand() - 0.5) * 2;
         return (
           <g key={i}>
-            <circle cx={p.x} cy={p.y + 2} r={r} fill="#04190e" opacity={0.55} />
-            <circle cx={p.x} cy={p.y} r={r} fill="#0d3a22" />
-            <circle cx={p.x - r * 0.3} cy={p.y - r * 0.35} r={r * 0.55} fill="#1b6a3c" opacity={0.85} />
+            <circle cx={p.x + jitterX} cy={p.y + 2.5} r={r * 1.05} fill="#02110a" opacity={0.55} />
+            <circle cx={p.x + jitterX} cy={p.y + jitterY} r={r} fill={base} />
+            <circle cx={p.x + jitterX - r * 0.32} cy={p.y + jitterY - r * 0.36} r={r * 0.55} fill={hi} opacity={0.9} />
+            <circle cx={p.x + jitterX - r * 0.55} cy={p.y + jitterY - r * 0.55} r={r * 0.22} fill="#a8e6bf" opacity={0.5} />
           </g>
         );
       })}
     </g>
   );
+}
+
+/** Multiply a hex color's channels by `mul`, clamped to 0-255. */
+function shadeHex(hex: string, mul: number): string {
+  const h = hex.replace("#", "");
+  const r = Math.min(255, Math.round(parseInt(h.slice(0, 2), 16) * mul));
+  const g = Math.min(255, Math.round(parseInt(h.slice(2, 4), 16) * mul));
+  const b = Math.min(255, Math.round(parseInt(h.slice(4, 6), 16) * mul));
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
 function seedCluster(center: { x: number; y: number }, n: number): { x: number; y: number }[] {
@@ -842,7 +1075,7 @@ function seedCluster(center: { x: number; y: number }, n: number): { x: number; 
 
 function RoughFeature({ points, center }: { points: { x: number; y: number }[] | null; center: { x: number; y: number } }) {
   if (points) {
-    return <path d={ringPath(points)} fill="url(#gs-rough)" fillOpacity={0.85} stroke="#1f5a36" strokeOpacity={0.55} strokeWidth={0.8} />;
+    return <path d={smoothRingPath(points)} fill="url(#gs-rough)" fillOpacity={0.85} stroke="#1f5a36" strokeOpacity={0.55} strokeWidth={0.8} filter="url(#gs-feather)" />;
   }
   return <ellipse cx={center.x} cy={center.y} rx={26} ry={16} fill="url(#gs-rough)" fillOpacity={0.85} stroke="#1f5a36" strokeOpacity={0.55} />;
 }
