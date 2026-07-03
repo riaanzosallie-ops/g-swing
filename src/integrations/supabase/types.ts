@@ -61,6 +61,42 @@ export type Database = {
           },
         ]
       }
+      golf_api_logs: {
+        Row: {
+          api_requests_left: string | null
+          created_at: string
+          endpoint: string
+          error: string | null
+          id: number
+          latency_ms: number | null
+          params: Json | null
+          status: number | null
+          user_id: string | null
+        }
+        Insert: {
+          api_requests_left?: string | null
+          created_at?: string
+          endpoint: string
+          error?: string | null
+          id?: number
+          latency_ms?: number | null
+          params?: Json | null
+          status?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          api_requests_left?: string | null
+          created_at?: string
+          endpoint?: string
+          error?: string | null
+          id?: number
+          latency_ms?: number | null
+          params?: Json | null
+          status?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       golf_courses: {
         Row: {
           city: string | null
@@ -430,6 +466,222 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "golf_holes"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      golfapi_clubs: {
+        Row: {
+          address: string | null
+          cached_at: string
+          city: string | null
+          club_id: string
+          club_name: string
+          country: string | null
+          country2: string | null
+          latitude: number | null
+          longitude: number | null
+          postal_code: string | null
+          raw: Json
+          state: string | null
+          telephone: string | null
+          timestamp_updated: number | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          cached_at?: string
+          city?: string | null
+          club_id: string
+          club_name: string
+          country?: string | null
+          country2?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          postal_code?: string | null
+          raw: Json
+          state?: string | null
+          telephone?: string | null
+          timestamp_updated?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          cached_at?: string
+          city?: string | null
+          club_id?: string
+          club_name?: string
+          country?: string | null
+          country2?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          postal_code?: string | null
+          raw?: Json
+          state?: string | null
+          telephone?: string | null
+          timestamp_updated?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      golfapi_coordinates: {
+        Row: {
+          cached_at: string
+          course_id: string
+          hole: number
+          id: number
+          latitude: number
+          location: number | null
+          longitude: number
+          poi: number
+          side_fw: number | null
+        }
+        Insert: {
+          cached_at?: string
+          course_id: string
+          hole: number
+          id?: number
+          latitude: number
+          location?: number | null
+          longitude: number
+          poi: number
+          side_fw?: number | null
+        }
+        Update: {
+          cached_at?: string
+          course_id?: string
+          hole?: number
+          id?: number
+          latitude?: number
+          location?: number | null
+          longitude?: number
+          poi?: number
+          side_fw?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "golfapi_coordinates_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "golfapi_courses"
+            referencedColumns: ["course_id"]
+          },
+        ]
+      }
+      golfapi_courses: {
+        Row: {
+          cached_at: string
+          club_id: string | null
+          course_id: string
+          course_name: string
+          has_gps: boolean
+          indexes_men: number[] | null
+          indexes_women: number[] | null
+          latitude: number | null
+          longitude: number | null
+          measure: string | null
+          num_holes: number
+          pars_men: number[] | null
+          pars_women: number[] | null
+          raw: Json
+          timestamp_updated: number | null
+          updated_at: string
+        }
+        Insert: {
+          cached_at?: string
+          club_id?: string | null
+          course_id: string
+          course_name: string
+          has_gps?: boolean
+          indexes_men?: number[] | null
+          indexes_women?: number[] | null
+          latitude?: number | null
+          longitude?: number | null
+          measure?: string | null
+          num_holes?: number
+          pars_men?: number[] | null
+          pars_women?: number[] | null
+          raw: Json
+          timestamp_updated?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cached_at?: string
+          club_id?: string | null
+          course_id?: string
+          course_name?: string
+          has_gps?: boolean
+          indexes_men?: number[] | null
+          indexes_women?: number[] | null
+          latitude?: number | null
+          longitude?: number | null
+          measure?: string | null
+          num_holes?: number
+          pars_men?: number[] | null
+          pars_women?: number[] | null
+          raw?: Json
+          timestamp_updated?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "golfapi_courses_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "golfapi_clubs"
+            referencedColumns: ["club_id"]
+          },
+        ]
+      }
+      golfapi_tees: {
+        Row: {
+          course_id: string
+          course_rating_men: number | null
+          course_rating_women: number | null
+          lengths: number[] | null
+          raw: Json
+          slope_men: number | null
+          slope_women: number | null
+          tee_color: string | null
+          tee_id: string
+          tee_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          course_id: string
+          course_rating_men?: number | null
+          course_rating_women?: number | null
+          lengths?: number[] | null
+          raw: Json
+          slope_men?: number | null
+          slope_women?: number | null
+          tee_color?: string | null
+          tee_id: string
+          tee_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string
+          course_rating_men?: number | null
+          course_rating_women?: number | null
+          lengths?: number[] | null
+          raw?: Json
+          slope_men?: number | null
+          slope_women?: number | null
+          tee_color?: string | null
+          tee_id?: string
+          tee_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "golfapi_tees_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "golfapi_courses"
+            referencedColumns: ["course_id"]
           },
         ]
       }

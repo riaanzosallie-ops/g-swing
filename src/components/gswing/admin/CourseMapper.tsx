@@ -21,7 +21,6 @@ import { ensureMappedLayers, setMappedHoleData } from "@/lib/mapbox-mapped-layer
 import { buildMappedHoleFromRows, loadMappedHole } from "@/lib/gswing-course-map-loader";
 import { OsmScanPanel } from "@/components/gswing/admin/OsmScanPanel";
 import type { OsmImportPreviewItem } from "@/lib/gswing-osm-overpass";
-import { GolfCourseApiSyncPanel } from "@/components/gswing/admin/GolfCourseApiSyncPanel";
 import {
   evaluatePremiumLayers,
   type PremiumLayerKey,
@@ -173,7 +172,6 @@ export default function CourseMapper() {
   // OSM (Overpass) assist — preview only, never auto-saved.
   const [osmOpen, setOsmOpen] = useState(false);
   // GolfCourseAPI sync (owner only, comparison + import).
-  const [gcaOpen, setGcaOpen] = useState(false);
   // Mobile UI — collapsible tool dock + inspector. Defaults closed on
   // narrow viewports so the map stays usable; auto-open on >=md.
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
@@ -1065,13 +1063,13 @@ export default function CourseMapper() {
           </Button>
           <Button
             type="button"
-            onClick={() => setGcaOpen(true)}
+            onClick={() => { window.location.href = "/gswing/golf-api"; }}
             size="sm"
             variant="outline"
             className="h-7 gap-1 border-gold/40 bg-black/40 px-2 text-[10px] uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
-            title="Sync GolfCourseAPI (metadata only, owner-reviewed)"
+            title="Open Golf API admin (search & sync courses via GolfAPI.io)"
           >
-            Sync GolfCourseAPI
+            Golf API
           </Button>
           <select
             value={courseMapId ?? ""}
@@ -1419,20 +1417,6 @@ export default function CourseMapper() {
         holeNumber={holeNumber}
         gswingSnapshot={gswingSnapshot}
         onImport={importOsmFeatures}
-      />
-      <GolfCourseApiSyncPanel
-        isOpen={gcaOpen}
-        onClose={() => setGcaOpen(false)}
-        courseMapId={courseMapId}
-        courseName={courseName}
-        centerLat={centerLat}
-        centerLng={centerLng}
-        onCourseMapCreated={(id) => {
-          // Auto-pivot the entire workspace onto the newly added course
-          // and jump straight into Hole 1 — no manual re-selection.
-          setGcaOpen(false);
-          void onSelectCourse(id, 1);
-        }}
       />
     </div>
   );
