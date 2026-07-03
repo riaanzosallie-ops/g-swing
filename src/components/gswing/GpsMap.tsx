@@ -1712,6 +1712,16 @@ function MapboxCourseView({
               }
             : undefined
         }
+        onPrevHole={
+          onChangeHole
+            ? () => {
+                const total = holeCount ?? 18;
+                onChangeHole(hole <= 1 ? total : hole - 1);
+              }
+            : undefined
+        }
+        onEndRound={() => setEndRoundOpen(true)}
+        endedLabel={round.round.endedAt != null ? "Round summary" : "End round"}
         mapView={mapView}
         onSetMapView={handleSetMapView}
         measureActive={measureActive}
@@ -1755,17 +1765,6 @@ function MapboxCourseView({
 
       {/* Non-intrusive offline chip — never blocks play. */}
       <OfflineBanner />
-
-      {/* End Round pill — visible but subtle, right side under the top HUD. */}
-      <div className="pointer-events-none absolute right-3 top-3 z-30 flex flex-col items-end gap-1">
-        <button
-          type="button"
-          onClick={() => setEndRoundOpen(true)}
-          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-black/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold backdrop-blur-md transition-all active:scale-95"
-        >
-          {round.round.endedAt != null ? "Round summary" : "End round"}
-        </button>
-      </div>
 
       {/* End-of-round summary. Also acts as a resume prompt after refresh. */}
       <EndRoundDialog
@@ -1870,6 +1869,9 @@ function PremiumGpsChrome(props: {
   weather: { status: string; data?: GswingWeather };
   caddieInsight: string;
   onNextHole?: () => void;
+  onPrevHole?: () => void;
+  onEndRound?: () => void;
+  endedLabel?: string;
   debug?: Omit<MappingDebugPanelProps, "playerPosition" | "playerAccuracy">;
 }): JSX.Element {
   const {
@@ -1900,6 +1902,9 @@ function PremiumGpsChrome(props: {
     playerAccuracy,
     weather,
     onNextHole,
+    onPrevHole,
+    onEndRound,
+    endedLabel,
     debug,
   } = props;
 
@@ -1912,19 +1917,24 @@ function PremiumGpsChrome(props: {
 
   return (
     <>
-      {/* TOP BAR — minimal: back · hole/par/hcp · hole counter */}
-      <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
-        <div className="pointer-events-auto flex items-center gap-2">
+      {/* TOP BAR — Back · Hole info · Prev · Next · End round.
+          Everything lives on a single row so End Round never overlaps
+          the Premium/Satellite toggle underneath. */}
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-center justify-between gap-2">
+        <div className="pointer-events-auto flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("gswing-exit-gps"))}
             aria-label="Back"
-            className="grid h-10 w-10 place-items-center rounded-full border border-gold/35 bg-black/55 text-gold-soft backdrop-blur-md transition-colors hover:text-gold active:scale-95"
+            className="grid h-10 w-10 flex-none place-items-center rounded-full border border-gold/35 bg-black/55 text-gold-soft backdrop-blur-md transition-colors hover:text-gold active:scale-95"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <div className="flex h-10 items-center gap-2 rounded-full border border-gold/35 bg-black/55 pl-2 pr-3 backdrop-blur-md">
-            <span className="font-serif text-2xl leading-none text-gold">{hole}</span>
+          <div
+            key={hole}
+            className="flex h-10 items-center gap-2 rounded-full border border-gold/35 bg-black/55 pl-2 pr-3 backdrop-blur-md animate-in fade-in slide-in-from-left-1 duration-200"
+          >
+            <span className="font-serif text-2xl leading-none text-gold tabular-nums">{hole}</span>
             <div className="flex flex-col text-[9px] uppercase tracking-[0.18em] leading-tight text-white/70">
               <span>
                 Par <span className="text-gold">{par ?? "—"}</span>
@@ -1938,17 +1948,37 @@ function PremiumGpsChrome(props: {
           </div>
         </div>
 
-        <div className="pointer-events-auto">
+        <div className="pointer-events-auto flex items-center gap-1.5 flex-none">
+          <button
+            type="button"
+            onClick={() => onPrevHole?.()}
+            disabled={!onPrevHole || hole <= 1}
+            aria-label="Previous hole"
+            className="grid h-10 w-10 place-items-center rounded-full border border-gold/35 bg-black/55 text-gold backdrop-blur-md transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="hidden sm:flex h-10 items-center rounded-full border border-gold/25 bg-black/45 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-gold-soft backdrop-blur-md tabular-nums">
+            H{hole}/{totalHoles}
+          </div>
           <button
             type="button"
             onClick={() => onNextHole?.()}
-            disabled={!onNextHole}
-            className="flex h-10 min-w-[3.25rem] items-center gap-1 rounded-full border border-gold/35 bg-black/55 px-3 text-[10px] font-semibold uppercase tracking-wider text-gold backdrop-blur-md transition-all active:scale-95 disabled:opacity-60"
+            disabled={!onNextHole || hole >= totalHoles}
             aria-label="Next hole"
+            className="grid h-10 w-10 place-items-center rounded-full border border-gold/35 bg-black/55 text-gold backdrop-blur-md transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <span>H{hole}/{totalHoles}</span>
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="h-4 w-4" />
           </button>
+          {onEndRound && (
+            <button
+              type="button"
+              onClick={onEndRound}
+              className="ml-1 inline-flex h-10 items-center gap-1.5 rounded-full border border-gold/40 bg-black/70 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gold backdrop-blur-md transition-all active:scale-95 hover:bg-black/85"
+            >
+              {endedLabel ?? "End round"}
+            </button>
+          )}
         </div>
       </div>
 
