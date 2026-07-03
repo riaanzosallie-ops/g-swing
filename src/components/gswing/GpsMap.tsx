@@ -1264,7 +1264,7 @@ function MapboxCourseView({
       );
     }
     return { readout, insight: parts.join(" ") };
-  }, [mappedHole, playerPosition, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
+  }, [mappedHole, playerPosition, tee, unit, yardageReadout.fromLastShot, yardageReadout.dailyPin]);
 
   // Strict source-of-truth rules:
   //   - When mapped data exists for the selected hole, ONLY mapped data
