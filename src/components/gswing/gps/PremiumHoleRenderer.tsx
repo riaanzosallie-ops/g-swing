@@ -123,9 +123,27 @@ export function PremiumHoleRenderer({
   const missing = useMemo(() => missingPremiumLayers(mappedHole), [mappedHole]);
   const progress = useMemo(() => premiumProgress(mappedHole), [mappedHole]);
   const quality = useMemo(() => evaluateHoleQuality(mappedHole), [mappedHole]);
+  // Hole-only bounds first — the hole must always fill the viewport,
+  // even when the player is far from the course (e.g. sitting at home).
+  const holeOnlyBounds = useMemo(
+    () => buildHoleBounds(mappedHole, null),
+    [mappedHole],
+  );
+  const includePlayer = useMemo(() => {
+    if (!holeOnlyBounds || !playerPosition) return false;
+    const latPad = 250 / 111000;
+    const lngPad =
+      250 / (111000 * Math.max(0.1, Math.cos((holeOnlyBounds.centerLat * Math.PI) / 180)));
+    return (
+      playerPosition.lat >= holeOnlyBounds.minLat - latPad &&
+      playerPosition.lat <= holeOnlyBounds.maxLat + latPad &&
+      playerPosition.lng >= holeOnlyBounds.minLng - lngPad &&
+      playerPosition.lng <= holeOnlyBounds.maxLng + lngPad
+    );
+  }, [holeOnlyBounds, playerPosition?.lat, playerPosition?.lng]);
   const bounds = useMemo(
-    () => buildHoleBounds(mappedHole, playerPosition),
-    [mappedHole, playerPosition?.lat, playerPosition?.lng],
+    () => buildHoleBounds(mappedHole, includePlayer ? playerPosition : null),
+    [mappedHole, playerPosition?.lat, playerPosition?.lng, includePlayer],
   );
 
   // Dev-only diagnostics so we can verify in console that Premium is
@@ -230,14 +248,14 @@ export function PremiumHoleRenderer({
               projection={projection}
             />
           )}
-          {projection && playerPosition && (
+          {projection && playerPosition && includePlayer && (
             <PlayerMarker
               projection={projection}
               player={playerPosition}
               accuracy={gpsAccuracy}
             />
           )}
-          {projection && playerPosition && measurementTarget && (
+          {projection && playerPosition && includePlayer && measurementTarget && (
             <MeasurementLineLayer
               projection={projection}
               from={playerPosition}
