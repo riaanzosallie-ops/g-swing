@@ -1762,42 +1762,6 @@ function MapboxCourseView({
         </button>
       </div>
 
-      {/* Owner-only debug/status. Collapsed by default; never leaks to
-          normal users. */}
-      {membership.isOwner && (
-        <OwnerDebugPanel
-          courseName={selectedCourse.name}
-          courseId={selectedCourse.id}
-          source={
-            isGolfApiCourseId(selectedCourse.id)
-              ? "GolfAPI.io Auto"
-              : sourceLabel(evaluateHoleQuality(mappedHole).source)
-          }
-          qualityScore={
-            isGolfApiCourseId(selectedCourse.id)
-              ? golfApiHealth.quality
-              : evaluateHoleQuality(mappedHole).score
-          }
-          qualityLabel={
-            isGolfApiCourseId(selectedCourse.id)
-              ? (golfApiHealth.quality >= 90
-                  ? "Premium Ready"
-                  : golfApiHealth.quality >= 75
-                    ? "Premium Ready · Can Enhance"
-                    : golfApiHealth.holesWithCoords > 0
-                      ? "Enhancement Recommended"
-                      : "Coordinates unavailable")
-              : evaluateHoleQuality(mappedHole).badge.label
-          }
-          cached={
-            isGolfApiCourseId(selectedCourse.id) ? golfApiHealth.cached : !!mappedHole
-          }
-          round={round.round}
-          gpsAccuracyMeters={playerAccuracy}
-          mapView={mapView}
-        />
-      )}
-
       {/* End-of-round summary. Also acts as a resume prompt after refresh. */}
       <EndRoundDialog
         open={endRoundOpen}
