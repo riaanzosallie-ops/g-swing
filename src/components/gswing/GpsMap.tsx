@@ -1488,6 +1488,25 @@ function MapboxCourseView({
     [round, hole],
   );
 
+  // Auto-visit hole whenever the active hole changes so the timeline is
+  // populated even if the golfer never saves a measurement on it.
+  useEffect(() => {
+    round.visitHole(hole);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hole, selectedCourse.id]);
+
+  // Log GPS breadcrumbs (bounded + deduped inside the engine). Drives
+  // walking distance + Fairway Memories path replay.
+  useEffect(() => {
+    if (!playerPosition) return;
+    round.logPosition(playerPosition, hole);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerPosition?.lat, playerPosition?.lng, hole]);
+
+  // End Round UI — plain dialog. Uses the same round engine so state
+  // survives refresh + reopen without any extra plumbing.
+  const [endRoundOpen, setEndRoundOpen] = useState(false);
+
   // Live shot metrics — everything downstream consumes these so both
   // Premium and Satellite modes show the same numbers.
   const shotDistanceDisplay = useMemo(() => {
