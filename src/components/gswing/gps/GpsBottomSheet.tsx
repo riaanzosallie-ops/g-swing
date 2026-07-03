@@ -14,6 +14,7 @@ import type { CarryTarget, Unit, YardageReadout } from "@/lib/yardage-engine";
 import type { LatLng } from "@/lib/gps-utils";
 import { measureBetween } from "@/lib/gswing-gps";
 import type { ClubSuggestion } from "@/lib/club-recommender";
+import { ShotPlanPanel, type ShotPlanPanelProps } from "@/components/gswing/gps/ShotPlanPanel";
 
 type SectionKey = "hazards" | "ace" | "yardages";
 
@@ -44,6 +45,9 @@ export interface GpsBottomSheetProps {
   onPickTarget?: (t: MeasureTarget) => void;
   /** Recommended club for the current measurement, from My Bag. */
   clubSuggestion?: ClubSuggestion | null;
+  /** When provided, replaces the inline measurement UI with the full
+   *  Shot Planning panel (Round Engine save/recall included). */
+  shotPlan?: ShotPlanPanelProps | null;
 }
 
 /**
@@ -66,6 +70,7 @@ export function GpsBottomSheet({
   targets = [],
   onPickTarget,
   clubSuggestion = null,
+  shotPlan = null,
 }: GpsBottomSheetProps) {
   const [expanded, setExpanded] = useState(false);
   const [minimized, setMinimized] = useState(true);
@@ -182,7 +187,13 @@ export function GpsBottomSheet({
           </div>
           )}
 
-          {measureActive && (
+          {measureActive && shotPlan && (
+            <div className="mt-2">
+              <ShotPlanPanel {...shotPlan} variant="roomy" />
+            </div>
+          )}
+
+          {measureActive && !shotPlan && (
             <div className="mt-1.5 text-center">
               {!measurePoint && (
                 <p className="text-[10px] uppercase tracking-wider text-gold-soft">
