@@ -435,19 +435,10 @@ function MapboxCourseView({
     };
   }, [selectedCourse.id]);
 
-  // Always-visible-course UX: when the selected hole has no Premium mapping
-  // yet, default to Satellite so the user can see, pan, zoom, and measure
-  // immediately. Premium becomes an enhancement, not a prerequisite.
-  useEffect(() => {
-    if (userPickedViewRef.current) return;
-    if (mappingStatus === "missing" && mapView === "premium") {
-      setMapView("satellite");
-    } else if (mappingStatus === "mapped" && mapView === "satellite") {
-      // If user lands on a fully mapped hole and hasn't expressed a
-      // preference, give them Premium (the marquee experience).
-      setMapView("premium");
-    }
-  }, [mappingStatus, mapView]);
+  // Premium is the default renderer. We only auto-switch to Satellite
+  // when Premium literally cannot render (no mapped hole AND no
+  // auto-synthesised hole from GolfAPI coordinates). Otherwise the
+  // golfer stays on the illustrated hole they picked.
 
   // Reset the dismiss flag whenever hole or course changes so the hint
   // re-appears once per missing hole, not just once per session.
