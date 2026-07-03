@@ -566,6 +566,19 @@ function HoleGeometryLayer({
   const roughPts = hole.roughPolygon ? projectRing(hole.roughPolygon) : null;
   const cartPathPts = hole.cartPath ? projectRing(hole.cartPath) : null;
 
+  // Mowing angle: tee → green centroid, in screen degrees.
+  let mowAngleDeg = 0;
+  if (tee && greenCenter) {
+    const t = project(tee);
+    const g = project(greenCenter);
+    mowAngleDeg = (Math.atan2(g.y - t.y, g.x - t.x) * 180) / Math.PI;
+  }
+  // Sanitised id fragment for unique per-hole defs.
+  const uid = (hole.id || `h${hole.holeNumber}`).replace(/[^a-zA-Z0-9_-]/g, "_");
+  const mowPatternId = `gs-mow-${uid}`;
+  const mowPerpPatternId = `gs-mow-perp-${uid}`;
+  const greenDirId = `gs-green-dir-${uid}`;
+
   // Green radius fallback only for the legacy ring overlay; if no polygon
   // we still draw the front/back-derived footprint as a soft halo.
   let greenRadiusPx = 28;
@@ -577,16 +590,62 @@ function HoleGeometryLayer({
 
   return (
     <g>
+      {/* Per-hole dynamic defs: rotated mowing patterns + oriented green shading. */}
+      <defs>
+        <pattern
+          id={mowPatternId}
+          width="18"
+          height="18"
+          patternUnits="userSpaceOnUse"
+          patternTransform={`rotate(${mowAngleDeg.toFixed(1)})`}
+        >
+          <rect width="18" height="18" fill="transparent" />
+          <rect x="0" y="0" width="18" height="9" fill="#ffffff" fillOpacity="0.08" />
+          <rect x="0" y="9" width="18" height="9" fill="#000000" fillOpacity="0.07" />
+        </pattern>
+        <pattern
+          id={mowPerpPatternId}
+          width="10"
+          height="10"
+          patternUnits="userSpaceOnUse"
+          patternTransform={`rotate(${(mowAngleDeg + 90).toFixed(1)})`}
+        >
+          <rect width="10" height="10" fill="transparent" />
+          <rect x="0" y="0" width="10" height="5" fill="#ffffff" fillOpacity="0.11" />
+          <rect x="0" y="5" width="10" height="5" fill="#000000" fillOpacity="0.07" />
+        </pattern>
+        <linearGradient
+          id={greenDirId}
+          gradientUnits="userSpaceOnUse"
+          x1={greenFront ? project(greenFront).x : 0}
+          y1={greenFront ? project(greenFront).y : 0}
+          x2={greenBack ? project(greenBack).x : 0}
+          y2={greenBack ? project(greenBack).y : 0}
+        >
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.22" />
+          <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="100%" stopColor="#04140a" stopOpacity="0.35" />
+        </linearGradient>
+      </defs>
       {/* Hole boundary — painted as the outer rough mass for depth. */}
       {holeBoundaryPts && holeBoundaryPts.length >= 3 && (
-        <g filter="url(#gs-shadow)">
+        <g filter="url(#gs-shadow-soft)">
           <path
-            d={ringPath(holeBoundaryPts)}
+            d={smoothRingPath(holeBoundaryPts)}
             fill="url(#gs-rough)"
             fillOpacity={0.95}
             stroke="#0a2c19"
             strokeOpacity={0.7}
             strokeWidth={1}
+          />
+          {/* Feathered rim so the boundary blends into the terrain */}
+          <path
+            d={smoothRingPath(holeBoundaryPts)}
+            fill="none"
+            stroke="#031a0f"
+            strokeOpacity={0.55}
+            strokeWidth={6}
+            filter="url(#gs-feather)"
           />
         </g>
       )}
@@ -594,7 +653,7 @@ function HoleGeometryLayer({
       {/* Explicit rough polygon overlay (if mapped separately). */}
       {roughPts && roughPts.length >= 3 && (
         <path
-          d={ringPath(roughPts)}
+          d={smoothRingPath(roughPts)}
           fill="url(#gs-semirough)"
           fillOpacity={0.85}
           stroke="#16542f"
@@ -605,21 +664,39 @@ function HoleGeometryLayer({
 
       {/* Manicured fairway — organic polygon from mapping. */}
       {fairwayPts && fairwayPts.length >= 3 && (
-        <g filter="url(#gs-shadow)">
+        <g filter="url(#gs-shadow-soft)">
+          {/* Feathered semi-rough halo just outside the fairway */}
           <path
-            d={ringPath(fairwayPts)}
+            d={smoothRingPath(fairwayPts)}
+            fill="url(#gs-semirough)"
+            fillOpacity={0.5}
+            stroke="none"
+            transform="scale(1.035)"
+            style={{ transformOrigin: "center", transformBox: "fill-box" } as React.CSSProperties}
+            filter="url(#gs-feather)"
+          />
+          {/* Base fairway turf */}
+          <path
+            d={smoothRingPath(fairwayPts)}
             fill="url(#gs-fairway)"
             stroke="#1e6b3f"
-            strokeOpacity={0.6}
+            strokeOpacity={0.55}
             strokeWidth={1}
           />
-          {/* Subtle mowing highlight ribbon along centroid axis. */}
+          {/* Mowing stripes rotated along tee→green bearing. */}
           <path
-            d={ringPath(fairwayPts)}
+            d={smoothRingPath(fairwayPts)}
+            fill={`url(#${mowPatternId})`}
+            stroke="none"
+          />
+          {/* Sunlit highlight ribbon */}
+          <path
+            d={smoothRingPath(fairwayPts)}
             fill="none"
-            stroke="#c8f5d6"
-            strokeOpacity={0.18}
-            strokeWidth={2}
+            stroke="#dcffe8"
+            strokeOpacity={0.15}
+            strokeWidth={1.4}
+            filter="url(#gs-feather)"
           />
         </g>
       )}
