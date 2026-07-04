@@ -9,4 +9,11 @@ import "@fontsource/manrope/400.css";
 import "@fontsource/manrope/500.css";
 import "@fontsource/manrope/600.css";
 
+window.__GSWING_DEPLOYMENT__ = {
+  commitSha: __GSWING_BUILD_SHA__,
+  buildTime: __GSWING_BUILD_TIME__,
+};
+
+console.info("[gswing.deploy] frontend bundle", window.__GSWING_DEPLOYMENT__);
+
 createRoot(document.getElementById("root")!).render(<App />);
