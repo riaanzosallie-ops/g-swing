@@ -37,6 +37,50 @@ export interface ProjectedPoint {
   y: number;
 }
 
+// ─── Corridor distance helpers (used only for bounds clamping) ───────────────
+
+/**
+ * Minimum distance² from point `p` to the line segment `[a, b]`.
+ * All values in equirectangular degrees² (cos-corrected longitude).
+ */
+function pointToSegmentDistSq(
+  p: GpsCoordinate,
+  a: GpsCoordinate,
+  b: GpsCoordinate,
+): number {
+  const cosLat = Math.cos((p.lat * Math.PI) / 180);
+  const px = p.lng * cosLat, py = p.lat;
+  const ax = a.lng * cosLat, ay = a.lat;
+  const bx = b.lng * cosLat, by = b.lat;
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) {
+    const ex = px - ax, ey = py - ay;
+    return ex * ex + ey * ey;
+  }
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  const rx = px - (ax + t * dx), ry = py - (ay + t * dy);
+  return rx * rx + ry * ry;
+}
+
+/**
+ * Is point `p` within `maxDeg` degrees (cos-corrected) of the
+ * polyline `corridor`? Used to clamp polygon rings to the active
+ * hole's tee→green axis so large OSM/bundled fairway polygons
+ * (which can span 300–450m) don't blow up the viewport fit.
+ */
+function nearCorridor(
+  p: GpsCoordinate,
+  corridor: GpsCoordinate[],
+  maxDeg: number,
+): boolean {
+  const maxSq = maxDeg * maxDeg;
+  for (let i = 0; i + 1 < corridor.length; i++) {
+    if (pointToSegmentDistSq(p, corridor[i], corridor[i + 1]) <= maxSq) return true;
+  }
+  return false;
+}
+
 /**
  * Collect every mapped coordinate that should influence the viewport
  * fit. This is intentionally restricted to the *playable hole corridor*
@@ -52,7 +96,17 @@ export interface ProjectedPoint {
  * Those layers still RENDER — they just don't get to control zoom. This
  * keeps the Premium camera centered on tee→green, not on tree bands or
  * course-wide masks that would otherwise force us to zoom out.
+ *
+ * VIEWPORT FIX: fairwayPolygon vertices are clamped to within
+ * MAX_FAIRWAY_DEG of the tee→green corridor. Large OSM/bundled fairway
+ * polygons (H6/H8: 374×456m; H7/H9: 337×386m) previously caused the
+ * bounds to span the entire course. Only vertices near the active hole
+ * axis are admitted; the polygon still renders in full.
  */
+
+/** ~120m at Sharjah latitude — generous enough for a wide par-5 fairway. */
+const MAX_FAIRWAY_DEG = 0.0011; // ≈120m
+
 function collectHolePoints(
   hole: MappedHole | null,
   player: LatLng | null,
@@ -88,15 +142,38 @@ function collectHolePoints(
     for (const l of hole.layups) pts.push(l.coordinate);
     for (const d of hole.doglegs) pts.push(d.coordinate);
     for (const z of hole.landingZones) pts.push(z.coordinate);
-    // Playable corridor polygons only. teePolygon is tight/local so it
-    // stays; fairwayPolygon defines the corridor itself.
-    const corridorPolys: Array<Array<[number, number]> | null | undefined> = [
-      hole.fairwayPolygon,
-      hole.teePolygon,
-    ];
-    for (const poly of corridorPolys) {
-      if (poly) for (const [lng, lat] of poly) pts.push({ lat, lng });
+
+    // teePolygon is always tight (≤12m radius) — admit all vertices.
+    if (hole.teePolygon) {
+      for (const [lng, lat] of hole.teePolygon) pts.push({ lat, lng });
     }
+
+    // fairwayPolygon: CLAMP to active-hole corridor.
+    // Large OSM/bundled fairway polygons can span 300–460m and include
+    // vertices far outside this hole's tee→green axis. We only admit
+    // vertices that lie within MAX_FAIRWAY_DEG of the [tee→green] line
+    // segment(s) so the bounds stay on the active hole, not the course.
+    // The polygon still renders in its entirety — this only gates which
+    // vertices can enlarge the viewport bounds.
+    if (hole.fairwayPolygon && hole.fairwayPolygon.length > 0) {
+      // Build a simple corridor from tee → green (via any doglegs/layups).
+      const corridorAnchors: GpsCoordinate[] = [
+        ...hole.tees.map((t) => t.coordinate),
+        ...hole.doglegs.map((d) => d.coordinate),
+        ...hole.layups.map((l) => l.coordinate),
+        ...(g.center ? [g.center] : []),
+        ...(g.front  ? [g.front]  : []),
+      ];
+      // Fall back: if no anchors, admit all vertices (safe for synthetic holes).
+      const hasCorridor = corridorAnchors.length >= 2;
+      for (const [lng, lat] of hole.fairwayPolygon) {
+        const pt: GpsCoordinate = { lat, lng };
+        if (!hasCorridor || nearCorridor(pt, corridorAnchors, MAX_FAIRWAY_DEG)) {
+          pts.push(pt);
+        }
+      }
+    }
+
     // Intentionally excluded from bounds (still rendered):
     //   hole.holeBoundary, hole.roughPolygon, hole.cartPath
   }
