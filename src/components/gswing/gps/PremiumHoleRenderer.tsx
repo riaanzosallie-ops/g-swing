@@ -863,7 +863,7 @@ function HoleGeometryLayer({
       </defs>
       {/* Hole boundary — painted as the outer rough mass for depth. */}
       {holeBoundaryPts && holeBoundaryPts.length >= 3 && (
-        <g filter="url(#gs-shadow-soft)">
+        <g filter="url(#gs-shadow-soft)" data-layer="rough">
           <path
             d={smoothRingPath(holeBoundaryPts)}
             fill="url(#gs-rough)"
@@ -886,19 +886,21 @@ function HoleGeometryLayer({
 
       {/* Explicit rough polygon overlay (if mapped separately). */}
       {roughPts && roughPts.length >= 3 && (
-        <path
-          d={smoothRingPath(roughPts)}
-          fill="url(#gs-semirough)"
-          fillOpacity={0.85}
-          stroke="#16542f"
-          strokeOpacity={0.55}
-          strokeWidth={0.8}
-        />
+        <g data-layer="rough">
+          <path
+            d={smoothRingPath(roughPts)}
+            fill="url(#gs-semirough)"
+            fillOpacity={0.85}
+            stroke="#16542f"
+            strokeOpacity={0.55}
+            strokeWidth={0.8}
+          />
+        </g>
       )}
 
       {/* Manicured fairway — organic polygon from mapping. */}
       {fairwayPts && fairwayPts.length >= 3 && (
-        <g filter="url(#gs-shadow-soft)">
+        <g filter="url(#gs-shadow-soft)" data-layer="fairway">
           {/* Feathered semi-rough halo just outside the fairway */}
           <path
             d={smoothRingPath(fairwayPts)}
@@ -937,18 +939,20 @@ function HoleGeometryLayer({
 
       {/* Cart path */}
       {cartPathPts && cartPathPts.length >= 2 && (
-        <path
-          d={cartPathPts
-            .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-            .join(" ")}
-          fill="none"
-          stroke="#d8c8a3"
-          strokeOpacity={0.7}
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray="1 0"
-        />
+        <g data-layer="cart-paths">
+          <path
+            d={cartPathPts
+              .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+              .join(" ")}
+            fill="none"
+            stroke="#d8c8a3"
+            strokeOpacity={0.7}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="1 0"
+          />
+        </g>
       )}
 
       {/* ─── Hazards ────────────────────────────────────────────────────────
@@ -957,7 +961,7 @@ function HoleGeometryLayer({
            beyond the active hole's frame. Bunkers and trees are NOT clipped
            — they are always within reasonable range of the fairway.
            ─────────────────────────────────────────────────────────────────── */}
-      <g>
+      <g data-layer="hazards" data-layer-composite="water,bunkers,trees">
         {hole.hazards
           .slice()
           .sort((a, b) => layerOrder(a.type) - layerOrder(b.type))
@@ -973,7 +977,9 @@ function HoleGeometryLayer({
       </g>
 
       {/* Landing zones — premium dashed rings with label */}
-      {hole.landingZones.map((z) => {
+      {hole.landingZones.length > 0 && (
+        <g data-layer="markers" data-marker-kind="landing-zones">
+          {hole.landingZones.map((z) => {
         const p = project(z.coordinate);
         const r = 22;
         return (
@@ -985,10 +991,14 @@ function HoleGeometryLayer({
             </text>
           </g>
         );
-      })}
+          })}
+        </g>
+      )}
 
       {/* Layups */}
-      {hole.layups.map((l) => {
+      {hole.layups.length > 0 && (
+        <g data-layer="labels" data-label-kind="layups">
+          {hole.layups.map((l) => {
         const p = project(l.coordinate);
         return (
           <g key={l.id}>
@@ -999,29 +1009,33 @@ function HoleGeometryLayer({
             </text>
           </g>
         );
-      })}
+          })}
+        </g>
+      )}
 
       {/* Green — uses mapped polygon when available, organic shape */}
-      {greenPolygon && greenPolygon.length >= 3 ? (
-        <GreenPolygon
-          polygon={greenPolygon}
-          project={project}
-          greenDirId={greenDirId}
-        />
-      ) : (
-        greenCenter && (
-          <GreenFallback
-            center={project(greenCenter)}
-            radiusPx={greenRadiusPx}
+      <g data-layer="green">
+        {greenPolygon && greenPolygon.length >= 3 ? (
+          <GreenPolygon
+            polygon={greenPolygon}
+            project={project}
+            greenDirId={greenDirId}
           />
-        )
-      )}
+        ) : (
+          greenCenter && (
+            <GreenFallback
+              center={project(greenCenter)}
+              radiusPx={greenRadiusPx}
+            />
+          )
+        )}
+      </g>
 
       {/* Pin / flag — focal point of the entire hole illustration */}
       {pin && (() => {
         const p = project(pin);
         return (
-          <g>
+          <g data-layer="pin">
             {/* Pin glow halo — subtle golden bloom so the pin is immediately visible */}
             <circle cx={p.x} cy={p.y} r={18} fill="#F5C84B" fillOpacity={0.07} filter="url(#gs-glow)" />
             {/* Ground shadow cone under the pin */}
@@ -1045,7 +1059,7 @@ function HoleGeometryLayer({
 
       {/* Tee — prefer polygon, fall back to icon */}
       {teePolyPts && teePolyPts.length >= 3 ? (
-        <g filter="url(#gs-shadow)">
+        <g filter="url(#gs-shadow)" data-layer="tee">
           <path
             d={ringPath(teePolyPts)}
             fill="url(#gs-tee)"
@@ -1057,7 +1071,7 @@ function HoleGeometryLayer({
       ) : tee && (() => {
         const t = project(tee);
         return (
-          <g filter="url(#gs-shadow)">
+          <g filter="url(#gs-shadow)" data-layer="tee">
             <rect x={t.x - 14} y={t.y - 9} width={28} height={18} rx={4} fill="url(#gs-tee)" stroke="#F5C84B" strokeWidth={1.4} />
             <circle cx={t.x - 7} cy={t.y} r={1.6} fill="#F5C84B" />
             <circle cx={t.x + 7} cy={t.y} r={1.6} fill="#F5C84B" />
