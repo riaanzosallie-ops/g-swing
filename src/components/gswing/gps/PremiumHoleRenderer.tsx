@@ -250,6 +250,48 @@ export function PremiumHoleRenderer({
 
   const par = mappedHole?.par ?? null;
 
+  // On-screen debug badge — proves at a glance whether Premium is rendering
+  // real mapped polygons or falling back. Visible to every user; no DevTools
+  // needed. Remove once mapped-data path is confirmed everywhere.
+  const debugBadge = useMemo(() => {
+    const geometrySource = classifyGeometrySource(mappedHole);
+    const fairwayPolygonPts = polygonPointCount(mappedHole?.fairwayPolygon);
+    const greenPolygonPts = polygonPointCount(mappedHole?.green.polygon);
+    const hazardPolygons =
+      mappedHole?.hazards.filter((h) => h.polygon?.length).length ?? 0;
+    let boundsInputCount = 0;
+    if (mappedHole) {
+      boundsInputCount += mappedHole.tees.length;
+      if (mappedHole.green.front) boundsInputCount += 1;
+      if (mappedHole.green.center) boundsInputCount += 1;
+      if (mappedHole.green.back) boundsInputCount += 1;
+      if (mappedHole.green.polygon) boundsInputCount += mappedHole.green.polygon.length;
+      if (mappedHole.fairwayPolygon) boundsInputCount += mappedHole.fairwayPolygon.length;
+      if (mappedHole.teePolygon) boundsInputCount += mappedHole.teePolygon.length;
+      if (mappedHole.holeBoundary) boundsInputCount += mappedHole.holeBoundary.length;
+      for (const h of mappedHole.hazards) {
+        if (h.polygon?.length) boundsInputCount += h.polygon.length;
+        else if (h.center) boundsInputCount += 1;
+      }
+      if (includePlayer && playerPosition) boundsInputCount += 1;
+    }
+    return { geometrySource, fairwayPolygonPts, greenPolygonPts, hazardPolygons, boundsInputCount };
+  }, [mappedHole, includePlayer, playerPosition?.lat, playerPosition?.lng]);
+  const isMapped = debugBadge.geometrySource === "mapped-polygons";
+  const isFallback = debugBadge.geometrySource === "auto-generated-fallback";
+  const badgeTone = isMapped
+    ? "border-emerald-400/60 text-emerald-200 bg-emerald-900/70"
+    : isFallback
+      ? "border-red-400/70 text-red-100 bg-red-900/70"
+      : "border-amber-400/60 text-amber-100 bg-amber-900/70";
+  const badgeLabel = isMapped
+    ? "MAPPED"
+    : isFallback
+      ? "FALLBACK"
+      : debugBadge.geometrySource === "auto-osm-polygons"
+        ? "OSM"
+        : "NONE";
+
   const projection: FittedProjection | null = useMemo(() => {
     if (!bounds || size.w < 20 || size.h < 20) return null;
     return fitHoleToViewport(bounds, {
@@ -385,6 +427,21 @@ export function PremiumHoleRenderer({
               : "Tap the hole to measure"}
         </div>
       )}
+
+      {/* Temporary on-screen Premium geometry debug badge — top-left,
+          respects safe area, always visible so we can verify whether the
+          renderer is using mapped polygons or fallback without DevTools. */}
+      <div
+        className={`pointer-events-none absolute left-2 rounded-lg border px-2 py-1.5 text-[10px] font-mono leading-tight backdrop-blur-md shadow-lg ${badgeTone}`}
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 8px)" }}
+        data-gswing-debug-badge="premium-geometry"
+      >
+        <div className="font-bold tracking-wider">H{selectedHoleNumber} · {badgeLabel}</div>
+        <div>src: {debugBadge.geometrySource}</div>
+        <div>fw: {debugBadge.fairwayPolygonPts} · gr: {debugBadge.greenPolygonPts}</div>
+        <div>hz-poly: {debugBadge.hazardPolygons}</div>
+        <div>bounds-in: {debugBadge.boundsInputCount}</div>
+      </div>
     </div>
   );
 }
