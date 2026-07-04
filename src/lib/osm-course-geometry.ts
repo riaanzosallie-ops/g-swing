@@ -388,15 +388,82 @@ export function extractOsmHoleGeometry(
     fairway = null;
   }
 
-  const near = (rings: Ring[], maxM: number): Ring[] =>
-    rings.filter((r) => ringToPolylineMeters(r, corridor, origin) <= maxM);
+  // ── Geometry isolation guards ──────────────────────────────────────────
+  //
+  // The Sharjah bundled geometry contains several polygon types that span
+  // multiple holes and must be excluded from per-hole rendering:
+  //
+  //   1. BLOB SIZE GUARD — any polygon whose bounding box diagonal exceeds
+  //      MAX_BLOB_DIAGONAL_M (400m) is a course-wide feature (rough outline,
+  //      mis-traced boundary) and is rejected for ALL hole types.  A genuine
+  //      single-hole feature — even a long par-5 fairway — fits inside 400m.
+  //
+  //   2. PROXIMITY MAX GUARD — for water and tree polygons the minDist filter
+  //      alone is not enough; a large polygon can clip a vertex near ANY hole
+  //      even when its body lies far away.  We additionally require that no
+  //      vertex strays more than MAX_WATER_STRAY_M / MAX_TREE_STRAY_M from the
+  //      corridor, so shared lakes / tree-bands that border multiple holes are
+  //      only shown on the hole whose corridor they are genuinely closest to.
+  //
+  //   3. CORRIDOR LENGTH GUARD — if the matched holeLine is longer than the
+  //      straight tee→green distance by more than CORRIDOR_DETOUR_RATIO the
+  //      holeLine meanders far off-corridor (common with merged OSM paths).
+  //      In that case we replace the corridor with the direct [tee, greenCenter]
+  //      segment so the proximity filters use a tight axis.
+
+  const MAX_BLOB_DIAGONAL_M   = 400;  // reject whole-course outlines / rough blobs
+  const MAX_WATER_STRAY_M     = 120;  // water vertex must stay within 120m of corridor
+  const MAX_TREE_STRAY_M      = 80;   // tree vertex must stay within 80m of corridor
+  const CORRIDOR_DETOUR_RATIO = 2.5;  // holeLine path > 2.5× straight dist → use direct axis
+
+  /** Bounding-box diagonal in metres for a ring. */
+  function ringDiagonalM(ring: Ring): number {
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const [lng, lat] of ring) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+    return metersBetween(
+      { lat: minLat, lng: minLng },
+      { lat: maxLat, lng: maxLng },
+    );
+  }
+
+  // Apply corridor-length guard: if the matched holeLine meanders excessively,
+  // fall back to a direct tee→green corridor for proximity calculations.
+  const straightDist = metersBetween(tee, greenCenter);
+  let corridorForFilter = corridor;
+  if (holeLine && holeLine.length >= 2) {
+    const pathDist = holeLine.reduce(
+      (acc, pt, i) => (i === 0 ? 0 : acc + metersBetween(holeLine![i - 1], pt)),
+      0,
+    );
+    if (pathDist > straightDist * CORRIDOR_DETOUR_RATIO) {
+      // holeLine is a meandering multi-hole path — use direct axis instead.
+      corridorForFilter = [tee, greenCenter];
+    }
+  }
+
+  const near = (rings: Ring[], maxMinM: number, maxStrayM?: number): Ring[] =>
+    rings.filter((r) => {
+      // 1. Blob size guard — reject course-wide polygons.
+      if (ringDiagonalM(r) > MAX_BLOB_DIAGONAL_M) return false;
+      // 2. MinDist proximity — must have at least one vertex near the corridor.
+      if (ringToPolylineMeters(r, corridorForFilter, origin) > maxMinM) return false;
+      // 3. Optional max-stray guard — no vertex may be too far from corridor.
+      if (maxStrayM !== undefined &&
+          ringMaxToPolylineMeters(r, corridorForFilter, origin) > maxStrayM) return false;
+      return true;
+    });
 
   return {
     holeLine,
     fairway,
     green,
     bunkers: near(course.bunkers, 90),
-    water: near(course.water, 80),
-    trees: near(course.trees, 100),
+    water:   near(course.water,   80, MAX_WATER_STRAY_M),
+    trees:   near(course.trees,  100, MAX_TREE_STRAY_M),
   };
 }
