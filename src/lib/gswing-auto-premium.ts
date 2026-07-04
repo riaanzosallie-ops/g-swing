@@ -427,8 +427,10 @@ export function synthesizePremiumHole(
     const k = Math.min(1, (t - 0.75) / span);
     return fullHalf * (1 - k * 0.4);
   };
-  // Real surveyed fairway tracing always wins over synthesis.
-  const fairwayPolygon = osm?.fairway
+  // Real surveyed fairway tracing wins over synthesis — but never on a
+  // par 3, where a fairway polygon makes no sense and only bloats the
+  // viewport (the corridor is tee → green with no landing zone in between).
+  const fairwayPolygon = (!isPar3 && osm?.fairway)
     ? osm.fairway
     : isPar3
       ? null
