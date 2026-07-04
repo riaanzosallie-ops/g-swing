@@ -978,7 +978,7 @@ function HoleGeometryLayer({
 
       {/* Landing zones — premium dashed rings with label */}
       {hole.landingZones.length > 0 && (
-        <g data-layer="markers" data-marker-kind="landing-zones">
+        <g data-layer="labels" data-label-kind="landing-zones">
           {hole.landingZones.map((z) => {
         const p = project(z.coordinate);
         const r = 22;
@@ -997,7 +997,7 @@ function HoleGeometryLayer({
 
       {/* Layups */}
       {hole.layups.length > 0 && (
-        <g data-layer="labels" data-label-kind="layups">
+        <g data-layer="markers" data-marker-kind="layups">
           {hole.layups.map((l) => {
         const p = project(l.coordinate);
         return (
