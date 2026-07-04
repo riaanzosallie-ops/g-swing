@@ -117,7 +117,7 @@ import {
 } from "@/lib/gswing-course-map-loader";
 import { buildGolfGpsSnapshot } from "@/lib/gswing-course-mapping";
 import type { MappedHole } from "@/types/gswing-course-map";
-import { synthesizePremiumHoleWithOsm } from "@/lib/gswing-auto-premium";
+import { synthesizePremiumHoleWithOsm, enrichMappedHoleWithAuto } from "@/lib/gswing-auto-premium";
 import { getBundledCourseHoleCount } from "@/lib/bundled-course-geometry";
 import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
