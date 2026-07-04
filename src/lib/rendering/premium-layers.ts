@@ -18,19 +18,37 @@ export type PremiumLayerKey =
   | "pin"
   | "player";
 
-/** Bottom → top render order for the Premium illustrated hole view. */
+/**
+ * Bottom → top render order for the Premium illustrated hole view.
+ *
+ * This constant is the DOCUMENTED SOURCE OF TRUTH for the current live
+ * runtime stacking used by `PremiumHoleRenderer` / `HoleGeometryLayer`.
+ * It intentionally mirrors the existing hardcoded paint order so the
+ * illustrated visuals are preserved exactly. Each entry corresponds to a
+ * `<g data-layer="…">` wrapper in the SVG DOM. Special behaviors that
+ * are not representable as a flat list (water viewport clipping, green
+ * rim/collar defs, per-hazard sub-ordering inside "hazards") remain
+ * inside the renderer.
+ *
+ * NOTE: "hazards" is a composite bucket that internally paints
+ *   trees/rough/waste/out_of_bounds → water/penalty → bunkers
+ * (see `layerOrder()` in PremiumHoleRenderer). The flat keys `water`,
+ * `bunkers`, and `trees` below describe where those sub-features
+ * effectively land in the stack; the composite `<g data-layer="hazards">`
+ * wrapper anchors them at that position.
+ */
 export const PREMIUM_LAYER_ORDER: readonly PremiumLayerKey[] = [
   "rough",
   "waste",
-  "water",
   "fairway",
-  "bunkers",
   "cart-paths",
-  "green",
+  "water",
+  "bunkers",
   "trees",
-  "tee",
   "labels",
   "markers",
+  "green",
+  "tee",
   "pin",
   "player",
 ] as const;
