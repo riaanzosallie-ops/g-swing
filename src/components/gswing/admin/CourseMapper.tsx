@@ -973,6 +973,18 @@ export default function CourseMapper() {
           >
             Golf API
           </Button>
+          {admin.status === "admin" && (
+            <Button
+              type="button"
+              onClick={() => { window.location.href = "/gswing/rendering-studio"; }}
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 border-gold/40 bg-black/40 px-2 text-[10px] uppercase tracking-wider text-gold hover:bg-black/60 hover:text-gold"
+              title="Open Rendering Studio (owned-geometry preview)"
+            >
+              Rendering Studio
+            </Button>
+          )}
           <select
             value={courseMapId ?? ""}
             onChange={(e) => (e.target.value ? onSelectCourse(e.target.value) : setCourseMapId(null))}
