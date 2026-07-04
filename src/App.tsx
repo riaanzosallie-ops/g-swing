@@ -9,6 +9,7 @@ import GswingCourseMapperPage from "./pages/GswingCourseMapper.tsx";
 import AuthPage from "./pages/Auth.tsx";
 import GswingMembershipAdminPage from "./pages/GswingMembershipAdmin.tsx";
 import GolfApiSettingsPage from "./pages/GolfApiSettings.tsx";
+import GswingRenderingStudioPage from "./pages/GswingRenderingStudio.tsx";
 import { AppErrorBoundary } from "./components/gswing/AppErrorBoundary";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,14 @@ const App = () => (
           />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/gswing/membership-admin" element={<GswingMembershipAdminPage />} />
+          <Route
+            path="/gswing/rendering-studio"
+            element={
+              <AppErrorBoundary label="Rendering Studio">
+                <GswingRenderingStudioPage />
+              </AppErrorBoundary>
+            }
+          />
           <Route
             path="/gswing/golf-api"
             element={
