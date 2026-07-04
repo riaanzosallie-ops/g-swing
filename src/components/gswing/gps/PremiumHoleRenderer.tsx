@@ -1569,7 +1569,7 @@ function PlayerMarker({
       ? Math.max(8, Math.min(80, accuracy * metersToPx))
       : 0;
   return (
-    <g>
+    <g data-layer="player">
       {ringPx > 0 && (
         <circle
           cx={p.x}
