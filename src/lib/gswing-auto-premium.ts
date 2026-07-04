@@ -666,18 +666,18 @@ export async function synthesizePremiumHoleWithOsm(
           greenCenter,
           holeNumber,
         );
-        if (import.meta.env.DEV) {
-          // eslint-disable-next-line no-console
-          console.info("[gswing.osm] hole geometry matched", {
-            hole: holeNumber,
-            holeLine: !!osm.holeLine,
-            fairway: !!osm.fairway,
-            green: !!osm.green,
-            bunkers: osm.bunkers.length,
-            water: osm.water.length,
-            trees: osm.trees.length,
-          });
-        }
+        console.info("[gswing.osm] hole geometry matched", {
+          buildSha: __GSWING_BUILD_SHA__,
+          hole: holeNumber,
+          bundledCourseGeometry: !!bundled,
+          fetchedOsmGeometry: !!fetched,
+          holeLine: !!osm.holeLine,
+          fairway: !!osm.fairway,
+          green: !!osm.green,
+          bunkers: osm.bunkers.length,
+          water: osm.water.length,
+          trees: osm.trees.length,
+        });
       }
     } catch {
       /* OSM is an enhancement — synthesis must never fail because of it */
