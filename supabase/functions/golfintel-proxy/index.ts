@@ -200,9 +200,15 @@ async function actionSearch(query: string, opts: { countryCode?: string; rows?: 
   console.log(`[golfintel-proxy] search status=${res.status} calls=${SEARCH_CALLS} reqId=${reqId ?? "-"} q="${query}"`);
   if (!res.ok) return { __error: mapUpstreamError(res.status) };
   const data = await res.json().catch(() => ({}));
+  console.log(`[golfintel-proxy] search raw keys=${Object.keys(data || {}).join(",")} sampleType=${typeof data} isArray=${Array.isArray(data)}`);
   const raw = Array.isArray(data)
     ? data
     : data.rows ?? data.results ?? data.courseGroups ?? data.data ?? data.searchResults ?? [];
+  if (raw.length === 0) {
+    console.log(`[golfintel-proxy] search empty — first 500 chars: ${JSON.stringify(data).slice(0, 500)}`);
+  } else if (raw[0]) {
+    console.log(`[golfintel-proxy] search first result keys=${Object.keys(raw[0]).join(",")}`);
+  }
   const results = (raw as any[]).map((r) => ({
     giCourseId: String(r.publicId ?? r.PublicId ?? r.id ?? r.courseGroupId ?? ""),
     name: r.name ?? r.courseName ?? r.title ?? "",
