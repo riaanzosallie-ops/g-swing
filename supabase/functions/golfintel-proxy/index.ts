@@ -106,25 +106,27 @@ async function actionSearch(query: string) {
   if (!query || query.trim().length < 2) return { results: [] };
   SEARCH_CALLS += 1;
   // POST per Swagger: /courses/searchCourseGroups
+  // Body shape per Swagger BLL.Courses.PublicCourseGroupSearchRequestDto.
   const res = await upstream(ENDPOINTS.search, {
     method: "POST",
-    body: { query, name: query, searchText: query },
+    body: { keywords: query, rows: 25, offset: 0 },
   });
   const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
   console.log(`[golfintel-proxy] search status=${res.status} calls=${SEARCH_CALLS} reqId=${reqId ?? "-"} q="${query}"`);
   if (!res.ok) return { __error: mapUpstreamError(res.status) };
   const data = await res.json().catch(() => ({}));
+  // Response: CourseGroupSearchResultsDto { rows: CourseGroupSearchDto[] }.
   const raw = Array.isArray(data)
     ? data
-    : data.results ?? data.courses ?? data.courseGroups ?? data.data ?? [];
+    : data.rows ?? data.results ?? data.courseGroups ?? data.data ?? [];
   const results = (raw as any[]).map((r) => ({
-    giCourseId: String(r.id ?? r.courseId ?? r.course_id ?? r.groupId ?? r.group_id ?? ""),
+    giCourseId: String(r.publicId ?? r.PublicId ?? r.id ?? r.courseGroupId ?? ""),
     name: r.name ?? r.courseName ?? r.title ?? "",
-    city: r.city ?? r.locality ?? null,
-    state: r.state ?? r.region ?? null,
-    country: r.country ?? null,
-    latitude: r.latitude ?? r.lat ?? null,
-    longitude: r.longitude ?? r.lng ?? r.lon ?? null,
+    city: r.city ?? r.address?.city ?? r.locality ?? null,
+    state: r.state ?? r.address?.state ?? r.region ?? null,
+    country: r.country ?? r.address?.country ?? null,
+    latitude: r.latitude ?? r.gpsCoordinate?.latitude ?? r.lat ?? null,
+    longitude: r.longitude ?? r.gpsCoordinate?.longitude ?? r.lng ?? null,
     holes: r.holes ?? r.holeCount ?? null,
   })).filter((r) => r.giCourseId && r.name);
   return { results };
@@ -150,8 +152,9 @@ async function actionCourseDetail(giCourseId: string) {
     console.log(`[golfintel-proxy] course-detail cache HIT id=${giCourseId}`);
     return { source: "cache", course: cached };
   }
+  // Swagger param: PublicId (query, string).
   const res = await upstream(ENDPOINTS.courseDetail, {
-    query: { courseGroupId: giCourseId, id: giCourseId, groupId: giCourseId },
+    query: { PublicId: giCourseId },
   });
   const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
   console.log(`[golfintel-proxy] course-detail cache MISS id=${giCourseId} status=${res.status} reqId=${reqId ?? "-"} credits=1`);
@@ -202,7 +205,7 @@ async function actionSubPayload(giCourseId: string, kind: "scorecard" | "gps") {
   }
   // Confirmed dedicated endpoint (free — sub-resource of an already-paid detail).
   const path = kind === "scorecard" ? ENDPOINTS.scorecard : ENDPOINTS.gps;
-  const res = await upstream(path, { query: { courseGroupId: giCourseId, id: giCourseId, groupId: giCourseId } });
+  const res = await upstream(path, { query: { PublicId: giCourseId } });
   const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
   console.log(`[golfintel-proxy] ${kind} upstream status=${res.status} reqId=${reqId ?? "-"} id=${giCourseId}`);
   if (!res.ok) return { __error: mapUpstreamError(res.status) };
@@ -226,9 +229,12 @@ async function actionHoleAsset(giCourseId: string, holeNumber: number, assetType
     const url = cached.storage_path ? await signedAssetUrl(cached.storage_path) : null;
     return { source: "cache", url, payload: cached.payload };
   }
+  // Swagger requires the internal integer holeId. Resolve it from cached GPS/Detail.
+  const holeId = await resolveHoleId(giCourseId, holeNumber);
+  if (!holeId) return { __error: { code: "hole_id_unresolved", status: 422 } };
   const path = assetType === "green_slope" ? ENDPOINTS.greenSlope : ENDPOINTS.elevation;
   const res = await upstream(path, {
-    query: { courseGroupId: giCourseId, id: giCourseId, hole: String(holeNumber), holeNumber: String(holeNumber) },
+    query: { holeId: String(holeId), imageSizeType: "Large" },
   });
   const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
   console.log(`[golfintel-proxy] ${assetType} cache MISS id=${giCourseId} hole=${holeNumber} status=${res.status} reqId=${reqId ?? "-"} credits=1`);
