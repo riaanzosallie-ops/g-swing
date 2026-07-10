@@ -3,7 +3,12 @@
   "sdk_version": "0.20.0",
   "path": "/functions/v1/mcp",
   "auth": {
-    "type": "none"
+    "type": "oauth",
+    "issuer": "https://cavcpeuemnfsycobqhrm.supabase.co/auth/v1",
+    "resource_name": "G-Swing MCP",
+    "accepted_audiences": [
+      "authenticated"
+    ]
   },
   "mcp": {
     "server": {
