@@ -222,6 +222,27 @@ async function signedAssetUrl(path: string) {
   return data?.signedUrl ?? null;
 }
 
+// Walk cached GPS/Detail payload to map a course + human hole number -> upstream integer holeId.
+async function resolveHoleId(giCourseId: string, holeNumber: number): Promise<number | null> {
+  const { data: cached } = await admin.from("gi_courses").select("gps,detail")
+    .eq("gi_course_id", giCourseId).maybeSingle();
+  const sources = [cached?.gps, cached?.detail].filter(Boolean);
+  const stack: unknown[] = [...sources];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node) continue;
+    if (Array.isArray(node)) { for (const n of node) stack.push(n); continue; }
+    if (typeof node === "object") {
+      const rec = node as Record<string, unknown>;
+      const num = rec.holeNumber ?? rec.HoleNumber ?? rec.number ?? rec.Number;
+      const id = rec.holeId ?? rec.HoleId ?? rec.id ?? rec.Id;
+      if (typeof num === "number" && Number(num) === holeNumber && typeof id === "number") return id as number;
+      for (const v of Object.values(rec)) if (v && typeof v === "object") stack.push(v);
+    }
+  }
+  return null;
+}
+
 async function actionHoleAsset(giCourseId: string, holeNumber: number, assetType: "green_slope" | "elevation") {
   const { data: cached } = await admin.from("gi_hole_assets").select("*")
     .eq("gi_course_id", giCourseId).eq("hole_number", holeNumber).eq("asset_type", assetType).maybeSingle();
