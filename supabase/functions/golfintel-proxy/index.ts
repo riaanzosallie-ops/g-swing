@@ -325,6 +325,15 @@ Deno.serve(async (req) => {
       case "credit-status":
         result = await actionCreditStatus();
         break;
+      case "diag": {
+        const res = await upstream(ENDPOINTS.search, {
+          method: "POST",
+          body: { keywords: "Sharjah", rows: 1, offset: 0 },
+        });
+        const text = (await res.text()).slice(0, 400);
+        result = { status: res.status, ct: res.headers.get("content-type"), body: text };
+        break;
+      }
       default:
         return j(400, { error: "unknown_action" });
     }
