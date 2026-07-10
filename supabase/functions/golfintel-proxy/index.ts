@@ -39,12 +39,55 @@ let SEARCH_CALLS = 0;
 const BASE_URL = Deno.env.get("GOLFINTEL_BASE_URL") ?? "";
 const TOKEN = Deno.env.get("GOLFINTEL_TOKEN") ?? "";
 const CLIENT_ID = Deno.env.get("GOLFINTEL_CLIENT_ID") ?? "";
+const AUTH_PATH = Deno.env.get("GOLFINTEL_PATH_AUTH") ?? "/auth/authenticateToken";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+// ---- Token cache (in-memory per isolate) ----
+type TokenCache = { accessToken: string; refreshToken: string | null; expiresAt: number };
+let TOKEN_CACHE: TokenCache | null = null;
+let TOKEN_INFLIGHT: Promise<TokenCache> | null = null;
+
+async function fetchToken(): Promise<TokenCache> {
+  if (!BASE_URL || !TOKEN || !CLIENT_ID) throw new Error("upstream_not_configured");
+  const url = BASE_URL.replace(/\/$/, "") + AUTH_PATH;
+  const form = new URLSearchParams({
+    grant_type: "client_credentials",
+    code: TOKEN,
+    client_id: CLIENT_ID,
+  });
+  const t0 = Date.now();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: form.toString(),
+  });
+  const dur = Date.now() - t0;
+  const text = await res.text();
+  if (!res.ok) {
+    console.error(`[golfintel-proxy] auth FAILED status=${res.status} durMs=${dur} body=${text.slice(0, 200)}`);
+    throw new Error(`auth_failed_${res.status}`);
+  }
+  const data = JSON.parse(text);
+  const accessToken = data.access_token ?? data.accessToken;
+  if (!accessToken) throw new Error("auth_no_access_token");
+  const refreshToken = data.refresh_token ?? data.refreshToken ?? null;
+  const expiresIn = Number(data.expires_in ?? data.expiresIn ?? 3600);
+  const expiresAt = Date.now() + Math.max(60, expiresIn - 60) * 1000;
+  console.log(`[golfintel-proxy] auth OK durMs=${dur} expiresIn=${expiresIn}s hasRefresh=${Boolean(refreshToken)}`);
+  return { accessToken, refreshToken, expiresAt };
+}
+
+async function getAccessToken(force = false): Promise<string> {
+  if (!force && TOKEN_CACHE && TOKEN_CACHE.expiresAt > Date.now()) return TOKEN_CACHE.accessToken;
+  if (!TOKEN_INFLIGHT) TOKEN_INFLIGHT = fetchToken().finally(() => { TOKEN_INFLIGHT = null; });
+  TOKEN_CACHE = await TOKEN_INFLIGHT;
+  return TOKEN_CACHE.accessToken;
+}
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -53,39 +96,52 @@ function j(status: number, body: unknown) {
   });
 }
 
-async function upstream(path: string, init: { method?: string; query?: Record<string, string>; body?: unknown } = {}) {
-  if (!BASE_URL || !TOKEN) throw new Error("upstream_not_configured");
+async function upstreamOnce(path: string, init: { method?: string; query?: Record<string, string>; body?: unknown }, accessToken: string) {
   const url = new URL(BASE_URL.replace(/\/$/, "") + path);
   if (init.query) for (const [k, v] of Object.entries(init.query)) url.searchParams.set(k, v);
-  // Include client id as header AND query param; upstream will accept whichever it uses.
-  if (CLIENT_ID) url.searchParams.set("client_id", CLIENT_ID);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
+  const timer = setTimeout(() => controller.abort(), 20_000);
   try {
-    const res = await fetch(url.toString(), {
+    return await fetch(url.toString(), {
       method: init.method ?? "GET",
       signal: controller.signal,
       redirect: "manual",
       headers: {
-        Authorization: `Bearer ${TOKEN}`,
-        "X-Client-Id": CLIENT_ID,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
         Accept: "application/json,image/*",
       },
       body: init.body ? JSON.stringify(init.body) : undefined,
     });
-    // A 3xx to /Account/Login means the bearer token is missing/expired — surface as 401.
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get("location") ?? "";
-      console.warn(`[golfintel-proxy] upstream redirect status=${res.status} location=${loc}`);
-      if (/login/i.test(loc)) {
-        return new Response(JSON.stringify({ error: "upstream_unauthenticated", location: loc }), { status: 401 });
-      }
-    }
-    return res;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function upstream(path: string, init: { method?: string; query?: Record<string, string>; body?: unknown } = {}) {
+  if (!BASE_URL || !TOKEN || !CLIENT_ID) throw new Error("upstream_not_configured");
+  const t0 = Date.now();
+  let authRefreshed = false;
+  let accessToken = await getAccessToken();
+  let res = await upstreamOnce(path, init, accessToken);
+  // If the token is stale/rejected, upstream returns 401 OR redirects to /Account/Login.
+  const looksUnauth =
+    res.status === 401 ||
+    (res.status >= 300 && res.status < 400 && /login/i.test(res.headers.get("location") ?? ""));
+  if (looksUnauth) {
+    console.warn(`[golfintel-proxy] token rejected on ${path} status=${res.status} — refreshing`);
+    accessToken = await getAccessToken(true);
+    authRefreshed = true;
+    res = await upstreamOnce(path, init, accessToken);
+  }
+  if (res.status >= 300 && res.status < 400 && /login/i.test(res.headers.get("location") ?? "")) {
+    // Still unauthenticated after refresh — surface cleanly.
+    return new Response(JSON.stringify({ error: "upstream_unauthenticated" }), { status: 401 });
+  }
+  const dur = Date.now() - t0;
+  const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id") ?? "-";
+  console.log(`[golfintel-proxy] upstream ${init.method ?? "GET"} ${path} status=${res.status} durMs=${dur} reqId=${reqId} refreshed=${authRefreshed}`);
+  return res;
 }
 
 function mapUpstreamError(status: number) {
@@ -111,23 +167,28 @@ async function requireUser(req: Request) {
 
 // ---- actions ----
 
-async function actionSearch(query: string) {
+async function actionSearch(query: string, opts: { countryCode?: string; rows?: number; offset?: number } = {}) {
   if (!query || query.trim().length < 2) return { results: [] };
   SEARCH_CALLS += 1;
-  // POST per Swagger: /courses/searchCourseGroups
-  // Body shape per Swagger BLL.Courses.PublicCourseGroupSearchRequestDto.
+  // POST /courses/searchCourseGroups — body per PublicCourseGroupSearchRequestDto.
   const res = await upstream(ENDPOINTS.search, {
     method: "POST",
-    body: { keywords: query, rows: 25, offset: 0 },
+    body: {
+      rows: opts.rows ?? 100,
+      offset: opts.offset ?? 0,
+      keywords: query,
+      countryCode: opts.countryCode ?? "",
+      regionCode: "",
+      gpsCoordinate: null,
+    },
   });
   const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
   console.log(`[golfintel-proxy] search status=${res.status} calls=${SEARCH_CALLS} reqId=${reqId ?? "-"} q="${query}"`);
   if (!res.ok) return { __error: mapUpstreamError(res.status) };
   const data = await res.json().catch(() => ({}));
-  // Response: CourseGroupSearchResultsDto { rows: CourseGroupSearchDto[] }.
   const raw = Array.isArray(data)
     ? data
-    : data.rows ?? data.results ?? data.courseGroups ?? data.data ?? [];
+    : data.rows ?? data.results ?? data.courseGroups ?? data.data ?? data.searchResults ?? [];
   const results = (raw as any[]).map((r) => ({
     giCourseId: String(r.publicId ?? r.PublicId ?? r.id ?? r.courseGroupId ?? ""),
     name: r.name ?? r.courseName ?? r.title ?? "",
@@ -304,7 +365,11 @@ Deno.serve(async (req) => {
     let result: any;
     switch (action) {
       case "search":
-        result = await actionSearch(String(body.query ?? ""));
+        result = await actionSearch(String(body.query ?? ""), {
+          countryCode: body.countryCode ? String(body.countryCode) : undefined,
+          rows: body.rows ? Number(body.rows) : undefined,
+          offset: body.offset ? Number(body.offset) : undefined,
+        });
         break;
       case "course-detail":
         result = await actionCourseDetail(String(body.giCourseId ?? ""));
@@ -325,6 +390,11 @@ Deno.serve(async (req) => {
       case "credit-status":
         result = await actionCreditStatus();
         break;
+      case "validate": {
+        // Owner-runnable end-to-end validation with Sharjah Golf & Shooting Club.
+        result = await actionValidate();
+        break;
+      }
       default:
         return j(400, { error: "unknown_action" });
     }
