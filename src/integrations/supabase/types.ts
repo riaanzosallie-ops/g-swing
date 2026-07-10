@@ -61,6 +61,128 @@ export type Database = {
           },
         ]
       }
+      gi_courses: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          detail: Json | null
+          detail_fetched_at: string | null
+          gi_course_id: string
+          gps: Json | null
+          gps_fetched_at: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          scorecard: Json | null
+          scorecard_fetched_at: string | null
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          detail?: Json | null
+          detail_fetched_at?: string | null
+          gi_course_id: string
+          gps?: Json | null
+          gps_fetched_at?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          scorecard?: Json | null
+          scorecard_fetched_at?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          detail?: Json | null
+          detail_fetched_at?: string | null
+          gi_course_id?: string
+          gps?: Json | null
+          gps_fetched_at?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          scorecard?: Json | null
+          scorecard_fetched_at?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gi_credit_log: {
+        Row: {
+          action: string
+          created_at: string
+          credits_estimated: number
+          gi_course_id: string | null
+          hole_number: number | null
+          id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          credits_estimated?: number
+          gi_course_id?: string | null
+          hole_number?: number | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          credits_estimated?: number
+          gi_course_id?: string | null
+          hole_number?: number | null
+          id?: string
+        }
+        Relationships: []
+      }
+      gi_hole_assets: {
+        Row: {
+          asset_type: string
+          fetched_at: string
+          gi_course_id: string
+          hole_number: number
+          id: string
+          payload: Json | null
+          storage_path: string | null
+        }
+        Insert: {
+          asset_type: string
+          fetched_at?: string
+          gi_course_id: string
+          hole_number: number
+          id?: string
+          payload?: Json | null
+          storage_path?: string | null
+        }
+        Update: {
+          asset_type?: string
+          fetched_at?: string
+          gi_course_id?: string
+          hole_number?: number
+          id?: string
+          payload?: Json | null
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gi_hole_assets_gi_course_id_fkey"
+            columns: ["gi_course_id"]
+            isOneToOne: false
+            referencedRelation: "gi_courses"
+            referencedColumns: ["gi_course_id"]
+          },
+        ]
+      }
       golf_api_logs: {
         Row: {
           api_requests_left: string | null
@@ -1234,6 +1356,7 @@ export type Database = {
           created_at: string
           director_id: string | null
           format: string
+          gi_course_id: string | null
           holes: number
           id: string
           name: string
@@ -1252,6 +1375,7 @@ export type Database = {
           created_at?: string
           director_id?: string | null
           format?: string
+          gi_course_id?: string | null
           holes?: number
           id?: string
           name: string
@@ -1270,6 +1394,7 @@ export type Database = {
           created_at?: string
           director_id?: string | null
           format?: string
+          gi_course_id?: string | null
           holes?: number
           id?: string
           name?: string
