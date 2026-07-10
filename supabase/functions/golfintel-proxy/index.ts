@@ -355,6 +355,62 @@ async function actionCreditStatus() {
   return { used, limit: 50, remaining: Math.max(0, 50 - used) };
 }
 
+// End-to-end validation. Uses Sharjah Golf & Shooting Club.
+// Prefers cache; only spends a credit for a step that has never been cached.
+async function actionValidate() {
+  const report: Record<string, unknown> = { startedAt: new Date().toISOString() };
+  // Auth
+  try {
+    const token = await getAccessToken();
+    report.auth = { ok: true, tokenPrefix: token.slice(0, 6) + "…", expiresAt: new Date(TOKEN_CACHE!.expiresAt).toISOString() };
+  } catch (e) {
+    report.auth = { ok: false, error: String((e as Error).message) };
+    return report;
+  }
+  // Search
+  const search = await actionSearch("Sharjah Golf", { countryCode: "AE" });
+  report.search = "__error" in (search as any)
+    ? { ok: false, error: (search as any).__error }
+    : { ok: true, count: (search as any).results.length, firstPublicId: (search as any).results[0]?.giCourseId ?? null, firstName: (search as any).results[0]?.name ?? null };
+  const publicId = (search as any).results?.find((r: any) => /sharjah/i.test(r.name))?.giCourseId
+    ?? (search as any).results?.[0]?.giCourseId
+    ?? null;
+  if (!publicId) return report;
+  // Course detail
+  const detail = await actionCourseDetail(publicId);
+  report.courseDetail = "__error" in (detail as any)
+    ? { ok: false, error: (detail as any).__error }
+    : { ok: true, source: (detail as any).source, name: (detail as any).course?.name };
+  // Scorecard
+  const scorecard = await actionSubPayload(publicId, "scorecard");
+  report.scorecard = "__error" in (scorecard as any)
+    ? { ok: false, error: (scorecard as any).__error }
+    : { ok: true, source: (scorecard as any).source, hasData: Boolean((scorecard as any).scorecard) };
+  // GPS
+  const gps = await actionSubPayload(publicId, "gps");
+  report.gps = "__error" in (gps as any)
+    ? { ok: false, error: (gps as any).__error }
+    : { ok: true, source: (gps as any).source, hasData: Boolean((gps as any).gps) };
+  // Enumerate holeIds we can see
+  const holeIds: number[] = [];
+  const stack: unknown[] = [(gps as any).gps, (detail as any).course?.detail].filter(Boolean);
+  while (stack.length && holeIds.length < 3) {
+    const node = stack.pop();
+    if (!node) continue;
+    if (Array.isArray(node)) { for (const n of node) stack.push(n); continue; }
+    if (typeof node === "object") {
+      const rec = node as Record<string, unknown>;
+      const id = rec.holeId ?? rec.HoleId;
+      if (typeof id === "number") holeIds.push(id);
+      for (const v of Object.values(rec)) if (v && typeof v === "object") stack.push(v);
+    }
+  }
+  report.holeIds = holeIds;
+  report.publicId = publicId;
+  report.credits = await actionCreditStatus();
+  return report;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
