@@ -4,6 +4,7 @@
 // Bundled from src/lib/mcp/index.ts by @lovable.dev/mcp-js.
 // src/lib/mcp/index.ts
 import { defineMcp } from "npm:@lovable.dev/mcp-js@0.20.0";
+import { auth } from "npm:@lovable.dev/mcp-js@0.20.0";
 
 // src/lib/mcp/tools/list-courses.ts
 import { defineTool } from "npm:@lovable.dev/mcp-js@0.20.0";
@@ -160,11 +161,17 @@ From player: F ${playerDist.to_green_front ?? "?"} / C ${playerDist.to_green_cen
 });
 
 // src/lib/mcp/index.ts
+var supabaseUrl = (typeof process !== "undefined" ? process.env.SUPABASE_URL : void 0) ?? (typeof process !== "undefined" ? process.env.VITE_SUPABASE_URL : void 0) ?? "";
 var mcp_default = defineMcp({
   name: "g-swing-mcp",
   title: "G-Swing MCP",
   version: "0.1.0",
   instructions: "Tools for the G-Swing golf app. Use `list_courses` to discover courses, `get_course` for full detail and hole list, and `get_hole_gps` for per-hole tee/green/hazard geometry (optionally with player distances when lat/lng are supplied).",
+  auth: auth.oauth.issuer({
+    issuer: `${supabaseUrl.replace(/\/$/, "")}/auth/v1`,
+    acceptedAudiences: ["authenticated"],
+    resourceName: "G-Swing MCP"
+  }),
   tools: [list_courses_default, get_course_default, get_hole_gps_default]
 });
 
