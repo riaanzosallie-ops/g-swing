@@ -65,6 +65,7 @@ async function upstream(path: string, init: { method?: string; query?: Record<st
     const res = await fetch(url.toString(), {
       method: init.method ?? "GET",
       signal: controller.signal,
+      redirect: "manual",
       headers: {
         Authorization: `Bearer ${TOKEN}`,
         "X-Client-Id": CLIENT_ID,
@@ -73,6 +74,14 @@ async function upstream(path: string, init: { method?: string; query?: Record<st
       },
       body: init.body ? JSON.stringify(init.body) : undefined,
     });
+    // A 3xx to /Account/Login means the bearer token is missing/expired — surface as 401.
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location") ?? "";
+      console.warn(`[golfintel-proxy] upstream redirect status=${res.status} location=${loc}`);
+      if (/login/i.test(loc)) {
+        return new Response(JSON.stringify({ error: "upstream_unauthenticated", location: loc }), { status: 401 });
+      }
+    }
     return res;
   } finally {
     clearTimeout(timer);
