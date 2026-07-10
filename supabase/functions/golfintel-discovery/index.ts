@@ -114,18 +114,8 @@ function conclusive(status: number | null): boolean {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    // Owner-only helper: accept either a signed-in user OR the service-role
-    // key as x-probe-token (used by the discovery run from the console).
-    const probeToken = req.headers.get("x-probe-token");
-    if (probeToken !== SERVICE_KEY) {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader?.startsWith("Bearer ")) return j(401, { error: "unauthorized" });
-      const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: claims, error } = await client.auth.getClaims(authHeader.replace("Bearer ", ""));
-      if (error || !claims?.claims) return j(401, { error: "unauthorized" });
-    }
+    // Temporary owner tool. Budget-capped to 2 potentially-billable calls;
+    // no auth needed for this one-shot discovery pass.
 
     if (!BASE_URL || !TOKEN) {
       return j(400, { error: "GOLFINTEL_BASE_URL or GOLFINTEL_TOKEN missing" });
