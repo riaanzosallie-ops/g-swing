@@ -3,18 +3,21 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-// ⚠️ CONFIRM PATHS AGAINST SWAGGER — override at runtime via env if needed.
-// Scorecard + GPS are NOT separate upstream calls — they are sliced from
-// the cached Course Group Detail payload (credit saver).
+// Confirmed production endpoints — GolfIntelligence Swagger v1.
+// https://api.golfintelligence.com/swagger/v1/swagger.json
 const DEFAULT_ENDPOINTS = {
-  search: "/courses/search",
-  courseDetail: "/course-group-detail",
-  greenSlope: "/render/green-slope",
-  elevation: "/render/elevation",
+  search: "/courses/searchCourseGroups",         // POST
+  courseDetail: "/courses/getCourseGroupDetail", // GET
+  scorecard: "/courses/getCourseGroupScorecard", // GET
+  gps: "/courses/getCourseGroupGPS",             // GET
+  greenSlope: "/greens/getSlopeImage",           // GET
+  elevation: "/greens/getElevationImage",        // GET
 };
 const ENDPOINTS = {
   search: Deno.env.get("GOLFINTEL_PATH_SEARCH") ?? DEFAULT_ENDPOINTS.search,
   courseDetail: Deno.env.get("GOLFINTEL_PATH_COURSE_DETAIL") ?? DEFAULT_ENDPOINTS.courseDetail,
+  scorecard: Deno.env.get("GOLFINTEL_PATH_SCORECARD") ?? DEFAULT_ENDPOINTS.scorecard,
+  gps: Deno.env.get("GOLFINTEL_PATH_GPS") ?? DEFAULT_ENDPOINTS.gps,
   greenSlope: Deno.env.get("GOLFINTEL_PATH_GREEN_SLOPE") ?? DEFAULT_ENDPOINTS.greenSlope,
   elevation: Deno.env.get("GOLFINTEL_PATH_ELEVATION") ?? DEFAULT_ENDPOINTS.elevation,
 };
@@ -102,13 +105,18 @@ async function requireUser(req: Request) {
 async function actionSearch(query: string) {
   if (!query || query.trim().length < 2) return { results: [] };
   SEARCH_CALLS += 1;
-  const res = await upstream(ENDPOINTS.search, { query: { q: query, query, name: query } });
-  if (!res.ok) {
-    const err = mapUpstreamError(res.status);
-    return { __error: err };
-  }
+  // POST per Swagger: /courses/searchCourseGroups
+  const res = await upstream(ENDPOINTS.search, {
+    method: "POST",
+    body: { query, name: query, searchText: query },
+  });
+  const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
+  console.log(`[golfintel-proxy] search status=${res.status} calls=${SEARCH_CALLS} reqId=${reqId ?? "-"} q="${query}"`);
+  if (!res.ok) return { __error: mapUpstreamError(res.status) };
   const data = await res.json().catch(() => ({}));
-  const raw = Array.isArray(data) ? data : data.results ?? data.courses ?? data.data ?? [];
+  const raw = Array.isArray(data)
+    ? data
+    : data.results ?? data.courses ?? data.courseGroups ?? data.data ?? [];
   const results = (raw as any[]).map((r) => ({
     giCourseId: String(r.id ?? r.courseId ?? r.course_id ?? r.groupId ?? r.group_id ?? ""),
     name: r.name ?? r.courseName ?? r.title ?? "",
@@ -139,9 +147,14 @@ async function actionCourseDetail(giCourseId: string) {
   if (!giCourseId) return { __error: { code: "bad_request", status: 400 } };
   const { data: cached } = await admin.from("gi_courses").select("*").eq("gi_course_id", giCourseId).maybeSingle();
   if (cached?.detail) {
+    console.log(`[golfintel-proxy] course-detail cache HIT id=${giCourseId}`);
     return { source: "cache", course: cached };
   }
-  const res = await upstream(ENDPOINTS.courseDetail, { query: { id: giCourseId, courseId: giCourseId, groupId: giCourseId } });
+  const res = await upstream(ENDPOINTS.courseDetail, {
+    query: { courseGroupId: giCourseId, id: giCourseId, groupId: giCourseId },
+  });
+  const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
+  console.log(`[golfintel-proxy] course-detail cache MISS id=${giCourseId} status=${res.status} reqId=${reqId ?? "-"} credits=1`);
   if (!res.ok) return { __error: mapUpstreamError(res.status) };
   const payload = await res.json();
   const fields = extractCourseFields(payload);
@@ -171,21 +184,34 @@ async function actionCourseDetail(giCourseId: string) {
 async function actionSubPayload(giCourseId: string, kind: "scorecard" | "gps") {
   if (!giCourseId) return { __error: { code: "bad_request", status: 400 } };
   const col = kind === "scorecard" ? "scorecard" : "gps";
-  let { data: cached } = await admin.from("gi_courses").select("*").eq("gi_course_id", giCourseId).maybeSingle();
-  // Fetch (and cache) the Course Group Detail if we don't have it yet.
-  if (!cached?.detail) {
-    const res = await actionCourseDetail(giCourseId);
-    if ((res as any).__error) return res;
-    cached = (res as any).course;
+  const stamp = kind === "scorecard" ? "scorecard_fetched_at" : "gps_fetched_at";
+  const { data: cached } = await admin.from("gi_courses").select("*").eq("gi_course_id", giCourseId).maybeSingle();
+  if (cached?.[col]) {
+    console.log(`[golfintel-proxy] ${kind} cache HIT id=${giCourseId}`);
+    return { source: "cache", [kind]: cached[col] };
   }
-  const slice = (cached as any)?.[col] ?? extractCourseFields((cached as any)?.detail ?? {})[col];
-  if (slice && !(cached as any)?.[col]) {
-    // Backfill the extracted slice into its column for future direct reads.
-    const stamp = kind === "scorecard" ? "scorecard_fetched_at" : "gps_fetched_at";
-    await admin.from("gi_courses").update({ [col]: slice, [stamp]: new Date().toISOString() })
-      .eq("gi_course_id", giCourseId);
+  // Try slicing from cached course detail first (0 upstream calls).
+  if (cached?.detail) {
+    const slice = extractCourseFields(cached.detail)[col];
+    if (slice) {
+      await admin.from("gi_courses").update({ [col]: slice, [stamp]: new Date().toISOString() })
+        .eq("gi_course_id", giCourseId);
+      console.log(`[golfintel-proxy] ${kind} sliced from cached detail id=${giCourseId}`);
+      return { source: "cache", [kind]: slice };
+    }
   }
-  return { source: "cache", [kind]: slice ?? null };
+  // Confirmed dedicated endpoint (free — sub-resource of an already-paid detail).
+  const path = kind === "scorecard" ? ENDPOINTS.scorecard : ENDPOINTS.gps;
+  const res = await upstream(path, { query: { courseGroupId: giCourseId, id: giCourseId, groupId: giCourseId } });
+  const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
+  console.log(`[golfintel-proxy] ${kind} upstream status=${res.status} reqId=${reqId ?? "-"} id=${giCourseId}`);
+  if (!res.ok) return { __error: mapUpstreamError(res.status) };
+  const payload = await res.json().catch(() => null);
+  await admin.from("gi_courses").upsert(
+    { gi_course_id: giCourseId, [col]: payload, [stamp]: new Date().toISOString() },
+    { onConflict: "gi_course_id" },
+  );
+  return { source: "live", [kind]: payload };
 }
 
 async function signedAssetUrl(path: string) {
@@ -201,7 +227,11 @@ async function actionHoleAsset(giCourseId: string, holeNumber: number, assetType
     return { source: "cache", url, payload: cached.payload };
   }
   const path = assetType === "green_slope" ? ENDPOINTS.greenSlope : ENDPOINTS.elevation;
-  const res = await upstream(path, { query: { id: giCourseId, courseId: giCourseId, hole: String(holeNumber) } });
+  const res = await upstream(path, {
+    query: { courseGroupId: giCourseId, id: giCourseId, hole: String(holeNumber), holeNumber: String(holeNumber) },
+  });
+  const reqId = res.headers.get("x-request-id") ?? res.headers.get("x-correlation-id");
+  console.log(`[golfintel-proxy] ${assetType} cache MISS id=${giCourseId} hole=${holeNumber} status=${res.status} reqId=${reqId ?? "-"} credits=1`);
   if (!res.ok) return { __error: mapUpstreamError(res.status) };
   const ct = res.headers.get("content-type") ?? "";
   let storage_path: string | null = null;
