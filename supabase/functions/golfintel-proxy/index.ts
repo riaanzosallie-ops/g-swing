@@ -471,6 +471,13 @@ Deno.serve(async (req) => {
         result = await actionValidate();
         break;
       }
+      case "debug-search": {
+        const b = { rows: Number(body.rows ?? 5), offset: 0, keywords: String(body.keywords ?? ""), countryCode: String(body.countryCode ?? ""), regionCode: "", gpsCoordinate: null };
+        const res = await upstream(ENDPOINTS.search, { method: "POST", body: b });
+        const text = (await res.text()).slice(0, 800);
+        result = { status: res.status, sent: b, body: text };
+        break;
+      }
       default:
         return j(400, { error: "unknown_action" });
     }
