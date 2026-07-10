@@ -4,14 +4,34 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 // ⚠️ CONFIRM PATHS AGAINST SWAGGER — override at runtime via env if needed.
-const ENDPOINTS = {
-  search: Deno.env.get("GOLFINTEL_PATH_SEARCH") ?? "/courses/search",
-  courseDetail: Deno.env.get("GOLFINTEL_PATH_COURSE_DETAIL") ?? "/course-group-detail",
-  scorecard: Deno.env.get("GOLFINTEL_PATH_SCORECARD") ?? "/scorecard",
-  gps: Deno.env.get("GOLFINTEL_PATH_GPS") ?? "/gps",
-  greenSlope: Deno.env.get("GOLFINTEL_PATH_GREEN_SLOPE") ?? "/render/green-slope",
-  elevation: Deno.env.get("GOLFINTEL_PATH_ELEVATION") ?? "/render/elevation",
+// Scorecard + GPS are NOT separate upstream calls — they are sliced from
+// the cached Course Group Detail payload (credit saver).
+const DEFAULT_ENDPOINTS = {
+  search: "/courses/search",
+  courseDetail: "/course-group-detail",
+  greenSlope: "/render/green-slope",
+  elevation: "/render/elevation",
 };
+const ENDPOINTS = {
+  search: Deno.env.get("GOLFINTEL_PATH_SEARCH") ?? DEFAULT_ENDPOINTS.search,
+  courseDetail: Deno.env.get("GOLFINTEL_PATH_COURSE_DETAIL") ?? DEFAULT_ENDPOINTS.courseDetail,
+  greenSlope: Deno.env.get("GOLFINTEL_PATH_GREEN_SLOPE") ?? DEFAULT_ENDPOINTS.greenSlope,
+  elevation: Deno.env.get("GOLFINTEL_PATH_ELEVATION") ?? DEFAULT_ENDPOINTS.elevation,
+};
+// Cold-start warning: list which endpoint paths are still on defaults.
+{
+  const usingDefaults = (Object.keys(DEFAULT_ENDPOINTS) as (keyof typeof DEFAULT_ENDPOINTS)[])
+    .filter((k) => ENDPOINTS[k] === DEFAULT_ENDPOINTS[k]);
+  if (usingDefaults.length > 0) {
+    console.warn(
+      "[golfintel-proxy] Using DEFAULT paths for:",
+      usingDefaults.map((k) => `${k}=${DEFAULT_ENDPOINTS[k]}`).join(", "),
+      "— set GOLFINTEL_PATH_* env vars to override.",
+    );
+  }
+}
+// Lightweight in-memory search counter (observability only, no credits).
+let SEARCH_CALLS = 0;
 
 const BASE_URL = Deno.env.get("GOLFINTEL_BASE_URL") ?? "";
 const TOKEN = Deno.env.get("GOLFINTEL_TOKEN") ?? "";
@@ -81,6 +101,7 @@ async function requireUser(req: Request) {
 
 async function actionSearch(query: string) {
   if (!query || query.trim().length < 2) return { results: [] };
+  SEARCH_CALLS += 1;
   const res = await upstream(ENDPOINTS.search, { query: { q: query, query, name: query } });
   if (!res.ok) {
     const err = mapUpstreamError(res.status);
@@ -145,18 +166,26 @@ async function actionCourseDetail(giCourseId: string) {
   return { source: "live", course: upserted };
 }
 
+// Scorecard and GPS are served from the cached Course Group Detail payload.
+// No separate upstream call — 0 additional credits.
 async function actionSubPayload(giCourseId: string, kind: "scorecard" | "gps") {
+  if (!giCourseId) return { __error: { code: "bad_request", status: 400 } };
   const col = kind === "scorecard" ? "scorecard" : "gps";
-  const stamp = kind === "scorecard" ? "scorecard_fetched_at" : "gps_fetched_at";
-  const { data: cached } = await admin.from("gi_courses").select("*").eq("gi_course_id", giCourseId).maybeSingle();
-  if (cached && (cached as any)[col]) return { source: "cache", [kind]: (cached as any)[col] };
-  const path = kind === "scorecard" ? ENDPOINTS.scorecard : ENDPOINTS.gps;
-  const res = await upstream(path, { query: { id: giCourseId, courseId: giCourseId } });
-  if (!res.ok) return { __error: mapUpstreamError(res.status) };
-  const payload = await res.json();
-  await admin.from("gi_courses").update({ [col]: payload, [stamp]: new Date().toISOString() }).eq("gi_course_id", giCourseId);
-  await logCredit(kind, giCourseId);
-  return { source: "live", [kind]: payload };
+  let { data: cached } = await admin.from("gi_courses").select("*").eq("gi_course_id", giCourseId).maybeSingle();
+  // Fetch (and cache) the Course Group Detail if we don't have it yet.
+  if (!cached?.detail) {
+    const res = await actionCourseDetail(giCourseId);
+    if ((res as any).__error) return res;
+    cached = (res as any).course;
+  }
+  const slice = (cached as any)?.[col] ?? extractCourseFields((cached as any)?.detail ?? {})[col];
+  if (slice && !(cached as any)?.[col]) {
+    // Backfill the extracted slice into its column for future direct reads.
+    const stamp = kind === "scorecard" ? "scorecard_fetched_at" : "gps_fetched_at";
+    await admin.from("gi_courses").update({ [col]: slice, [stamp]: new Date().toISOString() })
+      .eq("gi_course_id", giCourseId);
+  }
+  return { source: "cache", [kind]: slice ?? null };
 }
 
 async function signedAssetUrl(path: string) {
