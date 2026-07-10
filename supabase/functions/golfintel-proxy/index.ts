@@ -47,6 +47,20 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
+// Cold-start config sanity: log presence only, never values.
+{
+  const missing = [
+    ["GOLFINTEL_BASE_URL", BASE_URL && /^https?:\/\//i.test(BASE_URL)],
+    ["GOLFINTEL_TOKEN", Boolean(TOKEN)],
+    ["GOLFINTEL_CLIENT_ID", Boolean(CLIENT_ID)],
+  ].filter(([, ok]) => !ok).map(([k]) => k);
+  if (missing.length) {
+    console.error(`[golfintel-proxy] cold-start MISSING config: ${missing.join(", ")}`);
+  } else {
+    console.log(`[golfintel-proxy] cold-start config OK base=${BASE_URL} auth=${AUTH_PATH}`);
+  }
+}
+
 // ---- Token cache (in-memory per isolate) ----
 type TokenCache = { accessToken: string; refreshToken: string | null; expiresAt: number };
 let TOKEN_CACHE: TokenCache | null = null;
