@@ -183,6 +183,66 @@ export type Database = {
           },
         ]
       }
+      gi_probe_log: {
+        Row: {
+          content_type: string | null
+          feature: string
+          id: string
+          method: string
+          path: string
+          preview: string | null
+          provider_request_id: string | null
+          ran_at: string
+          status: number | null
+          verdict: string
+        }
+        Insert: {
+          content_type?: string | null
+          feature: string
+          id?: string
+          method: string
+          path: string
+          preview?: string | null
+          provider_request_id?: string | null
+          ran_at?: string
+          status?: number | null
+          verdict: string
+        }
+        Update: {
+          content_type?: string | null
+          feature?: string
+          id?: string
+          method?: string
+          path?: string
+          preview?: string | null
+          provider_request_id?: string | null
+          ran_at?: string
+          status?: number | null
+          verdict?: string
+        }
+        Relationships: []
+      }
+      gi_search_counter: {
+        Row: {
+          count: number
+          id: number
+          last_query: string | null
+          updated_at: string
+        }
+        Insert: {
+          count?: number
+          id?: number
+          last_query?: string | null
+          updated_at?: string
+        }
+        Update: {
+          count?: number
+          id?: number
+          last_query?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       golf_api_logs: {
         Row: {
           api_requests_left: string | null
